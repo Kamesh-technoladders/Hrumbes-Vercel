@@ -7,10 +7,10 @@ import rainbowLoader from "@/assets/animations/rainbowloader.json";
 // import AIloader from "@/assets/animations/ai_loader.json"
 import { FaPersonCircleQuestion } from "react-icons/fa6";
 import { ArrowRight } from "lucide-react";
-
+ 
 <ArrowRight className="mr-1 w-3 h-3 animate-bounce" />
-
-
+ 
+ 
 interface ValidateResumeButtonProps {
   isValidated: boolean;
   candidateId: number;
@@ -18,7 +18,7 @@ interface ValidateResumeButtonProps {
   isLoading?: boolean;
   overallScore?: number;
 }
-
+ 
 const ValidateResumeButton = ({
   isValidated,
   candidateId,
@@ -28,15 +28,15 @@ const ValidateResumeButton = ({
 }: ValidateResumeButtonProps) => {
   const user = useSelector((state: any) => state.auth.user);
   const userId = user?.id || null;
-
+ 
   const getScoreColor = (score: number) => {
   if (score >= 80) return "bg-green-100 text-green-800";
   if (score >= 60) return "bg-yellow-100 text-yellow-800";
   return "bg-red-100 text-red-800";
 };
-
-  
-
+ 
+ 
+ 
   // ✅ Case 1: Show score bar if validated with score
   if (isValidated && overallScore !== undefined) {
     return (
@@ -49,12 +49,12 @@ const ValidateResumeButton = ({
        <div className={`h-[20px] rounded-md ${getScoreColor(overallScore)}  flex items-center justify-center text-sm font-semibold`}>
   {overallScore}/100
 </div>
-
-
+ 
+ 
       </div>
     );
   }
-
+ 
   // ✅ Case 2: Show Lottie loader full width when loading
   if (isLoading) {
     return (
@@ -71,7 +71,7 @@ const ValidateResumeButton = ({
       </div>
     );
   }
-
+ 
   // ✅ Case 3: Button (validated with no score OR not validated)
   return (
 <div className="relative group flex items-center justify-center">
@@ -85,7 +85,7 @@ const ValidateResumeButton = ({
   >
     <FaPersonCircleQuestion />
   </Button>
-
+ 
   {/* AI Tip on Hover */}
   {!isValidated && (
   <div className="absolute left-full ml-2">
@@ -98,14 +98,14 @@ const ValidateResumeButton = ({
     </span>
   </div>
 )}
-
+ 
 </div>
-
-
-
-
-
+ 
+ 
+ 
+ 
+ 
   );
 };
-
+ 
 export default ValidateResumeButton;
