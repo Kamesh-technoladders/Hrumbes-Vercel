@@ -1750,6 +1750,8 @@ const CandidatesList = ({
 
   const recruitmentStages = ["New", "InReview", "Engaged", "Available", "Offered", "Hired"];
 
+  const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://62.72.51.159:5005";
+
   useEffect(() => {
     setFilteredCandidates(candidatesData);
 
@@ -2093,148 +2095,331 @@ const CandidatesList = ({
   //     setValidatingId(null);
   //   }
   // };
-  const handleValidateResume = async (candidateId: string) => {
-    try {
-      setValidatingId(candidateId);
-      const candidate = filteredCandidates.find((c) => c.id === candidateId);
-      if (!candidate) {
-        toast.error("Candidate not found");
-        return;
-      }
+  // const handleValidateResume = async (candidateId: string) => {
+  //   try {
+  //     setValidatingId(candidateId);
+  //     const candidate = filteredCandidates.find((c) => c.id === candidateId);
+  //     if (!candidate) {
+  //       toast.error("Candidate not found");
+  //       return;
+  //     }
   
-      const resumeUrlParts = candidate.resume.split("candidate_resumes/");
-      const extractedResumeUrl = resumeUrlParts.length > 1 ? resumeUrlParts[1] : candidate.resume;
+  //     const resumeUrlParts = candidate.resume.split("candidate_resumes/");
+  //     const extractedResumeUrl = resumeUrlParts.length > 1 ? resumeUrlParts[1] : candidate.resume;
   
-      // Validate job_id by querying hr_jobs with id (UUID)
-      const { data: jobData, error: jobError } = await supabase
-        .from("hr_jobs")
-        .select("job_id, id")
-        .eq("id", jobId)
-        .single();
+  //     // Validate job_id by querying hr_jobs with id (UUID)
+  //     const { data: jobData, error: jobError } = await supabase
+  //       .from("hr_jobs")
+  //       .select("job_id, id")
+  //       .eq("id", jobId)
+  //       .single();
   
-      if (jobError || !jobData) {
-        console.error("Job ID validation failed:", jobError || "No job data");
-        toast.error("Invalid job ID. Please check the job configuration.");
-        return;
-      }
+  //     if (jobError || !jobData) {
+  //       console.error("Job ID validation failed:", jobError || "No job data");
+  //       toast.error("Invalid job ID. Please check the job configuration.");
+  //       return;
+  //     }
   
-      const jobTextId = jobData.job_id;
-      const jobUuid = jobData.id;
+  //     const jobTextId = jobData.job_id;
+  //     const jobUuid = jobData.id;
   
-      const payload = {
-        job_id: jobTextId,
-        candidate_id: candidateId,
-        resume_url: extractedResumeUrl,
-        job_description: jobdescription,
-      };
+  //     const payload = {
+  //       job_id: jobTextId,
+  //       candidate_id: candidateId,
+  //       resume_url: extractedResumeUrl,
+  //       job_description: jobdescription,
+  //     };
   
-      console.log("Backend data", payload);
+  //     console.log("Backend data", payload);
   
-      const response = await fetch("http://62.72.51.159:5005/api/validate-candidate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+  //     const response = await fetch("http://62.72.51.159:5005/api/validate-candidate", {
+  //       method: "POST",
+  //       headers: {
+
+  //         "Content-Type": "application/json",
+  //         "Accept": "application/json",
+  //       },
+  //       body: JSON.stringify(payload),
+  //     });
   
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Validation failed: ${response.status} ${response.statusText} - ${errorText}`);
-        throw new Error(`Validation failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
+  //     if (!response.ok) {
+  //       const errorText = await response.text();
+  //       console.error(`Validation failed: ${response.status} ${response.statusText} - ${errorText}`);
+  //       throw new Error(`Validation failed: ${response.status} ${response.statusText} - ${errorText}`);
+  //     }
   
-      const responseData = await response.json();
-      console.log("Validation response:", responseData);
+  //     const responseData = await response.json();
+  //     console.log("Validation response:", responseData);
   
-      let overallScore = null;
-      let attempts = 0;
-      const maxAttempts = 20;
-      const interval = 5000;
+  //     let overallScore = null;
+  //     let attempts = 0;
+  //     const maxAttempts = 20;
+  //     const interval = 5000;
   
-      while (!overallScore && attempts < maxAttempts) {
-        const { data, error } = await supabase
-          .from("candidate_resume_analysis")
-          .select("overall_score, has_validated_resume")
-          .eq("job_id", jobUuid)
-          .eq("candidate_id", candidateId)
-          .single();
+  //     while (!overallScore && attempts < maxAttempts) {
+  //       const { data, error } = await supabase
+  //         .from("candidate_resume_analysis")
+  //         .select("overall_score, has_validated_resume")
+  //         .eq("job_id", jobUuid)
+  //         .eq("candidate_id", candidateId)
+  //         .single();
   
-        if (error && error.code !== "PGRST116") {
-          console.error("Supabase polling error:", error);
-          throw new Error(`Polling error: ${error.message}`);
-        }
+  //       if (error && error.code !== "PGRST116") {
+  //         console.error("Supabase polling error:", error);
+  //         throw new Error(`Polling error: ${error.message}`);
+  //       }
   
-        if (data && data.overall_score !== null) {
-          overallScore = data.overall_score;
-          if (data.has_validated_resume) {
-            console.log("Resume validated in candidate_resume_analysis");
-          }
-          break;
-        }
+  //       if (data && data.overall_score !== null) {
+  //         overallScore = data.overall_score;
+  //         if (data.has_validated_resume) {
+  //           console.log("Resume validated in candidate_resume_analysis");
+  //         }
+  //         break;
+  //       }
   
-        // Check job logs for backend errors after 3 attempts
-        if (attempts >= 3 && responseData.job_id) {
-          try {
-            const logResponse = await fetch(`http://62.72.51.159:5005/api/job-logs/${responseData.job_id}`, {
-              method: "GET",
-              headers: { "Accept": "application/json" }
-            });
-            if (logResponse.ok) {
-              const logs = await logResponse.json();
-              const errorLog = logs.find(log => log.stage === "error" || log.message.includes("Failed"));
-              if (errorLog) {
-                console.error("Backend task failed:", errorLog.message);
-                throw new Error(`Resume validation failed: ${errorLog.message}`);
-              }
-            }
-          } catch (logError) {
-            console.warn("Failed to fetch job logs:", logError);
-          }
-        }
+  //       // Check job logs for backend errors after 3 attempts
+  //       if (attempts >= 3 && responseData.job_id) {
+  //         try {
+  //           const logResponse = await fetch(`http://62.72.51.159:5005/api/job-logs/${responseData.job_id}`, {
+  //             method: "GET",
+  //             headers: { "Accept": "application/json" }
+  //           });
+  //           if (logResponse.ok) {
+  //             const logs = await logResponse.json();
+  //             const errorLog = logs.find(log => log.stage === "error" || log.message.includes("Failed"));
+  //             if (errorLog) {
+  //               console.error("Backend task failed:", errorLog.message);
+  //               throw new Error(`Resume validation failed: ${errorLog.message}`);
+  //             }
+  //           }
+  //         } catch (logError) {
+  //           console.warn("Failed to fetch job logs:", logError);
+  //         }
+  //       }
   
-        console.log(`Polling attempt ${attempts + 1}/${maxAttempts} - No score yet`);
-        await new Promise((resolve) => setTimeout(resolve, interval));
-        attempts++;
-      }
+  //       console.log(`Polling attempt ${attempts + 1}/${maxAttempts} - No score yet`);
+  //       await new Promise((resolve) => setTimeout(resolve, interval));
+  //       attempts++;
+  //     }
   
-      if (!overallScore) {
-        throw new Error("Resume validation timed out. Check backend logs for errors.");
-      }
+  //     if (!overallScore) {
+  //       throw new Error("Resume validation timed out. Check backend logs for errors.");
+  //     }
   
-      // Update hr_job_candidates
-     const{data, error} =  await supabase
-        .from("hr_job_candidates")
-        .update({ has_validated_resume: true })
-        .eq("candidate_id", candidateId)
-        .eq("job_id", jobUuid);
-        if (error) {
-          console.error("Error updating resume validation:", error);
-          toast.error("Failed to update resume validation status.");
-          return;
-        }
-        console.log("job it checking", jobUuid)
-      await refetch();
+  //     // Update hr_job_candidates
+  //    const{data, error} =  await supabase
+  //       .from("hr_job_candidates")
+  //       .update({ has_validated_resume: true })
+  //       .eq("candidate_id", candidateId)
+  //       .eq("job_id", jobUuid);
+  //       if (error) {
+  //         console.error("Error updating resume validation:", error);
+  //         toast.error("Failed to update resume validation status.");
+  //         return;
+  //       }
+  //       console.log("job it checking", jobUuid)
+  //     await refetch();
   
-      const candidateIndex = filteredCandidates.findIndex((c) => c.id === candidateId);
-      if (candidateIndex !== -1) {
-        filteredCandidates[candidateIndex].hasValidatedResume = true;
-        setFilteredCandidates([...filteredCandidates]);
-        setAnalysisDataAvailable((prev) => ({
-          ...prev,
-          [candidateId]: true,
-        }));
-        toast.success("Resume validated successfully!");
-        await fetchAnalysisData(candidateId);
-      }
-    } catch (error) {
-      console.error("Validation error:", error);
-      toast.error(error.message || "Failed to validate resume");
-    } finally {
-      setValidatingId(null);
+  //     const candidateIndex = filteredCandidates.findIndex((c) => c.id === candidateId);
+  //     if (candidateIndex !== -1) {
+  //       filteredCandidates[candidateIndex].hasValidatedResume = true;
+  //       setFilteredCandidates([...filteredCandidates]);
+  //       setAnalysisDataAvailable((prev) => ({
+  //         ...prev,
+  //         [candidateId]: true,
+  //       }));
+  //       toast.success("Resume validated successfully!");
+  //       await fetchAnalysisData(candidateId);
+  //     }
+  //   } catch (error) {
+  //     console.error("Validation error:", error);
+  //     toast.error(error.message || "Failed to validate resume");
+  //   } finally {
+  //     setValidatingId(null);
+  //   }
+  // };
+
+ // --- UPDATED handleValidateResume using Proxy for POST, Direct for GET ---
+ const handleValidateResume = async (candidateId: string) => {
+  let rqJobId: string | null = null; // RQ Job ID from backend response
+
+  // Prevent re-validation if already loading
+  if (validatingId) return;
+
+  try {
+    setValidatingId(candidateId); // Show loading state
+    toast.info("Starting resume validation...");
+
+    // Find candidate data locally first
+    const candidate = filteredCandidates.find((c) => c.id === candidateId);
+    // Ensure candidate and resume URL exist
+    if (!candidate || !candidate.resume) {
+      throw new Error("Candidate or resume data missing.");
     }
-  };
+
+    const resumeUrlParts = candidate.resume.split("candidate_resumes/");
+    const extractedResumeUrl = resumeUrlParts.length > 1 ? resumeUrlParts[1] : candidate.resume;
+
+    // Get the TEXT job ID (e.g., ASC022) needed for the initial POST payload
+    // Assumes `jobId` prop passed to CandidatesList is the UUID
+    const { data: jobData, error: jobError } = await supabase
+      .from("hr_jobs")
+      .select("job_id") // Select the text job_id
+      .eq("id", jobId) // Filter by the UUID jobId passed as prop
+      .single(); // Expect exactly one job
+
+    if (jobError || !jobData) { throw new Error("Invalid job configuration. Could not find job details."); }
+    const jobTextId = jobData.job_id; // e.g., ASC022
+
+    // Payload for the backend API via proxy
+    const payload = {
+      job_id: jobTextId,
+      candidate_id: candidateId,
+      resume_url: extractedResumeUrl,
+      job_description: jobdescription, // Pass the description prop
+    };
+    console.log("Sending payload to proxy /api/proxy:", payload);
+
+    // --- Call the Vercel Proxy (POST) ---
+    const response = await fetch("/api/proxy", { // Relative path to your proxy function
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    // ---
+
+    if (!response.ok) { // Check if response status is 2xx
+      const errorText = await response.text();
+      console.error(`Proxy validation request failed: ${response.status} - ${errorText}`);
+      try { const errorJson = JSON.parse(errorText); throw new Error(errorJson.error || `Validation start failed: ${response.status}`); }
+      catch { throw new Error(`Validation start request failed: ${response.status}`); }
+    }
+
+    const responseData = await response.json();
+    console.log("Proxy validation response:", responseData);
+    if (!responseData.job_id) { throw new Error("Backend did not return a job ID to track."); }
+    rqJobId = responseData.job_id; // Store the RQ job ID
+
+    // --- Start Polling Job Status (Directly to Backend - GET) ---
+    let attempts = 0;
+    const maxAttempts = 24; // ~2 minutes
+    const interval = 5000; // 5 seconds
+
+    const pollJobStatus = (): Promise<string> => {
+      return new Promise(async (resolve, reject) => {
+        // Check attempt count before making the call
+        if (attempts >= maxAttempts) {
+           console.error(`Polling timed out after ${maxAttempts} attempts for job ${rqJobId}.`);
+           return reject(new Error("Validation timed out. Check server logs."));
+        }
+        attempts++;
+        console.log(`Polling attempt ${attempts}/${maxAttempts} for job ${rqJobId}...`);
+
+        try {
+          // --- Poll the backend status endpoint DIRECTLY ---
+          const statusApiUrl = `${backendBaseUrl}/api/job-status/${rqJobId}`;
+          console.log(`Polling URL: ${statusApiUrl}`);
+          const statusResponse = await fetch(statusApiUrl);
+          // ---
+
+          console.log(`Polling response status: ${statusResponse.status}`);
+
+          if (!statusResponse.ok) {
+            const pollErrorText = await statusResponse.text();
+            console.warn(`Polling status check failed (attempt ${attempts}): ${statusResponse.status} - ${pollErrorText}`);
+            // Retry until maxAttempts
+            setTimeout(() => pollJobStatus().then(resolve).catch(reject), interval);
+            return;
+          }
+
+          const statusData = await statusResponse.json();
+          console.log(`Polling status data:`, statusData);
+
+          if (statusData.status === 'finished') {
+            console.log("Job finished!");
+            return resolve(statusData.status); // Resolve the promise
+          } else if (statusData.status === 'failed') {
+            console.error("Backend job failed:", statusData.result?.error);
+            // Try fetching logs DIRECTLY for better error message
+            try {
+                const logApiUrl = `${backendBaseUrl}/api/job-logs/${rqJobId}`;
+                console.log(`Fetching failure logs from: ${logApiUrl}`);
+                const logResponse = await fetch(logApiUrl);
+                if (logResponse.ok) {
+                    const logsJson = await logResponse.json();
+                    console.log("Failure Logs:", logsJson.logs);
+                    // Look for specific error step in logs
+                    const errorLog = logsJson.logs?.find((log: any) => log.step?.includes("error"));
+                    const errorMessage = errorLog?.data?.error_message || statusData.result?.error || "Analysis failed on backend.";
+                    return reject(new Error(errorMessage)); // Reject with specific error
+                } else {
+                    console.warn(`Failed to fetch logs (${logResponse.status}), using original error.`);
+                    return reject(new Error(statusData.result?.error || "Analysis failed (could not fetch logs)."));
+                }
+            } catch (logError) {
+                console.warn("Error fetching failure logs:", logError);
+                return reject(new Error(statusData.result?.error || "Analysis failed (log fetch error)."));
+            }
+          } else {
+            // Still queued or started, schedule next poll
+            setTimeout(() => pollJobStatus().then(resolve).catch(reject), interval);
+          }
+        } catch (error) {
+          console.error("Network or other error during polling attempt:", error);
+           if (error instanceof TypeError && error.message.includes('fetch')) {
+               return reject(new Error("Network error polling job status. Check backend connectivity/CORS."));
+           }
+          // Retry for other errors until max attempts
+          if (attempts < maxAttempts) {
+             setTimeout(() => pollJobStatus().then(resolve).catch(reject), interval);
+          } else {
+             reject(new Error("Polling failed after multiple retry attempts."));
+          }
+        }
+      });
+    };
+
+    // Wait for polling to finish or fail
+    await pollJobStatus();
+
+    // --- Polling Succeeded ---
+    toast.success("Resume validation process completed successfully!");
+
+    // Refetch main candidate list data to update UI (e.g., show checkmark)
+    // This should now reflect the has_validated_resume=true set by the backend
+    await refetch();
+
+    // Fetch final detailed analysis data for the modal
+    const finalAnalysisData = await fetchAnalysisData(candidateId);
+    if (finalAnalysisData) {
+      console.log("Displaying modal with final data:", finalAnalysisData);
+      // Update local states to ensure modal has the latest data
+      setAnalysisDataAvailable((prev) => ({ ...prev, [candidateId]: true }));
+      // Update the potentially less strict state if needed elsewhere
+      setCandidateAnalysisData((prev) => ({ ...prev, [candidateId]: finalAnalysisData }));
+      // Set data for and open the modal
+      setAnalysisData(finalAnalysisData);
+      setIsSummaryModalOpen(true);
+    } else {
+       // Handle case where job finished but fetching final data from DB failed
+       toast.warn("Validation complete, but failed to load final analysis details.");
+       // Ensure analysis available state is false if data couldn't be loaded
+       setAnalysisDataAvailable((prev) => ({ ...prev, [candidateId]: false }));
+    }
+
+  } catch (error: any) {
+    // Catch errors from initial POST or the polling promise rejection
+    console.error("Overall validation error in handleValidateResume:", error);
+    toast.error(error.message || "Failed to validate resume");
+    // No DB updates from frontend on failure
+  } finally {
+    setValidatingId(null); // Stop loading indicator regardless of outcome
+  }
+}; // --- END handleValidateResume ---
+
+
+
+
 
   const handleViewResume = (candidateId: string) => {
     const candidate = filteredCandidates.find((c) => c.id === candidateId);
