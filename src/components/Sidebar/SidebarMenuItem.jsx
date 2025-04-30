@@ -31,6 +31,7 @@ const menuItemsByRole = {
     { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
     { icon: GoGoal, label: "Goals", path: "/goals" },
     { icon: ImProfile, label: "My Profile", path: "/profile" },
+    { icon: AiOutlineProfile, label: "Reports", path: "/reports" },
     // { icon: MdOutlineManageAccounts, label: "User Management", path: "/user-management" },
     { icon: FiSettings, label: "Settings", path: "#" },
   ],

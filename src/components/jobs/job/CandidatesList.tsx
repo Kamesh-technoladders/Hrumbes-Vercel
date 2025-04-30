@@ -2416,6 +2416,7 @@ const CandidatesList = ({
     setValidatingId(null); // Stop loading indicator regardless of outcome
   }
 }; // --- END handleValidateResume ---
+ 
 
 
 

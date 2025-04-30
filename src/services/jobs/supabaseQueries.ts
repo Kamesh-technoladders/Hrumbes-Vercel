@@ -131,18 +131,16 @@ export const updateJobStatusRecord = async (jobId: string, status: string) => {
   return { data, error };
 };
 
-export const deleteJobRecord = async (id: string) => {
+export const deleteJobRecord = async (id: string): Promise<void> => {
+  console.log('Deleting job with ID:', id);
   const { error } = await supabase
-    .from("hr_jobs")
+    .from('hr_jobs')
     .delete()
-    .eq("id", id);
-
+    .eq('id', id);
   if (error) {
-    console.error("Error deleting job:", error);
+    console.error('Error deleting job:', error);
     throw error;
   }
-
-  return { error };
 };
 
 export const shareJob = async (jobId) => {

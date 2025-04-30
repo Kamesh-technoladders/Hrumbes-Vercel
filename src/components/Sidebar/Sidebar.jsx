@@ -48,12 +48,18 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
       display={isMobile && !isExpanded ? "none" : "flex"} // ✅ Hide on Mobile When Collapsed
     >
       {/* Sidebar Header */}
-      <Box textAlign="center" mb={6}>
-        <Image src="/hr-icon.svg" alt="Logo" boxSize={isExpanded ? "50px" : "40px"} transition="box-size 0.3s ease" mb={2} />
-        {isExpanded && <Text fontSize="md" fontWeight="bold">Hello!</Text>}
-        {isExpanded && <Text fontSize="sm" color="gray.500">Good Morning</Text>}
+      <Box display="flex" flexDirection="column" alignItems="center" mb={6}>
+        <Image
+          src="/hrumbles_logo2.png"
+          alt="Logo"
+          width={isExpanded ? "140px" : "60px"} // Adjusted sizes for better fit
+          height="auto" // Preserve aspect ratio
+          transition="width 0.3s ease" // Transition width, not boxSize
+          mb={isExpanded ? 3 : 2} // Adjust margin based on state
+        />
+        {/* {isExpanded && <Text fontSize="md" fontWeight="bold">Hello!</Text>}
+        {isExpanded && <Text fontSize="sm" color="gray.500">Good Morning</Text>} */}
       </Box>
-
       {/* Scrollable Menu */}
       <VStack
         spacing={2}
