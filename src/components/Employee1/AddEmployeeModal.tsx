@@ -25,6 +25,7 @@ interface FormData {
   hire_type: string;
   salary: string;
   salary_type: string;
+  joining_date: string;
 }
 
 interface Department {
@@ -176,6 +177,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ isOpen, onClose }) 
     hire_type: "",
     salary: "",
     salary_type: "LPA",
+    joining_date: "", 
   });
 
   const [formattedSalary, setFormattedSalary] = useState<string>("");
@@ -394,6 +396,15 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ isOpen, onClose }) 
                 onChange={handleSelectChange("salary_type")}
                 options={salaryTypeOptions}
               />
+              <FormInput
+  label="Joining Date"
+  placeholder="Select joining date"
+  name="joining_date"
+  value={formData.joining_date}
+  onChange={handleChange}
+  type="date"
+/>
+
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-6">

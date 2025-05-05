@@ -39,6 +39,7 @@ const createEmployee = createAsyncThunk("employees/createEmployee", async (emplo
             hire_type: employeeData.hire_type,
             salary: employeeData.salary, // Added salary
             salary_type: employeeData.salary_type, // Added salary_type
+            joining_date: employeeData.joining_date
           },
         },
       });
@@ -64,6 +65,7 @@ const createEmployee = createAsyncThunk("employees/createEmployee", async (emplo
         hire_type: employeeData.hire_type,
         salary: Number(employeeData.salary), // Convert to number for NUMERIC column
         salary_type: employeeData.salary_type, // Store as TEXT
+        joining_date: employeeData.joining_date
       });
   
       if (profileError) return rejectWithValue(profileError.message);

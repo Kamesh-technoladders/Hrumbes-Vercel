@@ -76,6 +76,7 @@ interface EmployeeFormData {
   profilePictureUrl: string;
   salary: string; // Added
   salary_type: string; // Added
+  joining_date: string;
   presentAddress: {
     addressLine1: string;
     addressLine2?: string;
@@ -169,6 +170,7 @@ const initialFormData: EmployeeFormData = {
   profilePictureUrl: "",
   salary: "", // Added
   salary_type: "LPA", // Added, default to LPA
+  joining_date: "",
   presentAddress: {
     addressLine1: "",
     country: "India",
@@ -469,6 +471,7 @@ const handleSalaryChange = (value: string) => {
         profilePictureUrl: employeeData.profile_picture_url || "",
         salary: employeeData.salary ? employeeData.salary.toString() : "", // Added
         salary_type: employeeData.salary_type || "LPA", // Added
+        joining_date: employeeData.joining_date,
         
         presentAddress: presentAddressData ? {
           addressLine1: presentAddressData.address_line1 || "",
@@ -1392,6 +1395,7 @@ const handleExpUpload = async (
         profile_picture_url: formData.profilePictureUrl,
         salary: Number(formData.salary) || null, // Convert to number
         salary_type: formData.salary_type || null, // Added
+        joining_date: formData.joining_date || null,
       };
       
       let employeeId = id;
@@ -1904,8 +1908,19 @@ const handleExpUpload = async (
               </Select>
               {errors.salary_type && <p className="text-red-500 text-xs mt-1">{errors.salary_type}</p>}
             </div>
+            
   }
+  <div className="max-w-xs">
+              <Label htmlFor="joining_date">Joining Date</Label>
+              <Input
+                type="date"
+                id="joining_date"
+                value={formData.joining_date}
+                onChange={(e) => handleInputChange("joining_date", e.target.value)}
+              />
+            </div>
           </div>
+          
         </div>
       </TabsContent>
     );
