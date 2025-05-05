@@ -1836,7 +1836,7 @@ const handleExpUpload = async (
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="Active">Active</SelectItem>
                   <SelectItem value="Inactive">Inactive</SelectItem>
                   <SelectItem value="Terminated">Terminated</SelectItem>
                 </SelectContent>

@@ -136,29 +136,47 @@ useEffect(() => {
   console.log("Basic Information Tab Data:", watchedValues);
 }, [watchedValues]); // Logs whenever the form values change
 
+const checkDuplicateCandidate = async (jobId: string, email: string, phone: string) => {
+  const { data, error } = await supabase
+    .from("hr_job_candidates")
+    .select("id, email, phone")
+    .eq("job_id", jobId)
+    .or(`email.eq.${email},phone.eq.${phone}`);
+
+  if (error) {
+    console.error("Error checking duplicate candidate:", error);
+    throw error;
+  }
+
+  return data && data.length > 0;
+};
+
+
 const handleSaveBasicInfo = async (data: CandidateFormData) => {
-  console.log("Form Data Before Saving:", data); // Log the data
+  console.log("Form Data Before Saving:", data);
+
+  if (!data.resume) {
+    toast.error("Resume is required. Please upload your resume.");
+    return;
+  }
+
+  if (!job.id) {
+    toast.error("Job ID is missing");
+    return;
+  }
 
   try {
-    if (!job.id) {
-      toast.error("Job ID is missing");
-      return;
-    }
-
     const appliedFrom = user?.user_metadata
       ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
       : "Unknown";
+    const createdby = user?.id;
 
-      const createdby = user?.id
+    const formatExperience = (years: number, months?: number) => {
+      const yearsStr = years > 0 ? `${years} year${years === 1 ? "" : "s"}` : "";
+      const monthsStr = months && months > 0 ? `${months} month${months === 1 ? "" : "s"}` : "";
+      return [yearsStr, monthsStr].filter(Boolean).join(" and ") || "0 years";
+    };
 
-      // Format experience string to include months
-      const formatExperience = (years: number, months?: number) => {
-        const yearsStr = years > 0 ? `${years} year${years === 1 ? "" : "s"}` : "";
-        const monthsStr = months && months > 0 ? `${months} month${months === 1 ? "" : "s"}` : "";
-        return [yearsStr, monthsStr].filter(Boolean).join(" and ") || "0 years";
-      };
-
-    // Create a new candidate with basic information
     const candidateData = {
       id: candidateId || "",
       name: `${data.firstName} ${data.lastName}`,
@@ -173,44 +191,47 @@ const handleSaveBasicInfo = async (data: CandidateFormData) => {
       expectedSalary: data.expectedSalary,
       location: data.currentLocation,
       appliedFrom,
-      resumeUrl: data.resume, // Ensure this is set correctly
+      resumeUrl: data.resume,
       createdBy: createdby,
       metadata: {
         currentLocation: data.currentLocation,
         preferredLocations: data.preferredLocations,
         totalExperience: data.totalExperience,
-        totalExperienceMonths: data.totalExperienceMonths, // Added
+        totalExperienceMonths: data.totalExperienceMonths,
         relevantExperience: data.relevantExperience,
         relevantExperienceMonths: data.relevantExperienceMonths,
         currentSalary: data.currentSalary,
         expectedSalary: data.expectedSalary,
-        resume_url: data.resume, // Optional: include in metadata as well
-        noticePeriod: data.noticePeriod, // Add Notice Period
-        lastWorkingDay: data.lastWorkingDay, // Add Last Working Day
-        linkedInId: data.linkedInId || undefined, // Include LinkedIn ID
-          hasOffers: data.hasOffers || undefined, // Include Has Offers
-          offerDetails: data.offerDetails || undefined, // Include Offer Details
-        uan: data.uan || undefined, // Include UAN
-          pan: data.pan || undefined, // Include PAN
-          pf: data.pf || undefined, // Include PF
-          esicNumber: data.esicNumber || undefined, // Include ESIC Number
+        resume_url: data.resume,
+        noticePeriod: data.noticePeriod,
+        lastWorkingDay: data.lastWorkingDay,
+        linkedInId: data.linkedInId || undefined,
+        hasOffers: data.hasOffers || undefined,
+        offerDetails: data.offerDetails || undefined,
+        uan: data.uan || undefined,
+        pan: data.pan || undefined,
+        pf: data.pf || undefined,
+        esicNumber: data.esicNumber || undefined,
       }
     };
 
-    console.log("Candidate Data to be Sent:", candidateData); // Log candidate data
-
+    // ✅ Prevent duplicate if not in edit mode
     if (!candidateId) {
-      // Create new candidate
+      const isDuplicate = await checkDuplicateCandidate(job.id, data.email, data.phone);
+      if (isDuplicate) {
+        toast.error("Candidate with same email or phone already exists for this job.");
+        return;
+      }
+
       const newCandidate = await createCandidate(job.id, candidateData);
       setCandidateId(newCandidate.id);
       toast.success("Basic information saved successfully");
     } else {
-      // Update existing candidate
+      // Edit mode - safe to update
       await updateCandidate(candidateId, candidateData);
       toast.success("Basic information updated successfully");
     }
 
-    // Move to skills tab
     setActiveTab("skills-info");
 
   } catch (error) {
@@ -218,6 +239,7 @@ const handleSaveBasicInfo = async (data: CandidateFormData) => {
     toast.error("Failed to save basic information");
   }
 };
+
   
 const handleSaveSkills = async (data: CandidateFormData) => {
   try {
@@ -256,15 +278,16 @@ const handleSaveProofId = async (data: CandidateFormData) => {
 
     await updateCandidate(candidateId, candidateData);
     toast.success("Proof ID information saved successfully");
-    onCandidateAdded();
-    handleClose();
+    handleClose(); // Close drawer after final step
+    onCandidateAdded(); // Trigger refresh in parent
   } catch (error) {
-    console.error("Error saving candidate proof ID:", error);
+    console.error("Error saving proof ID information:", error);
     toast.error("Failed to save proof ID information");
   } finally {
     setIsSaving(false); // Reset loading state
   }
 };
+
 // Function to fetch candidate by ID
 const fetchCandidateById = async (id: string) => {
   const { data, error } = await supabase

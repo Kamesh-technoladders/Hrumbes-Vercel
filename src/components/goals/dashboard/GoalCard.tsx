@@ -1,38 +1,23 @@
 
 import React from "react";
-import { useNavigate } from "react-router-dom";
-import { Calendar, Users, BarChart3, Clock, Target, ChevronRight } from "lucide-react";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import ProgressTracker from "@/components/goals/goals/ProgressTracker";
-import AnimatedCard from "@/components/ui/custom/AnimatedCard";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { 
+  AlertCircle, 
+  Users, 
+  CheckCircle, 
+  Calendar, 
+  Clock, 
+  BarChart3, 
+  Target, 
+  ArrowUpRight 
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { GoalWithDetails } from "@/types/goal";
-import { format, parseISO, formatDistanceToNow } from "date-fns";
+import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
-// Adding this AvatarGroup component since it's not included in shadcn by default
-const AvatarGroup = ({ children, limit = 3, className = "" }: { 
-  children: React.ReactNode; 
-  limit?: number; 
-  className?: string;
-}) => {
-  const childrenArray = React.Children.toArray(children);
-  const limitedChildren = childrenArray.slice(0, limit);
-  const excess = childrenArray.length - limit;
-
-  return (
-    <div className={`flex -space-x-2 ${className}`}>
-      {limitedChildren}
-      {excess > 0 && (
-        <Avatar className="ring-2 ring-background">
-          <AvatarFallback className="bg-muted text-muted-foreground text-xs">
-            +{excess}
-          </AvatarFallback>
-        </Avatar>
-      )}
-    </div>
-  );
-};
 
 interface GoalCardProps {
   goal: GoalWithDetails;
@@ -42,237 +27,199 @@ interface GoalCardProps {
 const GoalCard: React.FC<GoalCardProps> = ({ goal, delay = 0 }) => {
   const navigate = useNavigate();
   
-console.log("Goaaalssss:", goal)
-
-  // Calculate the total target value across all assigned employees
-  const calculateTotalTarget = () => {
-    if (!goal.assignedTo || goal.assignedTo.length === 0) {
-      return goal.targetValue || 0;
+  // Calculate aggregated values from all assignments
+  const totalTargetValue = goal.assignments?.reduce((sum, assignment) => sum + assignment.targetValue, 0) || 0;
+  const totalCurrentValue = goal.assignments?.reduce((sum, assignment) => sum + assignment.currentValue, 0) || 0;
+  const overallProgress = totalTargetValue > 0 ? Math.min(Math.round((totalCurrentValue / totalTargetValue) * 100), 100) : 0;
+  
+  // Determine overall status
+  const getOverallStatus = () => {
+    if (!goal.assignments || goal.assignments.length === 0) return 'pending';
+    
+    if (goal.assignments.every(a => a.status === 'completed')) {
+      return 'completed';
     }
     
-    // If there's just one assignment or no detailed assignments
-    if (!Array.isArray(goal.assignedTo) || goal.assignedTo.length <= 1) {
-      return goal.assignmentDetails?.targetValue || goal.targetValue || 0;
+    if (goal.assignments.some(a => a.status === 'overdue')) {
+      return 'overdue';
     }
     
-    // Try to get detailed assignments data if available through an API
-    // This would require the backend to expose all assignments for this goal
-    // For now, we'll just return the assignment target value or goal target value
-    return goal.assignmentDetails?.targetValue || goal.targetValue || 0;
-  };
-  
-  // Calculate the current progress value
-  const calculateCurrentValue = () => {
-    return goal.assignmentDetails?.currentValue || 0;
-  };
-  
-  // Get the total target value
-  const totalTargetValue = calculateTotalTarget();
-  const currentValue = calculateCurrentValue();
-  
-  // Calculate progress percentage
-  const calculateProgress = () => {
-    if (totalTargetValue === 0) return 0;
-    const progress = (currentValue / totalTargetValue) * 100;
-    return Math.min(Math.round(progress), 100);
-  };
-  
-  const progress = calculateProgress();
-  
-  const formatDate = (dateString: string) => {
-    try {
-      return format(parseISO(dateString), "MMM d, yyyy");
-    } catch (e) {
-      return dateString;
+    if (goal.assignments.some(a => a.status === 'in-progress')) {
+      return 'in-progress';
     }
-  };
-
-  const getSectorColor = (sector: string) => {
-    switch (sector.toLowerCase()) {
-      case "hr":
-        return "bg-sector-hr text-white";
-      case "sales":
-        return "bg-sector-sales text-white";
-      case "finance":
-        return "bg-sector-finance text-white";
-      case "operations":
-        return "bg-sector-operations text-white";
-      case "marketing":
-        return "bg-sector-marketing text-white";
-      default:
-        return "bg-gray-500 text-white";
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800";
-      case "in-progress":
-        return "bg-blue-100 text-blue-800";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "overdue":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getGoalTypeIcon = (goalType: string) => {
-    switch (goalType?.toLowerCase()) {
-      case "daily":
-        return <Clock className="h-4 w-4 mr-1" />;
-      case "weekly":
-        return <Calendar className="h-4 w-4 mr-1" />;
-      case "monthly":
-        return <Target className="h-4 w-4 mr-1" />;
-      case "yearly":
-        return <BarChart3 className="h-4 w-4 mr-1" />;
-      default:
-        return <Target className="h-4 w-4 mr-1" />;
-    }
-  };
-
-  const getGoalTypeLabel = () => {
-    if (!goal.assignmentDetails?.goalType) return null;
     
-    const goalType = goal.assignmentDetails.goalType;
-    return (
-      <Badge variant="outline" className="bg-purple-50 text-purple-800 border-purple-100 flex items-center">
-        {getGoalTypeIcon(goalType)}
-        <span>{goalType}</span>
-      </Badge>
-    );
+    return 'pending';
   };
-
-  const getTimeRemaining = () => {
-    if (!goal.endDate) return null;
-    
-    try {
-      const endDate = parseISO(goal.endDate);
-      if (endDate < new Date()) {
-        return <span className="text-red-500">Expired</span>;
-      }
-      return formatDistanceToNow(endDate, { addSuffix: true });
-    } catch (e) {
-      return null;
-    }
-  };
-
-  const handleCardClick = () => {
+  
+  const status = getOverallStatus();
+  
+  // Get all goal types for this goal
+  const goalTypes = Array.from(new Set(goal.assignments?.map(a => a.goalType) || []));
+  
+  // Get employee count
+  const employeeCount = goal.assignedTo?.length || 0;
+  
+  const handleClick = () => {
     navigate(`/goals/${goal.id}`);
   };
 
+  // Get the appropriate status icon
+  const getStatusIcon = () => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'in-progress':
+        return <BarChart3 className="h-4 w-4 text-blue-500" />;
+      case 'overdue':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-amber-500" />;
+    }
+  };
+
+  // Get badge classes based on status
+  const getStatusBadgeClasses = () => {
+    switch (status) {
+      case 'completed':
+        return "bg-green-100 text-green-800 border-green-200";
+      case 'in-progress':
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case 'overdue':
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-amber-100 text-amber-800 border-amber-200";
+    }
+  };
+
   return (
-    <AnimatedCard
-      animation="fade"
-      delay={delay}
-      className="bg-white border border-gray-100 transition-all cursor-pointer hover:shadow-md"
-      onClick={handleCardClick}
+    <Card
+      className="overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col animate-in fade-in-50 slide-in-from-bottom-5"
+      style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="flex flex-col h-full">
-        <div className="flex justify-between items-start mb-3">
-          <Badge variant="outline" className={getSectorColor(goal.sector)}>
+      <CardHeader className="pb-2">
+        <div className="flex justify-between">
+          <Badge variant="outline" className="mb-2">
             {goal.sector}
           </Badge>
-          <div className="flex gap-2">
-            {getGoalTypeLabel()}
-            {goal.assignmentDetails && (
-              <Badge
-                variant="outline"
-                className={getStatusColor(goal.assignmentDetails.status)}
-              >
-                {goal.assignmentDetails.status
-                  .replace("-", " ")
-                  .replace(/^\w/, (c) => c.toUpperCase())}
-              </Badge>
-            )}
-          </div>
+          <Badge variant="outline" className={getStatusBadgeClasses()}>
+            <span className="flex items-center">
+              {getStatusIcon()}
+              <span className="ml-1 capitalize">{status}</span>
+            </span>
+          </Badge>
         </div>
+        <CardTitle className="text-xl">{goal.name}</CardTitle>
+      </CardHeader>
 
-        <h3 className="text-lg font-semibold mb-2 line-clamp-1">{goal.name}</h3>
+      <CardContent className="py-2 flex-grow">
         <p className="text-gray-600 text-sm mb-4 line-clamp-2">
           {goal.description}
         </p>
 
-        <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-          <div className="flex items-center">
-            <Calendar className="h-4 w-4 mr-2" />
-            <span className="line-clamp-1">
-              {formatDate(goal.startDate)} - {formatDate(goal.endDate)}
-            </span>
+        <div className="space-y-4">
+          {/* Goal Types */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {goalTypes.map(type => (
+              <Badge key={type} variant="secondary" className="text-xs">
+                {type}
+              </Badge>
+            ))}
           </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger className="text-xs font-medium text-blue-600">
-                {getTimeRemaining()}
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Goal deadline: {formatDate(goal.endDate)}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
 
-        <div className="mt-auto">
-          {goal.assignmentDetails && (
-            <div className="mb-3">
-              <ProgressTracker
-                progress={progress}
-                size="md"
-              />
-              <div className="mt-2 flex justify-between text-xs text-gray-500">
-                <span>
-                  Current: {currentValue}
-                  {goal.metricUnit}
-                </span>
-                <span>
-                  Target: {totalTargetValue}
-                  {goal.metricUnit}
-                </span>
-              </div>
+          {/* Employee Assignment */}
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <div className="flex items-center">
+              <Users className="h-4 w-4 mr-1" />
+              <span>Assigned to:</span>
+            </div>
+            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-100">
+              {employeeCount} {employeeCount === 1 ? 'Employee' : 'Employees'}
+            </Badge>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span>Overall Progress</span>
+              <span className="font-medium">{overallProgress}%</span>
+            </div>
+            <Progress value={overallProgress} className="h-2" />
+          </div>
+
+          {/* Target Values */}
+          <div className="flex justify-between text-sm">
+            <div className="flex items-center text-gray-500">
+              <Target className="h-4 w-4 mr-1" />
+              <span>Target:</span>
+            </div>
+            <div className="font-medium">
+              {totalCurrentValue} / {totalTargetValue}
+              <span className="ml-1 text-xs text-gray-500">{goal.metricUnit}</span>
+            </div>
+          </div>
+
+          {/* Employee Tooltips */}
+          {employeeCount > 0 && (
+            <div className="flex items-center mt-2">
+              <TooltipProvider>
+                <div className="flex -space-x-2 overflow-hidden">
+                  {goal.assignedTo?.slice(0, 3).map((employee, idx) => (
+                    <Tooltip key={employee.id}>
+                      <TooltipTrigger asChild>
+                        <div 
+                          className="inline-block h-8 w-8 rounded-full border-2 border-white bg-gray-200 text-xs flex items-center justify-center font-medium"
+                          style={{ zIndex: 10 - idx }}
+                        >
+                          {employee.avatar ? (
+                            <img 
+                              src={employee.avatar} 
+                              alt={employee.name} 
+                              className="h-full w-full rounded-full object-cover"
+                            />
+                          ) : (
+                            employee.name.slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{employee.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                  
+                  {employeeCount > 3 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div 
+                          className="inline-block h-8 w-8 rounded-full border-2 border-white bg-gray-200 text-xs flex items-center justify-center font-medium"
+                          style={{ zIndex: 7 }}
+                        >
+                          +{employeeCount - 3}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{employeeCount - 3} more employees</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+              </TooltipProvider>
             </div>
           )}
-
-          <div className="flex justify-between items-center mt-4">
-            <div className="flex items-center">
-              <Target className="h-4 w-4 mr-2 text-gray-400" />
-              <span className="text-sm text-gray-600">
-                {goal.assignmentDetails?.goalType || "Not assigned"}
-              </span>
-            </div>
-
-            {goal.assignedTo && goal.assignedTo.length > 0 && (
-              <div className="flex items-center">
-                <div className="mr-2 text-xs text-gray-500 whitespace-nowrap">
-                  {goal.assignedTo.length} {goal.assignedTo.length === 1 ? 'employee' : 'employees'}
-                </div>
-                <AvatarGroup className="justify-end" limit={3}>
-                  {goal.assignedTo.map((employee) => (
-                    <Avatar
-                      key={employee.id}
-                      className="h-8 w-8 border-2 border-white"
-                    >
-                      <AvatarImage src={employee.avatar} alt={employee.name} />
-                      <AvatarFallback>
-                        {employee.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                </AvatarGroup>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end mt-3">
-            <ChevronRight className="h-5 w-5 text-gray-400" />
-          </div>
         </div>
-      </div>
-    </AnimatedCard>
+      </CardContent>
+
+      <CardFooter className="pt-2">
+        <Button 
+          onClick={handleClick} 
+          variant="default" 
+          className="w-full"
+        >
+          View Details
+          <ArrowUpRight className="ml-2 h-4 w-4" />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 };
 
