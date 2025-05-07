@@ -48,6 +48,8 @@ export type CandidateFormData = {
   skills: Array<{
     name: string;
     rating: number;
+    experienceYears: number;
+    experienceMonths: number;
   }>;
   location?: string;       // Make optional
   expectedSalary?: number; // Make optional
@@ -107,7 +109,7 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
 
   const skillsForm = useForm<CandidateFormData>({
     defaultValues: {
-      skills: job.skills?.map(skill => ({ name: skill, rating: 0 })) || []
+      skills: job.skills?.map(skill => ({ name: skill, rating: 0, experienceYears: 0, experienceMonths: 0 })) || []
     }
   });
 
@@ -325,7 +327,7 @@ const fetchCandidateById = async (id: string) => {
           {isEditMode ? "Edit Candidate" : "Add Candidate"}
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-md md:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg md:max-w-xl  overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle>Add New Candidate</SheetTitle>
         </SheetHeader>

@@ -39,7 +39,7 @@ const menuItemsByRole = {
     { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
     { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
     { icon: ImProfile, label: "My Profile", path: "/profile" },
-    { icon: GoGoal, label: "Goals", path: "/goalview" },
+    { icon: GoGoal, label: "Goals", path: "/goalsview" },
     { icon: FiCheckSquare, label: "My Tasks", path: "#" },
   ],
 };

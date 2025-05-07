@@ -50,6 +50,28 @@ const SkillInformationTab = ({
     
     form.setValue("skills", updatedSkills);
   };
+
+  const handleExperienceYearsChange = (skillName: string, newExperienceYears: number) => {
+    const updatedSkills = skills.map(skill => 
+      skill.name === skillName 
+        ? { ...skill, experienceYears: newExperienceYears } 
+        : skill
+    );
+    
+    form.setValue("skills", updatedSkills);
+  };
+
+  const handleExperienceMonthsChange = (skillName: string, newExperienceMonths: number) => {
+    const updatedSkills = skills.map(skill => 
+      skill.name === skillName 
+        ? { ...skill, experienceMonths: newExperienceMonths } 
+        : skill
+    );
+    
+    form.setValue("skills", updatedSkills);
+  };
+  
+  
   
   const handleRemoveSkill = (skillName: string) => {
     const updatedSkills = skills.filter(skill => skill.name !== skillName);
@@ -99,8 +121,12 @@ const SkillInformationTab = ({
                   key={skill.name}
                   skill={skill.name}
                   rating={skill.rating}
+                  experienceYears={skill.experienceYears}
+                  experienceMonths={skill.experienceMonths} // Pass experienceMonths
                   isJobSkill={jobSkills.includes(skill.name)}
                   onRatingChange={(newRating) => handleRatingChange(skill.name, newRating)}
+                  onExperienceYearsChange={(newExperienceYears) => handleExperienceYearsChange(skill.name, newExperienceYears)}
+                  onExperienceMonthsChange={(newExperienceMonths) => handleExperienceMonthsChange(skill.name, newExperienceMonths)} // New handler
                   onRemove={() => handleRemoveSkill(skill.name)}
                 />
               ))

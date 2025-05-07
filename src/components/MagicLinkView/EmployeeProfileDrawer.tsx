@@ -997,6 +997,9 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
                       >
                         <div className="flex justify-between items-center">
                           <p className="text-sm font-medium">{skill.name}</p>
+                          <span className="text-xs text-gray-500">
+      {`${skill.experienceYears}.${skill.experienceMonths} years`}
+    </span>
                           <div className="flex">
                             {[1, 2, 3, 4, 5].map((star) => (
                               <svg
