@@ -32,6 +32,7 @@ import StatusSettings from "./pages/jobs/StatusSettings";
 import ResumeAnalysisDetailView from "./pages/jobs/ResumeAnalysisDetailView";
 import SharedProfile from "./pages/jobs/SharedProfile"
 import ReportsPage from "./pages/reports/Index";
+import GoalDetailView from "./components/goals/dashboard/GoalDetailView";
 
 function App() {
   return (
@@ -89,6 +90,7 @@ function App() {
             <Route path="/goals/:goalId" element={<GoalDetail />} />
             <Route path="/goalsview" element={<GoalView />} />
             <Route path="goalview" element={<EmployeeGoalView/>} />
+            <Route path="/goals/:goalId/:goalType?" element={<GoalDetailView />} />
 
             {/* Jobs */}
             <Route path="/jobs" element={<Jobs />} />

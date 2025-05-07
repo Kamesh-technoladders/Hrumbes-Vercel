@@ -33,12 +33,9 @@ const EmployeeGoalDashboard: React.FC<EmployeeGoalDashboardProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [showHistory, setShowHistory] = useState<boolean>(false);
 
-  const user = useSelector((state: any) => state.auth.user);
-  const selectedId = employee?.id || user?.id;
-
   const { data: goals, isLoading, error } = useQuery({
-    queryKey: ["employeeGoals", selectedId],
-    queryFn: () => getEmployeeGoals(selectedId),
+    queryKey: ["employeeGoals", employee.id],
+    queryFn: () => getEmployeeGoals(employee.id),
   });
 
   const filteredByType = useMemo(() => {

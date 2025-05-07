@@ -183,6 +183,25 @@ export const getEmployees = async (): Promise<Employee[]> => {
   }
 };
 
+export const getEmployeeById = async (id: string): Promise<Employee> => {
+  const { data, error } = await supabase
+    .from("hr_employees")
+    .select("id, name, position, department, avatar")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error("Error fetching employee:", error);
+    throw new Error("Failed to fetch employee data");
+  }
+
+  if (!data) {
+    throw new Error("No employee found with the given ID");
+  }
+
+  return data;
+};
+
 export const getGoals = async (): Promise<Goal[]> => {
   try {
     const { data: goalsData, error: goalsError } = await supabase
@@ -1390,4 +1409,10 @@ export const deleteGoal = async (
     console.error("Exception deleting goal:", error);
     return false;
   }
+};
+
+export const getDepartments = async (): Promise<{ id: string; name: string }[]> => {
+  const { data, error } = await supabase.from("hr_departments").select("id, name");
+  if (error) throw error;
+  return data;
 };

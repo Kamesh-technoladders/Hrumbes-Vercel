@@ -26,6 +26,10 @@ const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance,
 
   const isSpecialGoal = goal.name === "Submission" || goal.name === "Onboarding";
 
+  console.log("goal", goal)
+  console.log("employee", employee)
+  console.log("isSpecialGoal", isSpecialGoal)
+
   console.log("EmployeeGoalCard: Initial Props", {
     goal: {
       id: goal.id,
@@ -330,7 +334,7 @@ const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance,
       
       <Separator />
       
-      <CardFooter className="p-4">
+      {/* <CardFooter className="p-4">
         <Button 
           variant="default" 
           className="w-full" 
@@ -338,7 +342,7 @@ const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance,
         >
           View {isSpecialGoal ? "Details" : "& Update Progress"}
         </Button>
-      </CardFooter>
+      </CardFooter> */}
     </Card>
   );
 };
