@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -15,9 +14,10 @@ interface EmployeeGoalCardProps {
   goal: GoalWithDetails;
   goalInstance: GoalInstance;
   employee: Employee;
+  onInstanceUpdate?: (instanceId: string, updates: Partial<GoalInstance>) => void;
 }
 
-const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance, employee }) => {
+const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance, employee, onInstanceUpdate }) => {
   const navigate = useNavigate();
   const [currentValue, setCurrentValue] = useState<number>(goalInstance.currentValue ?? 0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -25,10 +25,6 @@ const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance,
   const [progress, setProgress] = useState(goalInstance.progress ?? 0);
 
   const isSpecialGoal = goal.name === "Submission" || goal.name === "Onboarding";
-
-  console.log("goal", goal)
-  console.log("employee", employee)
-  console.log("isSpecialGoal", isSpecialGoal)
 
   console.log("EmployeeGoalCard: Initial Props", {
     goal: {
@@ -80,6 +76,13 @@ const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance,
 
         if (error) {
           console.error("Error updating goal instance status:", error);
+        } else {
+          // Notify parent component of the update
+          onInstanceUpdate?.(goalInstance.id, {
+            status: newStatus,
+            progress: newProgress,
+            currentValue: newCurrentValue
+          });
         }
       } catch (err) {
         console.error("Unexpected error updating goal instance:", err);
@@ -220,13 +223,18 @@ const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance,
     };
 
     fetchCurrentValue();
-  }, [goal.id, goalInstance.id, employee.id, goalInstance.periodStart, goalInstance.periodEnd, goalInstance.currentValue]);
+  }, [goal.id, goalInstance.id, employee.id, goalInstance.periodStart, goalInstance.periodEnd, goalInstance.currentValue, onInstanceUpdate]);
 
   const getPeriodText = () => {
-    const goalType = goal.assignmentDetails?.goalType || "Standard";
+    const goalType = goal.assignmentDetails?.find(ad => ad.id === goalInstance.assignedGoalId)?.goalType || "Standard";
     const startDate = format(new Date(goalInstance.periodStart), 'MMM d, yyyy');
     const endDate = format(new Date(goalInstance.periodEnd), 'MMM d, yyyy');
     return `${goalType} Period: ${startDate} - ${endDate}`;
+  };
+
+  const getIntervalTypeText = () => {
+    const goalType = goal.assignmentDetails?.find(ad => ad.id === goalInstance.assignedGoalId)?.goalType || "Goal";
+    return `${goalType} Goal`;
   };
 
   const statusIcon = () => {
@@ -253,10 +261,6 @@ const EmployeeGoalCard: React.FC<EmployeeGoalCardProps> = ({ goal, goalInstance,
       default:
         return "bg-amber-100 text-amber-800 border-amber-200";
     }
-  };
-
-  const getIntervalTypeText = () => {
-    return goal.assignmentDetails?.goalType ? `${goal.assignmentDetails.goalType} Goal` : "Goal";
   };
 
   const handleViewDetails = () => {

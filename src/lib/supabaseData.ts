@@ -985,7 +985,7 @@ export const getEmployeeGoals = async (employeeId: string): Promise<GoalWithDeta
     console.log(`Found ${assignedGoalsData.length} assigned goals for employee`);
     
     const assignedGoals = assignedGoalsData.map(mapHrAssignedGoalToAssignedGoal);
-    const goalIds = assignedGoals.map(ag => ag.goalId);
+    const goalIds = [...new Set(assignedGoals.map(ag => ag.goalId))]; // Unique goal IDs
     
     const { data: goalsData, error: goalsError } = await supabase
       .from('hr_goals')
@@ -1020,21 +1020,28 @@ export const getEmployeeGoals = async (employeeId: string): Promise<GoalWithDeta
     const goals: GoalWithDetails[] = [];
 
     for (const goalData of goalsData) {
-      const assignedGoal = assignedGoals.find(ag => ag.goalId === goalData.id);
+      // Find all assigned goals for this goal_id
+      const goalAssignedGoals = assignedGoals.filter(ag => ag.goalId === goalData.id);
       
-      if (!assignedGoal) continue;
+      if (goalAssignedGoals.length === 0) continue;
 
-      const { data: instancesData, error: instancesError } = await supabase
-        .from('hr_goal_instances')
-        .select('*')
-        .eq('assigned_goal_id', assignedGoal.id)
-        .order('period_start', { ascending: false });
-
-      let instances: GoalInstance[] = [];
+      const instances: GoalInstance[] = [];
       let activeInstance: GoalInstance | undefined = undefined;
 
-      if (!instancesError && instancesData && instancesData.length > 0) {
-        instances = instancesData.map(instance => {
+      // Fetch instances for all assigned goals
+      for (const assignedGoal of goalAssignedGoals) {
+        const { data: instancesData, error: instancesError } = await supabase
+          .from('hr_goal_instances')
+          .select('*')
+          .eq('assigned_goal_id', assignedGoal.id)
+          .order('period_start', { ascending: false });
+
+        if (instancesError || !instancesData) {
+          console.error('Error fetching instances for assigned goal:', instancesError);
+          continue;
+        }
+
+        const mappedInstances = instancesData.map(instance => {
           const currentValue = instance.current_value ?? 0;
           const targetValue = instance.target_value ?? 0;
           const progress = targetValue > 0 ? Math.min(Math.round((currentValue / targetValue) * 100), 100) : 0;
@@ -1085,9 +1092,12 @@ export const getEmployeeGoals = async (employeeId: string): Promise<GoalWithDeta
           };
         });
 
+        instances.push(...mappedInstances);
+
         console.log("Mapped Goal Instances:", {
           goalId: goalData.id,
-          instances: instances.map(i => ({
+          assignedGoalId: assignedGoal.id,
+          instances: mappedInstances.map(i => ({
             id: i.id,
             periodStart: i.periodStart,
             periodEnd: i.periodEnd,
@@ -1096,103 +1106,103 @@ export const getEmployeeGoals = async (employeeId: string): Promise<GoalWithDeta
             status: i.status
           }))
         });
-
-        const today = new Date().toISOString().split('T')[0];
-        const currentInstance = instances.find(
-          instance => 
-            new Date(instance.periodStart) <= new Date(today) && 
-            new Date(instance.periodEnd) >= new Date(today)
-        );
-
-        activeInstance = currentInstance || instances[0];
       }
 
+      // Find active instance
+      const today = new Date().toISOString().split('T')[0];
+      const currentInstance = instances.find(
+        instance => 
+          new Date(instance.periodStart) <= new Date(today) && 
+          new Date(instance.periodEnd) >= new Date(today)
+      );
+
+      activeInstance = currentInstance || instances[0];
+
+      // Handle special goals (Submission/Onboarding)
       const isSpecialGoal = goalData.name === "Submission" || goalData.name === "Onboarding";
       if (isSpecialGoal && activeInstance) {
-        const currentValue = await getSubmissionOrOnboardingCounts(
-          employeeId,
-          goalData.name,
-          activeInstance.periodStart,
-          activeInstance.periodEnd
-        );
-        
-        assignedGoal.currentValue = currentValue;
-        assignedGoal.progress = assignedGoal.targetValue > 0 
-          ? Math.min(Math.round((currentValue / assignedGoal.targetValue) * 100), 100) 
-          : 0;
-        assignedGoal.status = calculateGoalStatus(
-          currentValue,
-          assignedGoal.targetValue,
-          activeInstance.periodStart,
-          activeInstance.periodEnd
-        );
-        
-        await supabase
-          .from('hr_assigned_goals')
-          .update({
-            current_value: currentValue,
-            progress: assignedGoal.progress,
-            status: assignedGoal.status,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', assignedGoal.id)
-          .then(({ error }) => {
-            if (error) {
-              console.error("Error updating assigned goal for special goal:", error);
-            } else {
-              console.log("Updated assigned goal for special goal:", {
-                assignedGoalId: assignedGoal.id,
-                status: assignedGoal.status,
-                progress: assignedGoal.progress,
-                currentValue
-              });
-            }
-          });
-        
-        activeInstance.currentValue = currentValue;
-        activeInstance.progress = assignedGoal.progress;
-        activeInstance.status = assignedGoal.status;
-
-        const instanceToUpdate = instances.find(i => i.id === activeInstance!.id);
-        if (instanceToUpdate) {
-          instanceToUpdate.currentValue = currentValue;
-          instanceToUpdate.progress = assignedGoal.progress;
-          instanceToUpdate.status = assignedGoal.status;
-
+        for (const assignedGoal of goalAssignedGoals) {
+          const currentValue = await getSubmissionOrOnboardingCounts(
+            employeeId,
+            goalData.name,
+            activeInstance.periodStart,
+            activeInstance.periodEnd
+          );
+          
+          assignedGoal.currentValue = currentValue;
+          assignedGoal.progress = assignedGoal.targetValue > 0 
+            ? Math.min(Math.round((currentValue / assignedGoal.targetValue) * 100), 100) 
+            : 0;
+          assignedGoal.status = calculateGoalStatus(
+            currentValue,
+            assignedGoal.targetValue,
+            activeInstance.periodStart,
+            activeInstance.periodEnd
+          );
+          
           await supabase
-            .from('hr_goal_instances')
+            .from('hr_assigned_goals')
             .update({
               current_value: currentValue,
               progress: assignedGoal.progress,
               status: assignedGoal.status,
               updated_at: new Date().toISOString()
             })
-            .eq('id', instanceToUpdate.id)
+            .eq('id', assignedGoal.id)
             .then(({ error }) => {
               if (error) {
-                console.error("Error updating special goal instance:", error);
+                console.error("Error updating assigned goal for special goal:", error);
               } else {
-                console.log("Updated special goal instance:", {
-                  instanceId: instanceToUpdate.id,
+                console.log("Updated assigned goal for special goal:", {
+                  assignedGoalId: assignedGoal.id,
                   status: assignedGoal.status,
                   progress: assignedGoal.progress,
                   currentValue
                 });
               }
             });
+          
+          const instanceToUpdate = instances.find(i => i.id === activeInstance!.id);
+          if (instanceToUpdate) {
+            instanceToUpdate.currentValue = currentValue;
+            instanceToUpdate.progress = assignedGoal.progress;
+            instanceToUpdate.status = assignedGoal.status;
+
+            await supabase
+              .from('hr_goal_instances')
+              .update({
+                current_value: currentValue,
+                progress: assignedGoal.progress,
+                status: assignedGoal.status,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', instanceToUpdate.id)
+              .then(({ error }) => {
+                if (error) {
+                  console.error("Error updating special goal instance:", error);
+                } else {
+                  console.log("Updated special goal instance:", {
+                    instanceId: instanceToUpdate.id,
+                    status: assignedGoal.status,
+                    progress: assignedGoal.progress,
+                    currentValue
+                  });
+                }
+              });
+          }
         }
       }
 
       const goal: GoalWithDetails = {
         ...mapHrGoalToGoal(goalData),
         assignedTo: [employee],
-        assignments: [assignedGoal],
+        assignments: goalAssignedGoals,
         instances,
         activeInstance,
-        assignmentDetails: assignedGoal,
-        totalTargetValue: assignedGoal.targetValue,
-        totalCurrentValue: assignedGoal.currentValue,
-        overallProgress: assignedGoal.progress
+        assignmentDetails: goalAssignedGoals, // Use all assigned goals
+        totalTargetValue: goalAssignedGoals.reduce((sum, ag) => sum + (ag.targetValue || 0), 0),
+        totalCurrentValue: goalAssignedGoals.reduce((sum, ag) => sum + (ag.currentValue || 0), 0),
+        overallProgress: goalAssignedGoals.reduce((sum, ag) => sum + (ag.progress || 0), 0) / goalAssignedGoals.length || 0
       };
 
       goals.push(goal);
@@ -1409,10 +1419,4 @@ export const deleteGoal = async (
     console.error("Exception deleting goal:", error);
     return false;
   }
-};
-
-export const getDepartments = async (): Promise<{ id: string; name: string }[]> => {
-  const { data, error } = await supabase.from("hr_departments").select("id, name");
-  if (error) throw error;
-  return data;
 };
