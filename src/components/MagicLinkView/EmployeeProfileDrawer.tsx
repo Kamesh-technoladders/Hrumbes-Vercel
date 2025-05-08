@@ -44,6 +44,7 @@ interface EmployeeProfileDrawerProps {
   shareMode?: boolean;
   shareId?: string;
   sharedDataOptions?: DataSharingOptions;
+  jobId?: string;
 }
 
 interface DocumentState {
@@ -62,6 +63,7 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
   shareMode = false,
   shareId,
   sharedDataOptions: initialSharedDataOptions,
+  jobId
 }) => {
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
@@ -138,6 +140,8 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
   // Initialize candidate state with initialCandidate
   useEffect(() => {
     console.log("Initial Candidate:", initialCandidate);
+    console.log("jobID:", jobId);
+
     if (initialCandidate && isValidCandidate(initialCandidate)) {
       console.log("Setting candidate from initialCandidate:", initialCandidate);
       setCandidate(initialCandidate);

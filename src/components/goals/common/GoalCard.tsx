@@ -324,14 +324,14 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdate, className }) => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Goal Actions</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
+                {/* <DropdownMenuLabel>Goal Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator /> */}
+                {/* <DropdownMenuItem
                   onClick={() => setIsEmployeeManagementOpen(true)}
                 >
                   <UserPlus className="h-4 w-4 mr-2" />
                   Manage Employees
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
                 <DropdownMenuItem
                   onClick={() => setIsDeleteDialogOpen(true)}
                   className="text-red-600"
@@ -477,7 +477,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdate, className }) => {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem
+                                {/* <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedAssignedGoal({
                                       ...assignment,
@@ -490,9 +490,9 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdate, className }) => {
                                 >
                                   <Edit className="h-4 w-4 mr-2" />
                                   Edit Target
-                                </DropdownMenuItem>
+                                </DropdownMenuItem> */}
 
-                                {assignment.status === "completed" && (
+                               
                                   <DropdownMenuItem
                                     onClick={() => {
                                       setSelectedAssignedGoal({
@@ -507,9 +507,9 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdate, className }) => {
                                     }}
                                   >
                                     <Target className="h-4 w-4 mr-2" />
-                                    Extend Goal
+                                    Extend Target
                                   </DropdownMenuItem>
-                                )}
+                               
 
                                 <DropdownMenuItem
                                   onClick={() => handleRemoveEmployeeFromGoal(assignment.id)}
@@ -525,7 +525,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdate, className }) => {
                       })}
                     </div>
 
-                    <Accordion type="single" collapsible>
+                    {/* <Accordion type="single" collapsible>
                       <AccordionItem value="history">
                         <AccordionTrigger className="text-sm py-2">
                           <span className="flex items-center">
@@ -573,7 +573,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdate, className }) => {
                           </ScrollArea>
                         </AccordionContent>
                       </AccordionItem>
-                    </Accordion>
+                    </Accordion> */}
                   </div>
                 )}
               </TabsContent>

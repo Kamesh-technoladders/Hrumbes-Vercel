@@ -33,6 +33,12 @@ import ResumeAnalysisDetailView from "./pages/jobs/ResumeAnalysisDetailView";
 import SharedProfile from "./pages/jobs/SharedProfile"
 import ReportsPage from "./pages/reports/Index";
 import GoalDetailView from "./components/goals/dashboard/GoalDetailView";
+// Finance & Accounts
+import FinanceIndex from "./pages/finance/Index";
+import PayrollEdit from "./pages/finance/PayrollEdit";
+import InvoicesPage from "./pages/finance/accounts/InvoicesPage";
+import ExpensesPage from "./pages/finance/accounts/ExpensesPage";
+import AccountsOverview from "./pages/finance/accounts/AccountsOverview";
 
 function App() {
   return (
@@ -103,6 +109,13 @@ function App() {
 
                         {/* Reports */}
         <Route path="/reports" element={<ReportsPage />} />
+
+        {/* Finance & Accounts */}
+        <Route path="/finance" element={<FinanceIndex />} />
+          <Route path="/payroll/:id/edit" element={<PayrollEdit />} />
+          <Route path="/accounts/invoices" element={<InvoicesPage />} />
+          <Route path="/accounts/expenses" element={<ExpensesPage />} />
+          <Route path="/accounts/overall" element={<AccountsOverview />} />
           </Route>
         </Route>
       </Routes>

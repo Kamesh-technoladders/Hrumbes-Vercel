@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 interface SkillRatingItemProps {
   skill: string;
   rating: number;
-  experienceYears: number;
-  experienceMonths: number;
+  experienceYears: number | undefined;
+  experienceMonths: number | undefined;
   isJobSkill: boolean;
   onRatingChange: (rating: number) => void;
   onExperienceYearsChange: (newExperienceYears: number) => void;
@@ -19,8 +19,8 @@ interface SkillRatingItemProps {
 const SkillRatingItem = ({
   skill,
   rating,
-  experienceYears = 0, // Default to 0 if undefined
-  experienceMonths = 0, // Default to 0 if undefined
+  experienceYears,
+  experienceMonths,
   isJobSkill,
   onRatingChange,
   onExperienceYearsChange,
@@ -42,13 +42,15 @@ const SkillRatingItem = ({
             type="text"
             value={
               isYearsFocused
-                ? experienceYears.toString()
-                : `${experienceYears} ${experienceYears === 1 ? "year" : "years"}`
+                ? experienceYears !== undefined ? experienceYears.toString() : ""
+                : experienceYears !== undefined 
+                  ? `${experienceYears} ${experienceYears === 1 ? "year" : "years"}`
+                  : ""
             }
             onChange={(e) => {
               const numeric = e.target.value.replace(/[^\d]/g, "");
-              const parsed = parseInt(numeric, 10);
-              onExperienceYearsChange(isNaN(parsed) ? 0 : parsed);
+              const parsed = numeric ? parseInt(numeric, 10) : 0;
+              onExperienceYearsChange(parsed);
             }}
             onFocus={() => setIsYearsFocused(true)}
             onBlur={() => setIsYearsFocused(false)}
@@ -59,13 +61,15 @@ const SkillRatingItem = ({
             type="text"
             value={
               isMonthsFocused
-                ? experienceMonths.toString()
-                : `${experienceMonths} ${experienceMonths === 1 ? "month" : "months"}`
+                ? experienceMonths !== undefined ? experienceMonths.toString() : ""
+                : experienceMonths !== undefined 
+                  ? `${experienceMonths} ${experienceMonths === 1 ? "month" : "months"}`
+                  : ""
             }
             onChange={(e) => {
               const numeric = e.target.value.replace(/[^\d]/g, "");
-              const parsed = parseInt(numeric, 10);
-              onExperienceMonthsChange(isNaN(parsed) ? 0 : Math.min(parsed, 11));
+              const parsed = numeric ? parseInt(numeric, 10) : 0;
+              onExperienceMonthsChange(Math.min(parsed, 11));
             }}
             onFocus={() => setIsMonthsFocused(true)}
             onBlur={() => setIsMonthsFocused(false)}

@@ -1,9 +1,10 @@
-import { VStack, IconButton, Tooltip, Box, Text, Flex, useColorModeValue, Icon, Image, useMediaQuery } from "@chakra-ui/react";
+import { VStack, IconButton, Tooltip, Box, Text, Flex, useColorModeValue, Icon, Image, useMediaQuery, Collapse } from "@chakra-ui/react";
 import { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { menuItemsByRole, extraMenuItems } from "./SidebarMenuItem";
-import { logout } from "../../Redux/authSlice"; // 🚀 Import Logout Action
+import { logout } from "../../Redux/authSlice";
+import { ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
 
 const Sidebar = ({ isExpanded, setExpanded }) => {
   const location = useLocation();
@@ -12,6 +13,7 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
   const { role } = useSelector((state) => state.auth);
   const menuItems = menuItemsByRole[role] || [];
   const [isMobile] = useMediaQuery("(max-width: 768px)");
+  const [openDropdown, setOpenDropdown] = useState(null); // Track which dropdown is open
 
   const bgColor = useColorModeValue("#F6F6FC", "base.bgdark");
   const hoverBg = useColorModeValue("rgba(123, 67, 241, 0.1)", "secondary.800");
@@ -22,10 +24,13 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
   const activeTextColor = useColorModeValue("#7B43F1", "base.primary1");
   const scrolbarColor = useColorModeValue("#F6F6FC", "base.bgboxdark");
 
-  // ✅ Handle Logout Function
   const handleLogout = () => {
-    dispatch(logout()); // 🚀 Logout via Redux
-    navigate("/login"); // 🚀 Redirect to Login
+    dispatch(logout());
+    navigate("/login");
+  };
+
+  const toggleDropdown = (label) => {
+    setOpenDropdown(openDropdown === label ? null : label);
   };
 
   return (
@@ -34,7 +39,7 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
       bg={bgColor}
       color={textColor}
       height="100vh"
-      width={isExpanded ? "200px" : "80px"} // ✅ Fixed Collapse Size
+      width={isExpanded ? "200px" : "80px"}
       transition="width 0.3s ease-in-out"
       position="fixed"
       left={0}
@@ -45,22 +50,18 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
       justifyContent="space-between"
       onMouseEnter={() => !isMobile && setExpanded(true)}
       onMouseLeave={() => !isMobile && setExpanded(false)}
-      display={isMobile && !isExpanded ? "none" : "flex"} // ✅ Hide on Mobile When Collapsed
+      display={isMobile && !isExpanded ? "none" : "flex"}
     >
-      {/* Sidebar Header */}
       <Box display="flex" flexDirection="column" alignItems="center" mb={6}>
         <Image
           src="/hrumbles_logo2.png"
           alt="Logo"
-          width={isExpanded ? "140px" : "60px"} // Adjusted sizes for better fit
-          height="auto" // Preserve aspect ratio
-          transition="width 0.3s ease" // Transition width, not boxSize
-          mb={isExpanded ? 3 : 2} // Adjust margin based on state
+          width={isExpanded ? "140px" : "60px"}
+          height="auto"
+          transition="width 0.3s ease"
+          mb={isExpanded ? 3 : 2}
         />
-        {/* {isExpanded && <Text fontSize="md" fontWeight="bold">Hello!</Text>}
-        {isExpanded && <Text fontSize="sm" color="gray.500">Good Morning</Text>} */}
       </Box>
-      {/* Scrollable Menu */}
       <VStack
         spacing={2}
         overflowY="auto"
@@ -75,39 +76,95 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
           "scroll-behavior": "smooth",
         }}
       >
-        {menuItems.map(({ icon, label, path }) => {
-          const isActive = location.pathname === path;
+        {menuItems.map(({ icon, label, path, dropdown }) => {
+          const isActive = location.pathname === path || (dropdown && dropdown.some((item) => location.pathname === item.path));
+          const isDropdownOpen = openDropdown === label;
+
           return (
-            <Tooltip key={label} label={label} placement="right" isDisabled={isExpanded}>
-              <Flex
-                as={path !== "#" ? Link : "div"}
-                to={path !== "#" ? path : undefined}
-                align="center"
-                gap={1}
-                px={isExpanded ? 4 : 2}
-                py={1}
-                borderRadius="12px"
-                bg={isActive ? activeBg : "transparent"}
-                _hover={{ bg: hoverBg }}
-                transition="background 0.3s ease-in-out"
-                w="full"
-                cursor={path !== "#" ? "pointer" : "default"}
-              >
-                <IconButton
-                  icon={<Icon as={icon} color={isActive ? activeIconColor : iconColor} />}
-                  aria-label={label}
-                  variant="ghost"
-                  size="md"
-                  _hover={{ color: activeIconColor }}
-                />
-                {isExpanded && <Text fontWeight={isActive ? "bold" : "normal"} color={isActive ? activeTextColor : textColor}>{label}</Text>}
-              </Flex>
-            </Tooltip>
+            <Box key={label} w="full">
+              <Tooltip label={label} placement="right" isDisabled={isExpanded}>
+                <Flex
+                  align="center"
+                  gap={1}
+                  px={isExpanded ? 4 : 2}
+                  py={1}
+                  borderRadius="12px"
+                  bg={isActive ? activeBg : "transparent"}
+                  _hover={{ bg: hoverBg }}
+                  transition="background 0.3s ease-in-out"
+                  w="full"
+                >
+                  <IconButton
+                    as={path !== "#" ? Link : "button"}
+                    to={path !== "#" ? path : undefined}
+                    icon={<Icon as={icon} color={isActive ? activeIconColor : iconColor} />}
+                    aria-label={label}
+                    variant="ghost"
+                    size="md"
+                    _hover={{ color: activeIconColor }}
+                  />
+                  {isExpanded && (
+                    <Flex justify="space-between" align="center" w="full">
+                      <Text
+                        as={path !== "#" ? Link : "span"}
+                        to={path !== "#" ? path : undefined}
+                        fontWeight={isActive ? "bold" : "normal"}
+                        color={isActive ? activeTextColor : textColor}
+                        flex="1"
+                      >
+                        {label}
+                      </Text>
+                      {dropdown && (
+                        <Icon
+                          as={isDropdownOpen ? ChevronUpIcon : ChevronDownIcon}
+                          color={isActive ? activeIconColor : iconColor}
+                          cursor="pointer"
+                          onClick={() => toggleDropdown(label)}
+                        />
+                      )}
+                    </Flex>
+                  )}
+                </Flex>
+              </Tooltip>
+              {dropdown && isExpanded && (
+                <Collapse in={isDropdownOpen} animateOpacity>
+                  <VStack spacing={1} pl={6} align="start">
+                    {dropdown.map((subItem) => {
+                      const isSubActive = location.pathname === subItem.path;
+                      return (
+                        <Tooltip key={subItem.label} label={subItem.label} placement="right" isDisabled={isExpanded}>
+                          <Flex
+                            as={Link}
+                            to={subItem.path}
+                            align="center"
+                            gap={1}
+                            px={4}
+                            py={1}
+                            borderRadius="8px"
+                            bg={isSubActive ? activeBg : "transparent"}
+                            _hover={{ bg: hoverBg }}
+                            transition="background 0.3s ease-in-out"
+                            w="full"
+                          >
+                            <Icon as={subItem.icon} color={isSubActive ? activeIconColor : iconColor} boxSize={4} />
+                            <Text
+                              fontSize="sm"
+                              fontWeight={isSubActive ? "bold" : "normal"}
+                              color={isSubActive ? activeTextColor : textColor}
+                            >
+                              {subItem.label}
+                            </Text>
+                          </Flex>
+                        </Tooltip>
+                      );
+                    })}
+                  </VStack>
+                </Collapse>
+              )}
+            </Box>
           );
         })}
       </VStack>
-
-      {/* Extra Menu Items (Try Premium, Logout) */}
       <VStack spacing={4} mt={4}>
         {extraMenuItems.map(({ icon, label, action }) => (
           <Tooltip key={label} label={label} placement="right" isDisabled={isExpanded}>
@@ -121,7 +178,7 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
               transition="background 0.3s ease-in-out"
               w="full"
               cursor="pointer"
-              onClick={action === "logout" ? handleLogout : undefined} // ✅ Logout Click Handler
+              onClick={action === "logout" ? handleLogout : undefined}
             >
               <IconButton
                 icon={<Icon as={icon} color={iconColor} />}
@@ -145,5 +202,3 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
 };
 
 export default Sidebar;
-
-//Responsive Sidebar

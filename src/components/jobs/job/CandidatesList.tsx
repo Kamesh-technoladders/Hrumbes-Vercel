@@ -1673,6 +1673,8 @@ const CandidatesList = ({
   const userRole = useSelector((state: any) => state.auth.role);
   const isEmployee = userRole === 'employee';
 
+  console.log("user", user)
+
   const { data: candidatesData = [], isLoading, refetch } = useQuery({
     queryKey: ["job-candidates", jobId],
     queryFn: () => getCandidatesByJobId(jobId),
@@ -1722,6 +1724,7 @@ const CandidatesList = ({
   const [currentSubStatusId, setCurrentSubStatusId] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState<string | null>(null);
   const [needsReschedule, setNeedsReschedule] = useState(false);
+  const [candidateFilter, setCandidateFilter] = useState<"All" | "Yours">("All"); // New filter state
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -1907,9 +1910,17 @@ const CandidatesList = ({
     if (isCareerPage) {
       filtered = filtered.filter(c => c.appliedFrom === "Candidate");
     }
+
+        // Apply "Yours" filter
+        if (candidateFilter === "Yours") {
+          const userFullName = `${user.user_metadata.first_name} ${user.user_metadata.last_name}`;
+          filtered = filtered.filter(
+            c => c.owner === userFullName || c.appliedFrom === userFullName
+          );
+        }
     
     setFilteredCandidates(filtered);
-  }, [candidates, appliedCandidates, activeTab, statusFilters, statusFilter, isCareerPage]);
+  }, [candidates, appliedCandidates, activeTab, statusFilters, statusFilter, isCareerPage, candidateFilter]);
 
   const handleStatusChange = async (value: string, candidate: Candidate) => {
     try {
@@ -2013,231 +2024,6 @@ const CandidatesList = ({
     }
   };
 
-  // const handleValidateResume = async (candidateId: string) => {
-  //   try {
-  //     setValidatingId(candidateId);
-  //     const candidate = filteredCandidates.find((c) => c.id === candidateId);
-  //     if (!candidate) return;
-
-  //     const resumeUrlParts = candidate.resume.split("candidate_resumes/");
-  //     const extractedResumeUrl = resumeUrlParts.length > 1 ? resumeUrlParts[1] : candidate.resume;
-
-  //     const payload = {
-  //       job_id: jobId,
-  //       candidate_id: candidateId,
-  //       resume_url: extractedResumeUrl,
-  //       job_description: jobdescription,
-  //     };
-
-  //     console.log("Backend data", payload);
-
-  //     const response = await fetch("/api/proxy", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify(payload),
-  //     });
-
-  //     if (!response.ok) {
-  //       throw new Error("Validation failed");
-  //     }
-
-  //     let overallScore = null;
-  //     let attempts = 0;
-  //     const maxAttempts = 20;
-  //     const interval = 5000;
-
-  //     while (!overallScore && attempts < maxAttempts) {
-  //       const { data, error } = await supabase
-  //         .from("candidate_resume_analysis")
-  //         .select("overall_score")
-  //         .eq("job_id", jobId)
-  //         .eq("candidate_id", candidateId)
-  //         .single();
-
-  //       if (error && error.code !== "PGRST116") {
-  //         throw error;
-  //       }
-
-  //       if (data && data.overall_score !== null) {
-  //         overallScore = data.overall_score;
-  //         break;
-  //       }
-
-  //       await new Promise((resolve) => setTimeout(resolve, interval));
-  //       attempts++;
-  //     }
-
-  //     if (!overallScore) {
-  //       throw new Error("Overall score not set within the expected time");
-  //     }
-
-  //     await updateCandidateValidationStatus(candidateId);
-
-  //     await refetch();
-
-  //     const candidateIndex = filteredCandidates.findIndex((c) => c.id === candidateId);
-  //     if (candidateIndex !== -1) {
-  //       filteredCandidates[candidateIndex].hasValidatedResume = true;
-  //       setFilteredCandidates([...filteredCandidates]);
-  //       setAnalysisDataAvailable((prev) => ({
-  //         ...prev,
-  //         [candidateId]: true,
-  //       }));
-  //       toast.success("Resume validated successfully!");
-  //       await fetchAnalysisData(candidateId);
-  //     }
-  //   } catch (error) {
-  //     toast.error("Failed to validate resume");
-  //     console.error("Validation error:", error);
-  //   } finally {
-  //     setValidatingId(null);
-  //   }
-  // };
-  // const handleValidateResume = async (candidateId: string) => {
-  //   try {
-  //     setValidatingId(candidateId);
-  //     const candidate = filteredCandidates.find((c) => c.id === candidateId);
-  //     if (!candidate) {
-  //       toast.error("Candidate not found");
-  //       return;
-  //     }
-  
-  //     const resumeUrlParts = candidate.resume.split("candidate_resumes/");
-  //     const extractedResumeUrl = resumeUrlParts.length > 1 ? resumeUrlParts[1] : candidate.resume;
-  
-  //     // Validate job_id by querying hr_jobs with id (UUID)
-  //     const { data: jobData, error: jobError } = await supabase
-  //       .from("hr_jobs")
-  //       .select("job_id, id")
-  //       .eq("id", jobId)
-  //       .single();
-  
-  //     if (jobError || !jobData) {
-  //       console.error("Job ID validation failed:", jobError || "No job data");
-  //       toast.error("Invalid job ID. Please check the job configuration.");
-  //       return;
-  //     }
-  
-  //     const jobTextId = jobData.job_id;
-  //     const jobUuid = jobData.id;
-  
-  //     const payload = {
-  //       job_id: jobTextId,
-  //       candidate_id: candidateId,
-  //       resume_url: extractedResumeUrl,
-  //       job_description: jobdescription,
-  //     };
-  
-  //     console.log("Backend data", payload);
-  
-  //     const response = await fetch("http://62.72.51.159:5005/api/validate-candidate", {
-  //       method: "POST",
-  //       headers: {
-
-  //         "Content-Type": "application/json",
-  //         "Accept": "application/json",
-  //       },
-  //       body: JSON.stringify(payload),
-  //     });
-  
-  //     if (!response.ok) {
-  //       const errorText = await response.text();
-  //       console.error(`Validation failed: ${response.status} ${response.statusText} - ${errorText}`);
-  //       throw new Error(`Validation failed: ${response.status} ${response.statusText} - ${errorText}`);
-  //     }
-  
-  //     const responseData = await response.json();
-  //     console.log("Validation response:", responseData);
-  
-  //     let overallScore = null;
-  //     let attempts = 0;
-  //     const maxAttempts = 20;
-  //     const interval = 5000;
-  
-  //     while (!overallScore && attempts < maxAttempts) {
-  //       const { data, error } = await supabase
-  //         .from("candidate_resume_analysis")
-  //         .select("overall_score, has_validated_resume")
-  //         .eq("job_id", jobUuid)
-  //         .eq("candidate_id", candidateId)
-  //         .single();
-  
-  //       if (error && error.code !== "PGRST116") {
-  //         console.error("Supabase polling error:", error);
-  //         throw new Error(`Polling error: ${error.message}`);
-  //       }
-  
-  //       if (data && data.overall_score !== null) {
-  //         overallScore = data.overall_score;
-  //         if (data.has_validated_resume) {
-  //           console.log("Resume validated in candidate_resume_analysis");
-  //         }
-  //         break;
-  //       }
-  
-  //       // Check job logs for backend errors after 3 attempts
-  //       if (attempts >= 3 && responseData.job_id) {
-  //         try {
-  //           const logResponse = await fetch(`http://62.72.51.159:5005/api/job-logs/${responseData.job_id}`, {
-  //             method: "GET",
-  //             headers: { "Accept": "application/json" }
-  //           });
-  //           if (logResponse.ok) {
-  //             const logs = await logResponse.json();
-  //             const errorLog = logs.find(log => log.stage === "error" || log.message.includes("Failed"));
-  //             if (errorLog) {
-  //               console.error("Backend task failed:", errorLog.message);
-  //               throw new Error(`Resume validation failed: ${errorLog.message}`);
-  //             }
-  //           }
-  //         } catch (logError) {
-  //           console.warn("Failed to fetch job logs:", logError);
-  //         }
-  //       }
-  
-  //       console.log(`Polling attempt ${attempts + 1}/${maxAttempts} - No score yet`);
-  //       await new Promise((resolve) => setTimeout(resolve, interval));
-  //       attempts++;
-  //     }
-  
-  //     if (!overallScore) {
-  //       throw new Error("Resume validation timed out. Check backend logs for errors.");
-  //     }
-  
-  //     // Update hr_job_candidates
-  //    const{data, error} =  await supabase
-  //       .from("hr_job_candidates")
-  //       .update({ has_validated_resume: true })
-  //       .eq("candidate_id", candidateId)
-  //       .eq("job_id", jobUuid);
-  //       if (error) {
-  //         console.error("Error updating resume validation:", error);
-  //         toast.error("Failed to update resume validation status.");
-  //         return;
-  //       }
-  //       console.log("job it checking", jobUuid)
-  //     await refetch();
-  
-  //     const candidateIndex = filteredCandidates.findIndex((c) => c.id === candidateId);
-  //     if (candidateIndex !== -1) {
-  //       filteredCandidates[candidateIndex].hasValidatedResume = true;
-  //       setFilteredCandidates([...filteredCandidates]);
-  //       setAnalysisDataAvailable((prev) => ({
-  //         ...prev,
-  //         [candidateId]: true,
-  //       }));
-  //       toast.success("Resume validated successfully!");
-  //       await fetchAnalysisData(candidateId);
-  //     }
-  //   } catch (error) {
-  //     console.error("Validation error:", error);
-  //     toast.error(error.message || "Failed to validate resume");
-  //   } finally {
-  //     setValidatingId(null);
-  //   }
-  // };
 
  // --- UPDATED handleValidateResume using Proxy for POST, Direct for GET ---
  const handleValidateResume = async (candidateId: string) => {
@@ -2883,6 +2669,23 @@ const CandidatesList = ({
 
   return (
     <>
+    {isEmployee && <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Filter Candidates:</span>
+          <Select
+            value={candidateFilter}
+            onValueChange={(value: "All" | "Yours") => setCandidateFilter(value)}
+          >
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All</SelectItem>
+              <SelectItem value="Yours">Yours</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div> }
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList1 className="grid grid-cols-7 mb-4">
           <TabsTrigger1 value="All Candidates" className="relative">
@@ -3000,7 +2803,7 @@ const CandidatesList = ({
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="w-[150px] sm:w-[200px]">Candidate Name</TableHead>
-                <TableHead className="w-[100px] sm:w-[150px]">Owner</TableHead>
+                {!isEmployee && <TableHead className="w-[100px] sm:w-[150px]">Owner</TableHead>}
                 <TableHead className="w-[50px] sm:w-[100px]">
                   Contact Info
                 </TableHead>
@@ -3016,21 +2819,27 @@ const CandidatesList = ({
               {paginatedCandidates.map((candidate) => (
                 <TableRow key={candidate.id}>
                   <TableCell className="font-medium">
-                    <div
-                      className="flex flex-col cursor-pointer"
-                      onClick={() => {
-                        setSelectedDrawerCandidate(candidate);
-                        setIsDrawerOpen(true);
-                      }}
-                    >
-                      <span>{candidate.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {moment(candidate.createdAt).format("DD MMM YYYY")} (
-                        {moment(candidate.createdAt).fromNow()})
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{candidate.owner || candidate.appliedFrom}</TableCell>
+  <div
+    className="flex flex-col cursor-pointer"
+    onClick={() => {
+      setSelectedDrawerCandidate(candidate);
+      setIsDrawerOpen(true);
+    }}
+  >
+    <div className="flex items-center gap-2">
+      {candidate.owner || candidate.appliedFrom === `${user.user_metadata.first_name} ${user.user_metadata.last_name}` && (
+        <span className="h-2 w-2 rounded-full bg-green-500 inline-block" title="You added this candidate"></span>
+      )}
+      <span>{candidate.name}</span>
+    </div>
+    <span className="text-xs text-muted-foreground">
+      {moment(candidate.createdAt).format("DD MMM YYYY")} (
+      {moment(candidate.createdAt).fromNow()})
+    </span>
+  </div>
+</TableCell>
+
+{!isEmployee && <TableCell>{candidate.owner || candidate.appliedFrom}</TableCell>}
                   <HiddenContactCell
                     email={candidate.email}
                     phone={candidate.phone}
@@ -3158,6 +2967,7 @@ const CandidatesList = ({
           setSelectedDrawerCandidate(null);
         }}
         candidate={selectedDrawerCandidate}
+        jobId={jobId}
       />
 
       <Dialog open={showInterviewModal} onOpenChange={setShowInterviewModal}>
