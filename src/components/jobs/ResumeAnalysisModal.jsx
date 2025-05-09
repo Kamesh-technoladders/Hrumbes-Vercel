@@ -20,7 +20,7 @@ function ResumeAnalysisModal({ jobId, onClose, setError, onAnalysisComplete = ()
   const [isAnalysisComplete, setIsAnalysisComplete] = useState(false);
  
   // Gemini setup
-  const geminiApiKey = 'AIzaSyBLQBGzJMx2Vq58pSubSHzYz3kEu83kn7o';
+  const geminiApiKey = 'AIzaSyDlB7p7SKJblWbuyTC9ybNjfRgrpbB9REE';
   const geminiModel = 'gemini-1.5-pro';
   const genAI = new GoogleGenerativeAI(geminiApiKey);
   const model = genAI.getGenerativeModel({ model: geminiModel });
