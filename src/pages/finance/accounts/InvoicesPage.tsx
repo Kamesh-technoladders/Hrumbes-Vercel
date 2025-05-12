@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAccountsStore } from '@/lib/accounts-data';
 import AccountsLayout from '@/components/accounts/AccountsLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { 
-  Table, TableBody, TableCell, TableHead, 
-  TableHeader, TableRow 
+import {
+  Table, TableBody, TableCell, TableHead,
+  TableHeader, TableRow
 } from '@/components/ui/table';
-import { 
-  Tabs, TabsContent, TabsList, TabsTrigger 
+import {
+  Tabs, TabsContent, TabsList, TabsTrigger
 } from '@/components/ui/tabs';
-import { 
+import {
   FileText, Download, Eye, Edit, Trash2, Plus, Search,
   IndianRupee, AlertTriangle, CheckCircle, Clock, Loader2
 } from 'lucide-react';
@@ -19,22 +19,23 @@ import { formatINR } from '@/utils/currency';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import InvoiceForm from '@/components/accounts/InvoiceForm';
 import InvoiceDetails from '@/components/accounts/InvoiceDetails';
-import { 
-  Select, SelectContent, SelectItem, 
-  SelectTrigger, SelectValue 
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import { generateInvoicePDF, generateBatchInvoicePDF } from '@/utils/pdf-utils';
 import { toast } from 'sonner';
 
 const InvoicesPage: React.FC = () => {
-  const { 
-    invoices, 
-    stats, 
-    deleteInvoice, 
+  const {
+    invoices,
+    stats,
+    fetchInvoices,
+    deleteInvoice,
     updateInvoiceStatus,
-    exportInvoice 
+    exportInvoice,
   } = useAccountsStore();
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [currentTab, setCurrentTab] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -44,16 +45,21 @@ const InvoicesPage: React.FC = () => {
   const [timeFilter, setTimeFilter] = useState('all');
   const [exportingInvoiceIds, setExportingInvoiceIds] = useState<string[]>([]);
   const [isBatchExporting, setIsBatchExporting] = useState(false);
-  
-  const selectedInvoice = selectedInvoiceId 
-    ? invoices.find(inv => inv.id === selectedInvoiceId) 
+
+  const selectedInvoice = selectedInvoiceId
+    ? invoices.find((inv) => inv.id === selectedInvoiceId)
     : null;
-  
-  const filteredInvoices = invoices.filter(invoice => {
+
+  // Fetch invoices on mount and when timeFilter changes
+  useEffect(() => {
+    fetchInvoices(timeFilter);
+  }, [fetchInvoices, timeFilter]);
+
+  const filteredInvoices = invoices.filter((invoice) => {
     if (currentTab !== 'all' && invoice.status.toLowerCase() !== currentTab) {
       return false;
     }
-    
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -61,66 +67,74 @@ const InvoicesPage: React.FC = () => {
         invoice.clientName.toLowerCase().includes(query)
       );
     }
-    
+
     return true;
   });
-  
+
   const handleViewInvoice = (id: string) => {
     setSelectedInvoiceId(id);
     setIsViewDialogOpen(true);
   };
-  
+
   const handleEditInvoice = (id: string) => {
     setSelectedInvoiceId(id);
     setIsEditDialogOpen(true);
   };
-  
-  const handleDeleteInvoice = (id: string) => {
+
+  const handleDeleteInvoice = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this invoice?')) {
-      deleteInvoice(id);
+      try {
+        await deleteInvoice(id);
+      } catch (error) {
+        console.error('Error deleting invoice:', error);
+      }
     }
   };
-  
-  const handleStatusChange = (id: string, status: 'Paid' | 'Unpaid' | 'Overdue' | 'Draft') => {
-    updateInvoiceStatus(id, status);
+
+  const handleStatusChange = async (id: string, status: 'Paid' | 'Unpaid' | 'Overdue' | 'Draft') => {
+    try {
+      await updateInvoiceStatus(id, status);
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
   };
-  
+
   const handleExportInvoice = (id: string, format: 'pdf' | 'csv') => {
     if (format === 'csv') {
       exportInvoice(id, format);
       return;
     }
-    
-    setExportingInvoiceIds(prev => [...prev, id]);
-    
-    const invoice = invoices.find(inv => inv.id === id);
+
+    setExportingInvoiceIds((prev) => [...prev, id]);
+
+    const invoice = invoices.find((inv) => inv.id === id);
     if (!invoice) {
       toast.error('Invoice not found');
-      setExportingInvoiceIds(prev => prev.filter(i => i !== id));
+      setExportingInvoiceIds((prev) => prev.filter((i) => i !== id));
       return;
     }
-    
+
     generateInvoicePDF(invoice)
       .then(() => {
         toast.success(`Invoice #${invoice.invoiceNumber} PDF generated successfully`);
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('Error generating PDF:', error);
         toast.error('Failed to generate PDF. Please try again.');
       })
       .finally(() => {
-        setExportingInvoiceIds(prev => prev.filter(i => i !== id));
+        setExportingInvoiceIds((prev) => prev.filter((i) => i !== id));
       });
   };
-  
+
   const handleBatchExport = () => {
     setIsBatchExporting(true);
-    
+
     generateBatchInvoicePDF(filteredInvoices)
       .then(() => {
         toast.success(`Exported ${filteredInvoices.length} invoices successfully`);
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('Error generating batch PDF:', error);
         toast.error('Failed to generate batch PDF. Please try again.');
       })
@@ -128,7 +142,7 @@ const InvoicesPage: React.FC = () => {
         setIsBatchExporting(false);
       });
   };
-  
+
   const getStatusBadgeClass = (status: string) => {
     switch (status.toLowerCase()) {
       case 'paid':
@@ -143,7 +157,7 @@ const InvoicesPage: React.FC = () => {
         return 'status-badge';
     }
   };
-  
+
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
       case 'paid':
@@ -158,7 +172,7 @@ const InvoicesPage: React.FC = () => {
         return null;
     }
   };
-  
+
   return (
     <AccountsLayout title="Invoices">
       <div className="space-y-6">
@@ -220,7 +234,7 @@ const InvoicesPage: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -246,8 +260,8 @@ const InvoicesPage: React.FC = () => {
               </SelectContent>
             </Select>
             {filteredInvoices.length > 0 && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleBatchExport}
                 disabled={isBatchExporting}
               >
@@ -264,10 +278,10 @@ const InvoicesPage: React.FC = () => {
             </Button>
           </div>
         </div>
-        
-        <Tabs 
-          defaultValue="all" 
-          value={currentTab} 
+
+        <Tabs
+          defaultValue="all"
+          value={currentTab}
           onValueChange={setCurrentTab}
           className="w-full"
         >
@@ -278,7 +292,7 @@ const InvoicesPage: React.FC = () => {
             <TabsTrigger value="unpaid">Unpaid</TabsTrigger>
             <TabsTrigger value="overdue">Overdue</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value={currentTab} className="mt-6">
             <Card>
               <CardContent className="p-0">
@@ -318,7 +332,7 @@ const InvoicesPage: React.FC = () => {
                             {invoice.status === 'Paid' ? (
                               <div className="flex items-center">
                                 <IndianRupee className="h-3 w-3 mr-1" />
-                                {invoice.totalAmount.toLocaleString()}
+                                {(invoice.paidAmount || invoice.totalAmount).toLocaleString()}
                               </div>
                             ) : '-'}
                           </TableCell>
@@ -333,23 +347,23 @@ const InvoicesPage: React.FC = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center space-x-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleViewInvoice(invoice.id)}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleEditInvoice(invoice.id)}
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleExportInvoice(invoice.id, 'pdf')}
                                 disabled={exportingInvoiceIds.includes(invoice.id)}
                               >
@@ -359,9 +373,9 @@ const InvoicesPage: React.FC = () => {
                                   <Download className="h-4 w-4" />
                                 )}
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleDeleteInvoice(invoice.id)}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -378,40 +392,40 @@ const InvoicesPage: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
-      
+
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Invoice</DialogTitle>
           </DialogHeader>
-          <InvoiceForm 
-            onClose={() => setIsAddDialogOpen(false)} 
+          <InvoiceForm
+            onClose={() => setIsAddDialogOpen(false)}
           />
         </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Invoice Details</DialogTitle>
           </DialogHeader>
           {selectedInvoice && (
-            <InvoiceDetails 
-              invoice={selectedInvoice} 
+            <InvoiceDetails
+              invoice={selectedInvoice}
               onStatusChange={handleStatusChange}
               onClose={() => setIsViewDialogOpen(false)}
             />
           )}
         </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Invoice</DialogTitle>
           </DialogHeader>
           {selectedInvoice && (
-            <InvoiceForm 
+            <InvoiceForm
               invoice={selectedInvoice}
               onClose={() => setIsEditDialogOpen(false)}
             />

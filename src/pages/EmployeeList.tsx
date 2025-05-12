@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, Users, UserCheck, PieChart, Mail, Phone, Copy, Check } from "lucide-react";
+import { 
+  Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, Users, UserCheck, 
+  PieChart, HandCoins
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AddEmployeeModal from "../components/Employee1/AddEmployeeModal";
@@ -17,9 +20,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable'; 
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import HiddenContactCell from "@/components/ui/HiddenContactCell";
-
-
-
+import EmployeesPayrollDrawer from './EmployeesPayrollDrawer';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -37,6 +38,7 @@ interface Employee {
   employment_status?: string;
   hire_type?: string;
   profile_picture_url?: string;
+  joining_date?: string;
 }
 
 const EmployeeList = () => {
@@ -49,6 +51,10 @@ const EmployeeList = () => {
   
   const [currentPage, setCurrentPage] = useState(1);
   const employeesPerPage = 10;
+
+  // State for the drawer
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   useEffect(() => {
     fetchEmployees();
@@ -72,7 +78,8 @@ const EmployeeList = () => {
           position, 
           employment_status,
           hire_type,
-          profile_picture_url
+          profile_picture_url,
+          joining_date
         `)
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
@@ -92,6 +99,7 @@ const EmployeeList = () => {
         employment_status: emp.employment_status || 'Active',
         hire_type: emp.hire_type || 'N/A',
         profile_picture_url: emp.profile_picture_url,
+        joining_date: emp.joining_date || 'N/A',
       }));
       
       setEmployees(formattedEmployees);
@@ -179,7 +187,7 @@ const EmployeeList = () => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'right' as const, // <-- move legend to right
+        position: 'right' as const,
         labels: {
           font: {
             size: 10,
@@ -221,7 +229,6 @@ const EmployeeList = () => {
     document.body.removeChild(link);
   };
 
-  // PDF Download (updated to match ClientWiseReport.tsx)
   const downloadPDF = () => {
     const doc = new jsPDF();
     
@@ -235,17 +242,22 @@ const EmployeeList = () => {
       emp.employment_status,
     ]);
 
-    autoTable(doc, { // Use autoTable as a function, matching ClientWiseReport.tsx
+    autoTable(doc, {
       head: [headers],
       body: data,
       startY: 20,
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [124, 58, 237] }, // purple color header
+      headStyles: { fillColor: [124, 58, 237] },
     });
 
     doc.save('employees.pdf');
   };
 
+  // Handle opening the drawer with employee details
+  const handleViewDetails = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setIsDrawerOpen(true);
+  };
 
   return (
     <div className="container mx-auto py-6">
@@ -257,29 +269,29 @@ const EmployeeList = () => {
       
       {/* Dashboard Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <Card className="flex flex-col justify-between">
-  <CardHeader className="flex flex-row items-center gap-2">
-    <Users className="h-5 w-5 text-purple-600" />
-    <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
-  </CardHeader>
-  <CardContent className="flex flex-col items-center justify-center h-40">
-    <Users className="h-16 w-16 text-purple-600 mb-4" />
-    <div className="text-2xl font-bold">{totalEmployees}</div>
-    <p className="text-xs text-muted-foreground text-center mt-2">All employees in the organization</p>
-  </CardContent>
-</Card>
+        <Card className="flex flex-col justify-between">
+          <CardHeader className="flex flex-row items-center gap-2">
+            <Users className="h-5 w-5 text-purple-600" />
+            <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center h-40">
+            <Users className="h-16 w-16 text-purple-600 mb-4" />
+            <div className="text-2xl font-bold">{totalEmployees}</div>
+            <p className="text-xs text-muted-foreground text-center mt-2">All employees in the organization</p>
+          </CardContent>
+        </Card>
 
-<Card className="flex flex-col justify-between">
-  <CardHeader className="flex flex-row items-center gap-2">
-    <UserCheck className="h-5 w-5 text-purple-600" />
-    <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
-  </CardHeader>
-  <CardContent className="flex flex-col items-center justify-center h-40">
-    <UserCheck className="h-16 w-16 text-purple-600 mb-4" />
-    <div className="text-2xl font-bold">{activeEmployees}</div>
-    <p className="text-xs text-muted-foreground text-center mt-2">Currently active employees</p>
-  </CardContent>
-</Card>
+        <Card className="flex flex-col justify-between">
+          <CardHeader className="flex flex-row items-center gap-2">
+            <UserCheck className="h-5 w-5 text-purple-600" />
+            <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center h-40">
+            <UserCheck className="h-16 w-16 text-purple-600 mb-4" />
+            <div className="text-2xl font-bold">{activeEmployees}</div>
+            <p className="text-xs text-muted-foreground text-center mt-2">Currently active employees</p>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
@@ -287,12 +299,11 @@ const EmployeeList = () => {
             <CardTitle className="text-sm font-medium">Department Distribution</CardTitle>
           </CardHeader>
           <CardContent>
-          <div className="flex h-40 justify-between">
-  <div className="flex-1">
-    <Pie options={pieChartOptions} data={pieChartData} />
-  </div>
-</div>
-
+            <div className="flex h-40 justify-between">
+              <div className="flex-1">
+                <Pie options={pieChartOptions} data={pieChartData} />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -310,13 +321,13 @@ const EmployeeList = () => {
               />
             </div>
             <div className="flex gap-2">
-      <Button variant="outline" onClick={downloadCSV}>
-        Download CSV
-      </Button>
-      <Button variant="outline" onClick={downloadPDF}>
-        Download PDF
-      </Button>
-    </div>
+              <Button variant="outline" onClick={downloadCSV}>
+                Download CSV
+              </Button>
+              <Button variant="outline" onClick={downloadPDF}>
+                Download PDF
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -324,163 +335,178 @@ const EmployeeList = () => {
             <div className="text-center py-4">Loading employees...</div>
           ) : (
             <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead> {/* Merged Column */}
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {currentEmployees.length === 0 ? (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-4">
-                      {search ? "No employees match your search." : "No employees found. Add some!"}
-                    </TableCell>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  currentEmployees.map((employee) => (
-                    <TableRow key={employee.id} className="hover:bg-gray-50">
-                      <TableCell
-                        onClick={() => navigate(`/employee/profile/${employee.id}`)}
-                        className="cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          {employee.profile_picture_url ? (
-                            <img
-                              src={employee.profile_picture_url}
-                              alt={`${employee.first_name} ${employee.last_name}`}
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600">
-                              {employee.first_name[0]}
-                            </div>
-                          )}
-                          <div className="flex flex-col">
-                            <div className="font-medium">
-                              {employee.first_name} {employee.last_name}
-                            </div>
-                            <div className="flex gap-2 mt-1 flex-wrap">
-                              <span className="w-fit bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded-full">
-                                ID: {employee.employee_id}
-                              </span>
-                              <span
-                                className={`w-fit text-xs px-2 py-0.5 rounded-full ${
-                                  employee.hire_type === 'Full Time'
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : employee.hire_type === 'Contract'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : employee.hire_type === 'Internship'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : employee.hire_type === 'Part Time'
-                                    ? 'bg-orange-100 text-orange-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}
-                              >
-                                {employee.hire_type}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-          
-                      <HiddenContactCell
-                        email={employee.email}
-                        phone={employee.phone}
-                        candidateId={employee.id}
-                      />
-          
-                      <TableCell>{employee.department_name}</TableCell>
-          
-                      <TableCell>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${
-                            employee.employment_status?.toLowerCase() === 'active'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-gradient-to-r from-purple-400 to-purple-600 text-white'
-                          }`}
-                        >
-                          {employee.employment_status?.toLowerCase() === 'active'
-                            ? 'Active'
-                            : employee.employment_status}
-                        </span>
-                      </TableCell>
-          
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/employee/${employee.id}`);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(employee.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                </TableHeader>
+                <TableBody>
+                  {currentEmployees.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4">
+                        {search ? "No employees match your search." : "No employees found. Add some!"}
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    currentEmployees.map((employee) => (
+                      <TableRow key={employee.id} className="hover:bg-gray-50">
+                        <TableCell
+                          onClick={() => navigate(`/employee/profile/${employee.id}`)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3">
+                            {employee.profile_picture_url ? (
+                              <img
+                                src={employee.profile_picture_url}
+                                alt={`${employee.first_name} ${employee.last_name}`}
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600">
+                                {employee.first_name[0]}
+                              </div>
+                            )}
+                            <div className="flex flex-col">
+                              <div className="font-medium">
+                                {employee.first_name} {employee.last_name}
+                              </div>
+                              <div className="flex gap-2 mt-1 flex-wrap">
+                                <span className="w-fit bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded-full">
+                                  ID: {employee.employee_id}
+                                </span>
+                                <span
+                                  className={`w-fit text-xs px-2 py-0.5 rounded-full ${
+                                    employee.hire_type === 'Full Time'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : employee.hire_type === 'Contract'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : employee.hire_type === 'Internship'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : employee.hire_type === 'Part Time'
+                                      ? 'bg-orange-100 text-orange-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}
+                                >
+                                  {employee.hire_type}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
           
-            {/* Pagination remains same */}
-            {totalPages > 1 && (
-              <div className="flex justify-between items-center mt-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing {indexOfFirstEmployee + 1} to {Math.min(indexOfLastEmployee, filteredEmployees.length)} of {filteredEmployees.length} employees
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Previous
-                  </Button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <HiddenContactCell
+                          email={employee.email}
+                          phone={employee.phone}
+                          candidateId={employee.id}
+                        />
+          
+                        <TableCell>{employee.department_name}</TableCell>
+          
+                        <TableCell>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs ${
+                              employee.employment_status?.toLowerCase() === 'active'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-gradient-to-r from-purple-400 to-purple-600 text-white'
+                            }`}
+                          >
+                            {employee.employment_status?.toLowerCase() === 'active'
+                              ? 'Active'
+                              : employee.employment_status}
+                          </span>
+                        </TableCell>
+          
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewDetails(employee);
+                            }}
+                          >
+                            <HandCoins className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/employee/${employee.id}`);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(employee.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+          
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center mt-4">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {indexOfFirstEmployee + 1} to {Math.min(indexOfLastEmployee, filteredEmployees.length)} of {filteredEmployees.length} employees
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
+                      variant="outline"
                       size="sm"
-                      onClick={() => handlePageChange(page)}
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
                     >
-                      {page}
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
                     </Button>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(page)}
+                      >
+                        {page}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-          
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Drawer for Adding Payment */}
+      <EmployeesPayrollDrawer
+        isOpen={isDrawerOpen}
+        onOpenChange={setIsDrawerOpen}
+        selectedEmployee={selectedEmployee}
+      />
     </div>
   );
 };

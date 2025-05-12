@@ -26,8 +26,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
 import { PayrollDrawer } from '@/components/financial/PayrollDrawer';
-import PayslipViewer from '@/components/financial/PayslipViewer';
+import PayslipViewer from '@/components/financial/PayslipViewer'
 import { PayslipData } from '@/utils/payslip-extractor';
+import { useNavigate } from 'react-router-dom';
 
 interface Employee {
   id: string;
@@ -47,12 +48,13 @@ const ExpensesPage: React.FC = () => {
   const { 
     expenses, 
     stats,
+    fetchExpenses,
     deleteExpense,
     exportData
   } = useAccountsStore();
-  
+
   const { payments, setPayments } = useFinancialStore();
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -70,13 +72,36 @@ const ExpensesPage: React.FC = () => {
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [isPayslipDialogOpen, setIsPayslipDialogOpen] = useState(false);
   const [payslipData, setPayslipData] = useState<PayslipData | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  const navigate = useNavigate();
 
   const selectedExpense = selectedExpenseId 
     ? expenses.find(exp => exp.id === selectedExpenseId) 
     : null;
 
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: userData, error } = await supabase.auth.getUser();
+      if (error || !userData?.user) {
+        setIsAuthenticated(false);
+      } else {
+        setIsAuthenticated(true);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Fetch expenses on mount if authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchExpenses();
+    }
+  }, [isAuthenticated, fetchExpenses]);
+
   const updatePaymentStatus = async (payment: any) => {
-    if (!payment?.payment_date || payment.payment_date === '') {
+    if (!payment?.payment_date) {
       return { ...payment, status: 'Pending' };
     }
 
@@ -111,37 +136,43 @@ const ExpensesPage: React.FC = () => {
       }
 
       if (!data || data.length === 0) {
+        setPayments([]);
         toast.warning('No payment records found');
         return [];
       }
 
       const fetchPaymentDetails = async (record: any) => {
-        const { data: earningsData } = await supabase
+        const { data: earningsData, error: earningsError } = await supabase
           .from('payment_earnings')
           .select('*')
-          .eq('payment_id', record.id)
-          .limit(1);
+          .eq('payment_id', record.id);
 
-        const { data: deductionsData } = await supabase
+        const { data: deductionsData, error: deductionsError } = await supabase
           .from('payment_deductions')
           .select('*')
-          .eq('payment_id', record.id)
-          .limit(1);
+          .eq('payment_id', record.id);
 
-        const { data: customEarnings } = await supabase
+        const { data: customEarnings, error: customEarningsError } = await supabase
           .from('payment_custom_earnings')
           .select('*')
           .eq('payment_id', record.id);
 
-        const { data: customDeductions } = await supabase
+        const { data: customDeductions, error: customDeductionsError } = await supabase
           .from('payment_custom_deductions')
           .select('*')
           .eq('payment_id', record.id);
 
-        const paymentDate = record.payment_date && record.payment_date !== '' 
-          ? new Date(record.payment_date) 
-          : new Date();
+        if (earningsError || deductionsError || customEarningsError || customDeductionsError) {
+          console.error('Error fetching payment details:', {
+            earningsError,
+            deductionsError,
+            customEarningsError,
+            customDeductionsError,
+          });
+          return null;
+        }
 
+        const paymentDate = record.payment_date ? new Date(record.payment_date) : new Date();
         if (isNaN(paymentDate.getTime())) {
           console.warn(`Invalid payment_date for record ${record.id}, using current date as fallback`);
           paymentDate.setTime(new Date().getTime());
@@ -159,7 +190,7 @@ const ExpensesPage: React.FC = () => {
           designation: record.designation || 'N/A',
           payPeriod: payPeriod,
           payDate: paymentDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }),
-          dateOfJoining: record.joining_date || '',
+          dateOfJoining: record.joining_date || null,
           paidDays: deductions.paid_days || 30,
           lopDays: deductions.lop_days || 0,
           ctc: (earnings.total_earnings || 0) * 12,
@@ -203,11 +234,10 @@ const ExpensesPage: React.FC = () => {
 
       const paymentPromises = data.map(fetchPaymentDetails);
       const paymentData = await Promise.all(paymentPromises);
+      const validPaymentData = paymentData.filter((payment): payment is any => payment !== null);
 
-      console.log('Fetched Payments:', paymentData);
-
-      setPayments(paymentData);
-      return paymentData;
+      setPayments(validPaymentData);
+      return validPaymentData;
     } catch (error) {
       console.error('Error fetching payments:', error);
       toast.error('Failed to fetch payment data');
@@ -238,7 +268,7 @@ const ExpensesPage: React.FC = () => {
           employee_id: emp.employee_id,
           full_name: emp.employee_name || `Employee ${emp.employee_id}`,
           designation: emp.designation || 'N/A',
-          joining_date: emp.joining_date || '',
+          joining_date: emp.joining_date || null,
         }])).values()
       );
 
@@ -299,6 +329,11 @@ const ExpensesPage: React.FC = () => {
           return record;
         }
 
+        const joiningDate = joining_date ? new Date(joining_date) : null;
+        if (joining_date && (!joiningDate || isNaN(joiningDate.getTime()))) {
+          console.warn(`Invalid joining_date for employee ${employeeId}, setting to null`);
+        }
+
         const { error: updateError } = await supabase
           .from('payment_records')
           .update({
@@ -306,7 +341,7 @@ const ExpensesPage: React.FC = () => {
             designation: designation || record.designation,
             payment_amount: payment_amount !== undefined ? payment_amount : record.payment_amount,
             payment_category: payment_category || record.payment_category,
-            joining_date: joining_date || record.joining_date || '',
+            joining_date: joiningDate && !isNaN(joiningDate.getTime()) ? joiningDate.toISOString() : null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', record.id);
@@ -367,10 +402,7 @@ const ExpensesPage: React.FC = () => {
         continue;
       }
 
-      const firstPaymentDate = firstPayment.payment_date && firstPayment.payment_date !== ''
-        ? new Date(firstPayment.payment_date)
-        : new Date();
-
+      const firstPaymentDate = firstPayment.payment_date ? new Date(firstPayment.payment_date) : new Date();
       if (isNaN(firstPaymentDate.getTime())) {
         console.warn(`Invalid first payment_date for employee ${employee.employee_id}, using current date as fallback`);
         firstPaymentDate.setTime(new Date().getTime());
@@ -408,12 +440,17 @@ const ExpensesPage: React.FC = () => {
           year: 'numeric',
         });
 
+        const joiningDate = employee.joining_date ? new Date(employee.joining_date) : null;
+        if (employee.joining_date && (!joiningDate || isNaN(joiningDate.getTime()))) {
+          console.warn(`Invalid joining_date for employee ${employee.employee_id}, setting to null`);
+        }
+
         const newPaymentRecord = {
           employee_id: employee.employee_id,
           employee_name: employee.full_name,
           designation: employee.designation,
-          joining_date: employee.joining_date || '',
-          payment_date: targetMonthEnd,
+          joining_date: joiningDate && !isNaN(joiningDate.getTime()) ? joiningDate.toISOString() : null,
+          payment_date: targetMonthEnd.toISOString(),
           payment_amount: paymentAmount,
           payment_category: 'Staff',
           status: 'Pending',
@@ -438,7 +475,7 @@ const ExpensesPage: React.FC = () => {
           designation: employee.designation,
           payment_amount: paymentAmount,
           payment_category: 'Staff',
-          joining_date: employee.joining_date || '',
+          joining_date: employee.joining_date || null,
         });
 
         let updatedPayment = await updatePaymentStatus(data);
@@ -449,7 +486,7 @@ const ExpensesPage: React.FC = () => {
           designation: employee.designation || 'N/A',
           payPeriod: targetMonthEnd.toLocaleString('en-US', { month: 'long', year: 'numeric' }),
           payDate: paymentDate,
-          dateOfJoining: employee.joining_date || '',
+          dateOfJoining: employee.joining_date || null,
           paidDays: 30,
           lopDays: 0,
           ctc: 0,
@@ -526,12 +563,7 @@ const ExpensesPage: React.FC = () => {
   const monthOptions = generateMonthOptions();
 
   const getPaymentMonthYear = (paymentDate: string) => {
-    if (!paymentDate || paymentDate === '') {
-      const today = new Date();
-      return `${today.toLocaleString('en-US', { month: 'long' })}-${today.getFullYear()}`;
-    }
-
-    const date = new Date(paymentDate);
+    const date = paymentDate ? new Date(paymentDate) : new Date();
     if (isNaN(date.getTime())) {
       const today = new Date();
       return `${today.toLocaleString('en-US', { month: 'long' })}-${today.getFullYear()}`;
@@ -546,7 +578,7 @@ const ExpensesPage: React.FC = () => {
     if (categoryFilter !== 'all' && expense.category !== categoryFilter) {
       return false;
     }
-    
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -555,7 +587,7 @@ const ExpensesPage: React.FC = () => {
         expense.category.toLowerCase().includes(query)
       );
     }
-    
+
     return true;
   });
 
@@ -615,23 +647,23 @@ const ExpensesPage: React.FC = () => {
   const uniqueCategories = Array.from(
     new Set(expenses.map(expense => expense.category))
   );
-  
+
   const handleViewExpense = (id: string) => {
     setSelectedExpenseId(id);
     setIsViewDialogOpen(true);
   };
-  
+
   const handleEditExpense = (id: string) => {
     setSelectedExpenseId(id);
     setIsEditDialogOpen(true);
   };
-  
+
   const handleDeleteExpense = (id: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       deleteExpense(id);
     }
   };
-  
+
   const handleExportExpenses = () => {
     exportData('expenses', 'csv');
   };
@@ -648,7 +680,7 @@ const ExpensesPage: React.FC = () => {
       designation: payment.designation || 'N/A',
       payPeriod: '',
       payDate: payment.paymentDate,
-      dateOfJoining: payment.payslipData?.dateOfJoining || '',
+      dateOfJoining: payment.payslipData?.dateOfJoining || null,
       paidDays: 30,
       lopDays: 0,
       ctc: 0,
@@ -731,7 +763,7 @@ const ExpensesPage: React.FC = () => {
           designation: updatedPayment.designation,
           payment_amount: updatedPayment.paymentAmount,
           payment_category: updatedPayment.paymentCategory,
-          joining_date: updatedPayment.payslipData?.dateOfJoining || '',
+          joining_date: updatedPayment.payslipData?.dateOfJoining || null,
         });
 
         await handlePendingPaymentsForAllMonths();
@@ -775,6 +807,19 @@ const ExpensesPage: React.FC = () => {
   };
 
   const displayedPayments = activeSalaryCategory === 'Paid Salary' ? paidPayments : unpaidPayments;
+
+  if (isAuthenticated === null) {
+    return <div>Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="text-center">
+        <p className="text-red-500">You must be signed in to access this page.</p>
+        <Button onClick={() => navigate('/login')}>Go to Login</Button>
+      </div>
+    );
+  }
 
   return (
     <AccountsLayout title="Expenses">
@@ -825,7 +870,7 @@ const ExpensesPage: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -1117,7 +1162,7 @@ const ExpensesPage: React.FC = () => {
           )}
         </div>
       </div>
-      
+
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1128,7 +1173,7 @@ const ExpensesPage: React.FC = () => {
           />
         </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isViewDialogOpen} onOpenChange={handleViewDialogClose}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1153,7 +1198,7 @@ const ExpensesPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1179,7 +1224,7 @@ const ExpensesPage: React.FC = () => {
             designation: newPayment.designation,
             payment_amount: newPayment.paymentAmount,
             payment_category: newPayment.paymentCategory,
-            joining_date: newPayment.payslipData?.dateOfJoining || '',
+            joining_date: newPayment.payslipData?.dateOfJoining || null,
           });
           await handlePendingPaymentsForAllMonths();
         }}
