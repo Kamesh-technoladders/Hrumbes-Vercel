@@ -10,8 +10,26 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { role } = useSelector((state) => state.auth);
-  const menuItems = menuItemsByRole[role] || [];
+  const { role, user } = useSelector((state) => state.auth);
+  const { departments } = useSelector((state) => state.departments);
+
+  // Function to get department name by ID
+  const getDepartmentName = (departmentId) => {
+    const dept = departments.find((d) => d.id === departmentId);
+    return dept ? dept.name : "Unknown Department";
+  };
+
+  // Get department name for the logged-in user
+  const departmentName = user?.department_id
+    ? getDepartmentName(user.department_id)
+    : "Unknown Department";
+
+  // Get menu items based on role
+  const menuItems =
+    role === "employee"
+      ? menuItemsByRole.employee(departmentName) // Call the function for employee role
+      : menuItemsByRole[role] || [];
+
   const [isMobile] = useMediaQuery("(max-width: 768px)");
   const [openDropdown, setOpenDropdown] = useState(null); // Track which dropdown is open
 

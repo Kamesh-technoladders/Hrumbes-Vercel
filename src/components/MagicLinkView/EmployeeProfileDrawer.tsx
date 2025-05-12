@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import EmployeeDataSelection, { DataSharingOptions } from "./EmployeeDataSelection";
 import {
@@ -13,7 +13,6 @@ import {
   Briefcase,
   MapPin,
   FileCheck,
-  Users,
   Clock,
   CheckCircle2,
   XCircle,
@@ -22,14 +21,12 @@ import {
   Copy,
   Mail,
   Phone,
-  Building,
   Award,
   MapPinPlus,
   FileBadge,
   Eye,
   Download,
   Banknote,
-  Globe,
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -37,14 +34,10 @@ import { Candidate } from "@/lib/types";
 import { FaLinkedin } from "react-icons/fa";
 import { supabase } from "@/integrations/supabase/client";
 
-interface EmployeeProfileDrawerProps {
-  open: boolean;
-  onClose: () => void;
-  candidate?: Candidate | null;
+interface EmployeeProfilePageProps {
   shareMode?: boolean;
   shareId?: string;
   sharedDataOptions?: DataSharingOptions;
-  jobId?: string;
 }
 
 interface DocumentState {
@@ -56,21 +49,87 @@ interface DocumentState {
   isEditing: boolean;
 }
 
-const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
-  open,
-  onClose,
-  candidate: initialCandidate,
+interface ResumeAnalysis {
+  overall_score: number;
+  matched_skills: Array<{
+    requirement: string;
+    matched: string;
+    details: string;
+  }>;
+  summary: string;
+  missing_or_weak_areas: string[];
+  top_skills: string[];
+  development_gaps: string[];
+  additional_certifications: string[];
+  section_wise_scoring: Array<{
+    section: string;
+    weightage: number;
+    submenus: Array<{
+      submenu: string;
+      score: number;
+      remarks: string;
+      weightage: number;
+      weighted_score: number;
+    }>;
+  }>;
+}
+
+interface WorkHistory {
+  company_id: number;
+  company_name: string;
+  designation: string;
+  years: string;
+}
+
+interface TimelineEvent {
+  id: string;
+  candidate_id: string;
+  event_type: string;
+  event_data: {
+    action: string;
+    timestamp: string;
+    round?: string;
+    interview_date?: string;
+    interview_time?: string;
+    interview_type?: string;
+    interviewer_name?: string;
+    interview_location?: string;
+    interview_result?: string;
+    interview_feedback?: string;
+    ctc?: string;
+    joining_date?: string;
+  };
+  previous_state: {
+    subStatusId: string;
+    mainStatusId: string;
+    subStatusName: string;
+    mainStatusName: string;
+  };
+  new_state: {
+    subStatusId: string;
+    mainStatusId: string;
+    subStatusName: string;
+    mainStatusName: string;
+  };
+  created_by: string;
+  created_by_name: string;
+  created_at: string;
+}
+
+const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
   shareMode = false,
   shareId,
   sharedDataOptions: initialSharedDataOptions,
-  jobId
 }) => {
+  const { candidateId, jobId } = useParams<{ candidateId: string; jobId: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [magicLink, setMagicLink] = useState<string | null>(null);
   const [showDataSelection, setShowDataSelection] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("documents");
+  const [activeTab, setActiveTab] = useState<string>("resume-analysis");
   const [currentDataOptions, setCurrentDataOptions] = useState<DataSharingOptions>(
     initialSharedDataOptions || {
       personalInfo: true,
@@ -91,7 +150,7 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
     esic: DocumentState;
   }>({
     uan: {
-      value: initialCandidate?.metadata?.uan || "N/A",
+      value: "",
       isVerifying: false,
       isVerified: false,
       verificationDate: null,
@@ -99,7 +158,7 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
       isEditing: false,
     },
     pan: {
-      value: initialCandidate?.metadata?.pan || "N/A",
+      value: "",
       isVerifying: false,
       isVerified: false,
       verificationDate: null,
@@ -107,7 +166,7 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
       isEditing: false,
     },
     pf: {
-      value: initialCandidate?.metadata?.pf || "N/A",
+      value: "",
       isVerifying: false,
       isVerified: false,
       verificationDate: null,
@@ -115,7 +174,7 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
       isEditing: false,
     },
     esic: {
-      value: initialCandidate?.metadata?.esicNumber || "N/A",
+      value: "",
       isVerifying: false,
       isVerified: false,
       verificationDate: null,
@@ -123,6 +182,13 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
       isEditing: false,
     },
   });
+  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
+  const [workHistory, setWorkHistory] = useState<WorkHistory[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
 
   // Type guard to validate Candidate object
   const isValidCandidate = (data: any): data is Candidate => {
@@ -137,59 +203,135 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
     );
   };
 
-  // Initialize candidate state with initialCandidate
+  // Fetch candidate data
   useEffect(() => {
-    console.log("Initial Candidate:", initialCandidate);
-    console.log("jobID:", jobId);
+    const fetchCandidate = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-    if (initialCandidate && isValidCandidate(initialCandidate)) {
-      console.log("Setting candidate from initialCandidate:", initialCandidate);
-      setCandidate(initialCandidate);
-      setDocuments({
-        uan: {
-          value: initialCandidate.metadata?.uan || "N/A",
-          isVerifying: false,
-          isVerified: false,
-          verificationDate: null,
-          error: null,
-          isEditing: false,
-        },
-        pan: {
-          value: initialCandidate.metadata?.pan || "N/A",
-          isVerifying: false,
-          isVerified: false,
-          verificationDate: null,
-          error: null,
-          isEditing: false,
-        },
-        pf: {
-          value: initialCandidate.metadata?.pf || "N/A",
-          isVerifying: false,
-          isVerified: false,
-          verificationDate: null,
-          error: null,
-          isEditing: false,
-        },
-        esic: {
-          value: initialCandidate.metadata?.esicNumber || "N/A",
-          isVerifying: false,
-          isVerified: false,
-          verificationDate: null,
-          error: null,
-          isEditing: false,
-        },
-      });
-    } else {
-      console.log("Invalid or null initialCandidate, setting candidate to null");
-      setCandidate(null);
-    }
-  }, [initialCandidate]);
+        console.log("URL candidateId:", candidateId);
+        console.log("URL jobId:", jobId);
 
-  // Fetch shared data in share mode
+        const state = location.state as { candidate?: Candidate; jobId?: string };
+        console.log("Location state:", state);
+
+        const initialCandidate = state?.candidate;
+
+        if (initialCandidate && isValidCandidate(initialCandidate)) {
+          console.log("Setting candidate from location state:", initialCandidate);
+          setCandidate(initialCandidate);
+          setDocuments({
+            uan: {
+              value: initialCandidate.metadata?.uan || "N/A",
+              isVerifying: false,
+              isVerified: false,
+              verificationDate: null,
+              error: null,
+              isEditing: false,
+            },
+            pan: {
+              value: initialCandidate.metadata?.pan || "N/A",
+              isVerifying: false,
+              isVerified: false,
+              verificationDate: null,
+              error: null,
+              isEditing: false,
+            },
+            pf: {
+              value: initialCandidate.metadata?.pf || "N/A",
+              isVerifying: false,
+              isVerified: false,
+              verificationDate: null,
+              error: null,
+              isEditing: false,
+            },
+            esic: {
+              value: initialCandidate.metadata?.esicNumber || "N/A",
+              isVerifying: false,
+              isVerified: false,
+              verificationDate: null,
+              error: null,
+              isEditing: false,
+            },
+          });
+        } else if (candidateId) {
+          console.log("Fetching candidate from Supabase with ID:", candidateId);
+          const { data, error } = await supabase
+            .from("hr_job_candidates")
+            .select("*")
+            .eq("id", candidateId)
+            .single();
+
+          if (error || !data) {
+            console.error("Supabase fetch error:", error);
+            throw new Error("Failed to fetch candidate data: " + (error?.message || "No data found"));
+          }
+
+          if (isValidCandidate(data)) {
+            console.log("Setting candidate from Supabase:", data);
+            setCandidate(data);
+            setDocuments({
+              uan: {
+                value: data.metadata?.uan || "N/A",
+                isVerifying: false,
+                isVerified: false,
+                verificationDate: null,
+                error: null,
+                isEditing: false,
+              },
+              pan: {
+                value: data.metadata?.pan || "N/A",
+                isVerifying: false,
+                isVerified: false,
+                verificationDate: null,
+                error: null,
+                isEditing: false,
+              },
+              pf: {
+                value: data.metadata?.pf || "N/A",
+                isVerifying: false,
+                isVerified: false,
+                verificationDate: null,
+                error: null,
+                isEditing: false,
+              },
+              esic: {
+                value: data.metadata?.esicNumber || "N/A",
+                isVerifying: false,
+                isVerified: false,
+                verificationDate: null,
+                error: null,
+                isEditing: false,
+              },
+            });
+          } else {
+            throw new Error("Invalid candidate data received from Supabase");
+          }
+        } else {
+          throw new Error("No candidate data provided and no candidateId in URL");
+        }
+      } catch (err: any) {
+        console.error("Error fetching candidate:", err);
+        setError(err.message || "Failed to load candidate data.");
+        toast({
+          title: "Error",
+          description: err.message || "Failed to load candidate data.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCandidate();
+  }, [candidateId, location.state, toast]);
+
+  // Fetch shared data in share mode, resume analysis, and work history
   useEffect(() => {
-    if (shareMode && shareId) {
-      const fetchSharedData = async () => {
-        try {
+    const fetchData = async () => {
+      try {
+        if (shareMode && shareId) {
           const { data, error } = await supabase
             .from("shares")
             .select("data_options, candidate")
@@ -254,28 +396,116 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
               description: "Shared link is invalid or expired.",
               variant: "destructive",
             });
-            onClose();
+            return;
           }
-        } catch (error) {
-          console.error("Error fetching shared data:", error);
-          toast({
-            title: "Error",
-            description: "Failed to load shared data.",
-            variant: "destructive",
-          });
-          onClose();
         }
-      };
 
-      fetchSharedData();
+        if (jobId && candidate) {
+          console.log("Fetching resume analysis for candidateId:", candidate.id, "and jobId:", jobId);
+          const { data: resumeData, error: resumeError } = await supabase
+            .from("candidate_resume_analysis")
+            .select("*")
+            .eq("candidate_id", candidate.id)
+            .eq("job_id", jobId)
+            .single();
+
+          if (resumeError || !resumeData) {
+            console.warn("No resume analysis found for candidate and job:", resumeError?.message);
+          } else {
+            console.log("Resume Analysis fetched:", resumeData);
+            setResumeAnalysis(resumeData as ResumeAnalysis);
+          }
+
+          console.log("Fetching work history for candidateId:", candidate.id, "and jobId:", jobId);
+          const { data: workData, error: workError } = await supabase
+            .from("candidate_companies")
+            .select("company_id, designation, years, companies(name)")
+            .eq("candidate_id", candidate.id)
+            .eq("job_id", jobId);
+
+          if (workError || !workData) {
+            console.warn("No work history found for candidate and job:", workError?.message);
+          } else {
+            const formattedWorkHistory: WorkHistory[] = workData.map((item) => ({
+              company_id: item.company_id,
+              company_name: item.companies?.name || "Unknown Company",
+              designation: item.designation || "-",
+              years: item.years || "-",
+            }));
+            console.log("Work History fetched:", formattedWorkHistory);
+            setWorkHistory(formattedWorkHistory);
+          }
+        } else {
+          console.warn("Skipping resume analysis and work history fetch: jobId or candidate missing");
+        }
+      } catch (error: any) {
+        console.error("Error fetching additional data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load shared data, resume analysis, or work history: " + (error.message || "Unknown error"),
+          variant: "destructive",
+        });
+      }
+    };
+
+    if (candidate && !shareMode) {
+      fetchData();
     }
-  }, [shareMode, shareId, toast, onClose]);
+  }, [shareMode, shareId, jobId, candidate, sharedDataOptions, toast]);
 
-  // Wrap setCandidate to log calls
-  const wrappedSetCandidate = (value: Candidate | null) => {
-    console.log("Calling setCandidate with:", value);
-    setCandidate(value);
-  };
+  // Fetch timeline data with created_by employee details
+  useEffect(() => {
+    const fetchTimeline = async () => {
+      if (!candidateId || shareMode) return;
+
+      try {
+        setTimelineLoading(true);
+        setTimelineError(null);
+
+        console.log("Fetching timeline for candidateId:", candidateId);
+        const { data, error } = await supabase
+          .from("hr_candidate_timeline")
+          .select(`
+            *,
+            hr_employees!fk_created_by (
+              first_name,
+              last_name
+            )
+          `)
+          .eq("candidate_id", candidateId)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          throw new Error("Failed to fetch timeline data: " + error.message);
+        }
+
+        if (data) {
+          console.log("Timeline fetched:", data);
+          const formattedTimeline: TimelineEvent[] = data.map((event: any) => ({
+            ...event,
+            created_by_name: event.hr_employees
+              ? `${event.hr_employees.first_name} ${event.hr_employees.last_name}`
+              : "Unknown",
+          }));
+          setTimeline(formattedTimeline);
+        } else {
+          setTimeline([]);
+        }
+      } catch (err: any) {
+        console.error("Error fetching timeline:", err);
+        setTimelineError(err.message || "Failed to load timeline data.");
+        toast({
+          title: "Error",
+          description: err.message || "Failed to load timeline data.",
+          variant: "destructive",
+        });
+      } finally {
+        setTimelineLoading(false);
+      }
+    };
+
+    fetchTimeline();
+  }, [candidateId, shareMode, toast]);
 
   // Normalize skills to an array of strings
   const normalizeSkills = (skills: any[] | undefined): string[] => {
@@ -293,6 +523,18 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
           currency: "INR",
           maximumFractionDigits: 0,
         }).format(num);
+  };
+
+  // Format timeline date
+  const formatTimelineDate = (date: string) => {
+    return new Date(date).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: true,
+    });
   };
 
   // Employee data for normal mode
@@ -559,7 +801,7 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
         throw error;
       }
 
-      const shortLink = `${window.location.origin}/share/${shareId}?expires=${expiryDate.getTime()}`;
+      const shortLink = `${window.location.origin}/share/${shareId}?expires=${expiryDate.getTime()}${jobId ? `&jobId=${jobId}` : ""}`;
 
       console.log("Generated Share ID:", shareId);
       console.log("Shortened Link:", shortLink);
@@ -637,9 +879,9 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
     const doc = documents[type];
 
     return (
-      <div className="border rounded-lg mb-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+      <div className="border rounded-lg mb-4 bg-white shadow-sm hover:shadow-md transition-shadow w-full">
         <div className="p-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <div className="flex-1">
               <div className="flex items-center">
                 <p className="text-sm font-medium">{label}</p>
@@ -653,7 +895,7 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
                 <Input
                   value={doc.value}
                   onChange={(e) => handleDocumentChange(type, e.target.value)}
-                  className="mt-1 h-8 text-sm"
+                  className="mt-1 h-8 text-sm w-full sm:w-1/2"
                 />
               ) : (
                 <p className="text-xs text-muted-foreground">{doc.value}</p>
@@ -708,328 +950,717 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
     );
   };
 
-  // Available tabs based on sharedDataOptions
-  const availableTabs = shareMode
-    ? [
-        sharedDataOptions?.documentsInfo && "documents",
-        sharedDataOptions?.skillinfo && "skill-matrix",
-      ].filter(Boolean)
-    : ["documents", "skill-matrix"];
+  // Render resume analysis
+  const renderResumeAnalysis = () => {
+    if (!resumeAnalysis) return null;
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-lg font-medium">Resume Analysis</h3>
+        <Card className="border border-gray-200 bg-white shadow-sm w-full">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Overall Score: {resumeAnalysis.overall_score}%</p>
+            <p className="text-sm text-muted-foreground mt-2">{resumeAnalysis.summary}</p>
+          </CardContent>
+        </Card>
+        <Card className="border border-gray-200 bg-white shadow-sm w-full">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Top Skills</p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {resumeAnalysis.top_skills.map((skill, index) => (
+                <Badge key={index} variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border border-gray-200 bg-white shadow-sm w-full">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Missing or Weak Areas</p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {resumeAnalysis.missing_or_weak_areas.map((area, index) => (
+                <Badge key={index} variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                  {area}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border border-gray-200 bg-white shadow-sm w-full">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Development Gaps</p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground mt-2">
+              {resumeAnalysis.development_gaps.map((gap, index) => (
+                <li key={index}>{gap}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+        <Card className="border border-gray-200 bg-white shadow-sm w-full">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Certifications</p>
+            {resumeAnalysis.additional_certifications.length > 0 ? (
+              <ul className="list-disc list-inside text-sm text-muted-foreground mt-2">
+                {resumeAnalysis.additional_certifications.map((cert, index) => (
+                  <li key={index}>{cert}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground mt-2">No certifications listed.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border border-gray-200 bg-white shadow-sm w-full">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Matched Skills</p>
+            <div className="overflow-x-auto mt-2">
+              <table className="min-w-full text-sm text-left text-gray-600">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">Requirement</th>
+                    <th scope="col" className="px-4 py-3">Matched</th>
+                    <th scope="col" className="px-4 py-3">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumeAnalysis.matched_skills.map((skill, index) => (
+                    <tr key={index} className="border-b">
+                      <td className="px-4 py-3">{skill.requirement}</td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            skill.matched === "yes" && "bg-green-50 text-green-700 border-green-200",
+                            skill.matched === "partial" && "bg-yellow-50 text-yellow-700 border-yellow-200",
+                            skill.matched === "no" && "bg-red-50 text-red-700 border-red-200"
+                          )}
+                        >
+                          {skill.matched}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">{skill.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border border-gray-200 bg-white shadow-sm w-full">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Section-Wise Scoring</p>
+            <div className="space-y-4 mt-2">
+              {resumeAnalysis.section_wise_scoring.map((section, index) => (
+                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                  <p className="text-sm font-medium">{section.section} (Weightage: {section.weightage}%)</p>
+                  <div className="overflow-x-auto mt-2">
+                    <table className="min-w-full text-sm text-left text-gray-600">
+                      <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                        <tr>
+                          <th scope="col" className="px-4 py-3">Submenu</th>
+                          <th scope="col" className="px-4 py-3">Score</th>
+                          <th scope="col" className="px-4 py-3">Weightage</th>
+                          <th scope="col" className="px-4 py-3">Weighted Score</th>
+                          <th scope="col" className="px-4 py-3">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.submenus.map((submenu, subIndex) => (
+                          <tr key={subIndex} className="border-b">
+                            <td className="px-4 py-3">{submenu.submenu}</td>
+                            <td className="px-4 py-3">{submenu.score}/10</td>
+                            <td className="px-4 py-3">{submenu.weightage}%</td>
+                            <td className="px-4 py-3">{submenu.weighted_score.toFixed(1)}</td>
+                            <td className="px-4 py-3">{submenu.remarks}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // Render work history as a timeline
+  const renderWorkHistory = () => {
+    if (workHistory.length === 0) return null;
+
+    // Sort work history by start year (descending)
+    const sortedWorkHistory = [...workHistory].sort((a, b) => {
+      const startYearA = parseInt(a.years.split("-")[0], 10) || 0;
+      const startYearB = parseInt(b.years.split("-")[0], 10) || 0;
+      return startYearB - startYearA;
+    });
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-lg font-medium">Work History</h3>
+        <div className="space-y-6">
+          {sortedWorkHistory.map((history, index) => {
+            // Parse years to detect gaps
+            const [startYear, endYear] = history.years.split("-").map((year) => parseInt(year.trim(), 10) || 0);
+            let hasGap = false;
+            let gapText = "";
+
+            // Check for gaps by comparing with the next entry (if exists)
+            if (index < sortedWorkHistory.length - 1) {
+              const nextHistory = sortedWorkHistory[index + 1];
+              const nextStartYear = parseInt(nextHistory.years.split("-")[0], 10) || 0;
+              const gap = endYear && nextStartYear ? endYear - nextStartYear : 0;
+              if (gap > 1) {
+                hasGap = true;
+                gapText = `Gap of ${gap - 1} year${gap - 1 > 1 ? "s" : ""}`;
+              }
+            }
+
+            return (
+              <div key={index} className="relative pl-8 pb-6">
+                {/* Timeline dot and line */}
+                <div className="absolute left-0 top-0 h-full">
+                  <div className="w-4 h-4 bg-indigo-500 rounded-full"></div>
+                  {index < sortedWorkHistory.length - 1 && (
+                    <div className="absolute top-4 left-[7px] w-[2px] h-full bg-indigo-200"></div>
+                  )}
+                </div>
+
+                {/* Timeline content */}
+                <div>
+                  <p className={cn("text-xs", hasGap ? "text-red-600" : "text-gray-500")}>
+                    {history.years}
+                    {hasGap && <span className="ml-2">({gapText})</span>}
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">{history.company_name}</p>
+                  <p className="text-xs text-gray-600">{history.designation}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Render timeline
+  const renderTimeline = () => {
+    if (shareMode) return null;
+
+    if (timelineLoading) {
+      return (
+        <div className="p-4 text-center">
+          <Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-500" />
+          <p className="text-sm text-gray-600 mt-2">Loading timeline...</p>
+        </div>
+      );
+    }
+
+    if (timelineError) {
+      return (
+        <div className="p-4 text-center">
+          <p className="text-sm text-red-600">{timelineError}</p>
+        </div>
+      );
+    }
+
+    if (timeline.length === 0) {
+      return (
+        <div className="p-4 text-center">
+          <p className="text-sm text-gray-600">No timeline events available.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {timeline.map((event, index) => (
+          <div key={event.id} className="relative pl-8 pb-6">
+            {/* Timeline dot and line */}
+            <div className="absolute left-0 top-0 h-full">
+              <div className="w-4 h-4 bg-indigo-500 rounded-full"></div>
+              {index < timeline.length - 1 && (
+                <div className="absolute top-4 left-[7px] w-[2px] h-full bg-indigo-200"></div>
+              )}
+            </div>
+
+            {/* Timeline content */}
+            <div>
+              <p className="text-xs text-gray-500">{formatTimelineDate(event.created_at)}</p>
+              <p className="text-sm text-gray-600">
+                <span className="font-bold">Main Status:</span> {event.new_state.mainStatusName}
+              </p>
+              <p className="text-xs font-medium text-gray-900 mt-1">
+                {event.event_data.action}: {event.previous_state.subStatusName} → {event.new_state.subStatusName}
+              </p>
+              
+              <p className="text-xs text-gray-600">
+                Created by: {event.created_by_name}
+              </p>
+
+              {/* Additional event details */}
+              {event.event_data.round && (
+                <div className="mt-2 text-xs text-gray-600">
+                  <p>Round: {event.event_data.round}</p>
+                  {event.event_data.interview_date && (
+                    <p>Interview Date: {event.event_data.interview_date} at {event.event_data.interview_time}</p>
+                  )}
+                  {event.event_data.interview_type && (
+                    <p>Type: {event.event_data.interview_type}</p>
+                  )}
+                  {event.event_data.interviewer_name && (
+                    <p>Interviewer: {event.event_data.interviewer_name}</p>
+                  )}
+                  {event.event_data.interview_location && (
+                    <p>Location: {event.event_data.interview_location}</p>
+                  )}
+                  {event.event_data.interview_result && (
+                    <p>
+                      Result: 
+                      <span className={cn(
+                        event.event_data.interview_result === "selected" ? "text-green-600" : "text-red-600"
+                      )}>
+                        {event.event_data.interview_result}
+                      </span>
+                    </p>
+                  )}
+                  {event.event_data.interview_feedback && (
+                    <p>Feedback: {event.event_data.interview_feedback}</p>
+                  )}
+                </div>
+              )}
+              {event.event_data.ctc && (
+                <div className="mt-2 text-xs text-gray-600">
+                  <p>CTC: {formatINR(event.event_data.ctc)}</p>
+                </div>
+              )}
+              {event.event_data.joining_date && (
+                <div className="mt-2 text-xs text-gray-600">
+                  <p>Joining Date: {event.event_data.joining_date}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Render resume preview
+  const renderResumePreview = () => {
+    return (
+      <div className="space-y-6">
+        <h3 className="text-lg font-medium">Resume Preview</h3>
+        {employee.resume !== "#" ? (
+          <iframe
+            src={employee.resume}
+            title="Resume Preview"
+            className="w-full h-[800px] border border-gray-200 rounded-lg"
+          />
+        ) : (
+          <p className="text-sm text-gray-600">No resume available for preview.</p>
+        )}
+      </div>
+    );
+  };
+
+  // Available tabs based on sharedDataOptions and fetched data, in specified order
+  const availableTabs = [
+    resumeAnalysis && "resume-analysis",
+    (!shareMode || sharedDataOptions?.skillinfo) && "skill-matrix",
+    workHistory.length > 0 && "work-history",
+    (!shareMode || sharedDataOptions?.documentsInfo) && "documents",
+    "resume",
+  ].filter(Boolean) as string[];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-lg">Loading...</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-lg">Error</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-gray-600 mb-6 text-sm">{error}</p>
+            <Button onClick={() => navigate(-1)} variant="outline">
+              Go Back
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (shareMode && !availableTabs.length) {
     return (
-      <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <SheetContent className="w-full sm:max-w-md md:max-w-lg lg:max-w-xl overflow-y-auto bg-gray-50">
-          <SheetHeader className="mb-5">
-            <SheetTitle className="text-2xl text-gray-900">No Data Available</SheetTitle>
-          </SheetHeader>
-          <div className="text-center text-gray-600">
-            No data has been selected for sharing.
-          </div>
-        </SheetContent>
-      </Sheet>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-lg">No Data Available</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-gray-600 mb-6 text-sm">
+              No data has been selected for sharing.
+            </p>
+            <Button onClick={() => navigate(-1)} variant="outline">
+              Go Back
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
     <>
-      <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <SheetContent className="w-full sm:max-w-md md:max-w-lg lg:max-w-xl overflow-y-auto bg-gray-50">
-          <SheetHeader className="mb-5 mt-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <SheetTitle className="text-2xl text-gray-900">{employee.name}</SheetTitle>
-                <div className="flex items-center mt-1 text-sm text-gray-500">
-                  <Calendar className="w-4 h-4 mr-1" />
-                  <span>Applied: {employee.joinDate}</span>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3 mt-3">
-                <Button
-                  variant="resume"
-                  size="sm"
-                  className="flex items-center space-x-2 px-3 py-1"
-                >
-                  <span className="text-sm font-medium">Resume</span>
-                  <Separator orientation="vertical" className="h-4 bg-gray-300" />
-                  <span
-                    onClick={() => window.open(employee.resume, "_blank")}
-                    className="cursor-pointer hover:text-gray-800"
-                    title="View Resume"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </span>
-                  <span
-                    onClick={() => {
-                      const link = document.createElement("a");
-                      link.href = employee.resume;
-                      link.download = `${employee.name}_Resume.pdf`;
-                      link.click();
-                      toast({
-                        title: "Resume Download Started",
-                        description: "The resume is being downloaded.",
-                      });
-                    }}
-                    className="cursor-pointer hover:text-gray-800"
-                    title="Download Resume"
-                  >
-                    <Download className="w-4 h-4" />
-                  </span>
-                </Button>
-              </div>
-            </div>
-
-            {(!shareMode || sharedDataOptions?.personalInfo || sharedDataOptions?.contactInfo) && (
-              <div className="mt-6">
-                <Card className="border border-gray-200 bg-white shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col space-y-4">
-                      {(!shareMode || sharedDataOptions?.contactInfo) && (
-                        <>
-                          <div className="flex items-center text-sm space-x-3 w-full">
-                            <div className="flex items-center">
-                              <Mail className="w-4 h-4 mr-2 text-indigo-500" />
-                              <span className="ml-2 text-gray-600">{employee.email}</span>
-                              <Button
-                                variant="copyicon"
-                                size="xs"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(employee.email);
-                                  toast({
-                                    title: "Email Copied",
-                                    description: "Email address copied to clipboard.",
-                                  });
-                                }}
-                                className="ml-2 text-indigo-500 hover:text-indigo-700"
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
-
-                            <div className="flex items-center">
-                              <Phone className="w-4 h-4 mr-2 text-indigo-500" />
-                              <span className="ml-2 text-gray-600">{employee.phone}</span>
-                              <Button
-                                variant="copyicon"
-                                size="xs"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(employee.phone);
-                                  toast({
-                                    title: "Phone Copied",
-                                    description: "Phone number copied to clipboard.",
-                                  });
-                                }}
-                                className="ml-2 text-indigo-500 hover:text-indigo-700"
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
-
-                            <div className="flex items-center ml-auto">
-                              {employee.linkedInId !== "N/A" ? (
-                                <a
-                                  href={employee.linkedInId}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-indigo-500 hover:text-indigo-700"
+      <div className="min-h-screen bg-gray-50 py-4 px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-8xl mx-auto">
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Main Content (3/4th on lg screens) */}
+            <div className="lg:w-3/4 w-full">
+              <Card className="bg-white w-full">
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-gray-900">{employee.name}</h2>
+                        <Button onClick={() => navigate(-1)} variant="outline" size="sm">
+                          Back
+                        </Button>
+                      </div>
+                      <div className="flex items-center mt-1 text-sm text-gray-500">
+                        <Calendar className="w-4 h-4 mr-1" />
+                        <span>Applied: {employee.joinDate}</span>
+                      </div>
+                      {!shareMode && (
+                        <div className="mt-2">
+                          <Button
+                            variant="outline"
+                            className="flex items-center justify-center bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200"
+                            onClick={handleShareClick}
+                            disabled={isSharing || !candidate}
+                          >
+                            {isSharing ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating Link...
+                              </>
+                            ) : (
+                              <>
+                                <Share2 className="mr-2 h-4 w-4" /> Create Shareable Magic Link
+                              </>
+                            )}
+                          </Button>
+                          {magicLink && (
+                            <div className="mt-2 p-3 bg-indigo-50 rounded-md border border-indigo-100 relative">
+                              <p className="text-xs text-indigo-700 mb-1 font-medium">
+                                Magic Link (expires in 2 days):
+                              </p>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <Input
+                                  value={magicLink}
+                                  readOnly
+                                  className="text-xs bg-white border-indigo-200 w-full"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  // className="sm:absolute sm:right-4 sm:top-6"
+                                  onClick={copyMagicLink}
                                 >
-                                  <FaLinkedin className="w-6 h-6" />
-                                </a>
-                              ) : (
-                                <FaLinkedin className="w-4 h-4 text-gray-400" />
-                              )}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      {(!shareMode || sharedDataOptions?.personalInfo) && (
-                        <>
-                          <div className="flex items-center text-sm">
-                            <FileBadge className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Total Experience</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">{employee.experience}</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Award className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Relevant Experience</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">
-                              {employee.relvantExpyears} years and {employee.relvantExpmonths} months
-                            </span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <MapPin className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Current Location</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">{employee.location}</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <MapPinPlus className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Preferred Location</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">{employee.preferedLocation}</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Banknote className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Current Salary</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">{formatINR(employee.currentSalary)} LPA</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Banknote className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Expected Salary</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">{formatINR(employee.expectedSalary)} LPA</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Calendar className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Notice Period</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">{employee.noticePeriod} days</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Briefcase className="w-4 h-4 mr-2 text-indigo-500" />
-                            <span className="font-medium text-gray-700">Has Offers</span>
-                            <span className="mx-2 text-gray-300">•</span>
-                            <span className="text-gray-600">{employee.hasOffers}</span>
-                          </div>
-                          {employee.hasOffers === "Yes" && (
-                            <div className="flex items-center text-sm">
-                              <FileText className="w-4 h-4 mr-2 text-indigo-500" />
-                              <span className="font-medium text-gray-700">Offer Details</span>
-                              <span className="mx-2 text-gray-300">•</span>
-                              <span className="text-gray-600">{employee.offerDetails}</span>
+                                  {isCopied ? (
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                  ) : (
+                                    <Copy className="h-4 w-4 text-indigo-500" />
+                                  )}
+                                </Button>
+                              </div>
                             </div>
                           )}
-                        </>
+                        </div>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
-
-                {(!shareMode || sharedDataOptions?.personalInfo) && (
-                  <>
-                    {renderSkills()}
-                  </>
-                )}
-              </div>
-            )}
-          </SheetHeader>
-
-          {!shareMode && (
-            <div className="mb-6">
-              <Button
-                variant="outline"
-                className="w-full flex items-center justify-center bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200"
-                onClick={handleShareClick}
-                disabled={isSharing || !candidate}
-              >
-                {isSharing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating Link...
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="mr-2 h-4 w-4" /> Create Shareable Magic Link
-                  </>
-                )}
-              </Button>
-
-              {magicLink && (
-                <div className="mt-2 p-3 bg-indigo-50 rounded-md border border-indigo-100 relative">
-                  <p className="text-xs text-indigo-700 mb-1 font-medium">
-                    Magic Link (expires in 2 days):
-                  </p>
-                  <div className="flex">
-                    <Input
-                      value={magicLink}
-                      readOnly
-                      className="text-xs pr-10 bg-white border-indigo-200"
-                    />
                     <Button
-                      variant="ghost"
+                      variant="resume"
                       size="sm"
-                      className="absolute right-4 top-6"
-                      onClick={copyMagicLink}
+                      className="flex items-center space-x-2 px-3 py-1"
                     >
-                      {isCopied ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4 text-indigo-500" />
-                      )}
+                      <span className="text-sm font-medium">Resume</span>
+                      <Separator orientation="vertical" className="h-4 bg-gray-300" />
+                      <span
+                        onClick={() => window.open(employee.resume, "_blank")}
+                        className="cursor-pointer hover:text-gray-800"
+                        title="View Resume"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </span>
+                      <span
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = employee.resume;
+                          link.download = `${employee.name}_Resume.pdf`;
+                          link.click();
+                          toast({
+                            title: "Resume Download Started",
+                            description: "The resume is being downloaded.",
+                          });
+                        }}
+                        className="cursor-pointer hover:text-gray-800"
+                        title="Download Resume"
+                      >
+                        <Download className="w-4 h-4" />
+                      </span>
                     </Button>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
 
-          <Separator className="my-6" />
-
-          <Tabs defaultValue={availableTabs[0]} value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className={`grid grid-cols-${availableTabs.length} mb-6`}>
-              {availableTabs.map((tab) => (
-                <TabsTrigger key={tab} value={tab}>
-                  {tab === "documents" && "Documents"}
-                  {tab === "skill-matrix" && "Skill Matrix"}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {(!shareMode || sharedDataOptions?.documentsInfo) && (
-              <TabsContent value="documents">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium mb-4">Verification Documents</h3>
-                  {renderDocumentRow("uan", "UAN Number")}
-                  {renderDocumentRow("pan", "PAN Number")}
-                  {renderDocumentRow("pf", "PF Number")}
-                  {renderDocumentRow("esic", "ESIC Number")}
-                </div>
-              </TabsContent>
-            )}
-
-            {(!shareMode || sharedDataOptions?.skillinfo) && (
-              <TabsContent value="skill-matrix">
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium mb-4">Skill Matrix</h3>
-                  <div className="grid grid-cols-1 gap-4">
-                    {employee.skillRatings.map((skill, index) => (
-                      <div
-                        key={index}
-                        className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex justify-between items-center">
-                          <p className="text-sm font-medium">{skill.name}</p>
-                          <span className="text-xs text-gray-500">
-      {`${skill.experienceYears}.${skill.experienceMonths} years`}
-    </span>
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <svg
-                                key={star}
-                                className={cn(
-                                  "w-5 h-5",
-                                  star <= skill.rating ? "text-yellow-400" : "text-gray-300"
+                  {(!shareMode || sharedDataOptions?.personalInfo || sharedDataOptions?.contactInfo) && (
+                    <div className="mt-6">
+                      <Card className="border border-gray-200 bg-white shadow-sm w-full">
+                        <CardContent className="p-4">
+                          <div className="flex flex-col space-y-4">
+                            {(!shareMode || sharedDataOptions?.contactInfo) && (
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center text-sm space-y-2 sm:space-y-0 sm:space-x-4">
+                                <div className="flex items-center">
+                                  <Mail className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="text-gray-600">{employee.email}</span>
+                                  <Button
+                                    variant="copyicon"
+                                    size="xs"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(employee.email);
+                                      toast({
+                                        title: "Email Copied",
+                                        description: "Email address copied to clipboard.",
+                                      });
+                                    }}
+                                    className="ml-2 text-indigo-500 hover:text-indigo-700"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                                <div className="flex items-center">
+                                  <Phone className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="text-gray-600">{employee.phone}</span>
+                                  <Button
+                                    variant="copyicon"
+                                    size="xs"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(employee.phone);
+                                      toast({
+                                        title: "Phone Copied",
+                                        description: "Phone number copied to clipboard.",
+                                      });
+                                    }}
+                                    className="ml-2 text-indigo-500 hover:text-indigo-700"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                                <div className="flex items-center">
+                                  {employee.linkedInId !== "N/A" ? (
+                                    <a
+                                      href={employee.linkedInId}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-indigo-500 hover:text-indigo-700"
+                                    >
+                                      <FaLinkedin className="w-6 h-6" />
+                                    </a>
+                                  ) : (
+                                    <FaLinkedin className="w-4 h-4 text-gray-400" />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {(!shareMode || sharedDataOptions?.personalInfo) && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mt-4">
+                                <div className="flex items-center">
+                                  <FileBadge className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Total Experience</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">{employee.experience}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Award className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Relevant Experience</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">
+                                    {employee.relvantExpyears} years and {employee.relvantExpmonths} months
+                                  </span>
+                                </div>
+                                <div className="flex items-center">
+                                  <MapPin className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Current Location</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">{employee.location}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <MapPinPlus className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Preferred Location</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">{employee.preferedLocation}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Banknote className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Current Salary</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">{formatINR(employee.currentSalary)} LPA</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Banknote className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Expected Salary</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">{formatINR(employee.expectedSalary)} LPA</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Calendar className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Notice Period</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">{employee.noticePeriod} days</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Briefcase className="w-4 h-4 mr-2 text-indigo-500" />
+                                  <span className="font-medium text-gray-700">Has Offers</span>
+                                  <span className="mx-2 text-gray-300">•</span>
+                                  <span className="text-gray-600">{employee.hasOffers}</span>
+                                </div>
+                                {employee.hasOffers === "Yes" && (
+                                  <div className="flex items-center col-span-1 sm:col-span-2">
+                                    <FileText className="w-4 h-4 mr-2 text-indigo-500" />
+                                    <span className="font-medium text-gray-700">Offer Details</span>
+                                    <span className="mx-2 text-gray-300">•</span>
+                                    <span className="text-gray-600">{employee.offerDetails}</span>
+                                  </div>
                                 )}
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                                xmlns="http://www.w3.org/2000/svg"
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      {(!shareMode || sharedDataOptions?.personalInfo) && renderSkills()}
+                    </div>
+                  )}
+                </CardHeader>
+
+                <CardContent>
+                  <Tabs defaultValue="resume-analysis" value={activeTab} onValueChange={setActiveTab}>
+                    <TabsList className="flex flex-wrap gap-2 mb-6 overflow-x-auto">
+                      {availableTabs.map((tab) => (
+                        <TabsTrigger key={tab} value={tab} className="flex-1 min-w-[100px] text-xs sm:text-sm sm:min-w-[120px]">
+                          {tab === "resume-analysis" && "Resume Analysis"}
+                          {tab === "skill-matrix" && "Skill Matrix"}
+                          {tab === "work-history" && "Work History"}
+                          {tab === "documents" && "Documents"}
+                          {tab === "resume" && "Resume"}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+
+                    {resumeAnalysis && (
+                      <TabsContent value="resume-analysis">
+                        {renderResumeAnalysis()}
+                      </TabsContent>
+                    )}
+
+                    {(!shareMode || sharedDataOptions?.skillinfo) && (
+                      <TabsContent value="skill-matrix">
+                        <div className="space-y-6">
+                          <h3 className="text-lg font-medium mb-4">Skill Matrix</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {employee.skillRatings.map((skill, index) => (
+                              <div
+                                key={index}
+                                className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
                               >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                                  <p className="text-sm font-medium">{skill.name}</p>
+                            {skill.experienceYears !== undefined && skill.experienceMonths !== undefined && (
+
+                                  <span className="text-xs text-gray-500 mt-1 sm:mt-0">
+                                    {`${skill.experienceYears}.${skill.experienceMonths} years`}
+                                  </span>
+                            )}
+                                  <div className="flex mt-2 sm:mt-0">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                      <svg
+                                        key={star}
+                                        className={cn(
+                                          "w-5 h-5",
+                                          star <= skill.rating ? "text-yellow-400" : "text-gray-300"
+                                        )}
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                      >
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                      </svg>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
                             ))}
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </TabsContent>
-            )}
-          </Tabs>
-        </SheetContent>
-      </Sheet>
+                      </TabsContent>
+                    )}
+
+                    {workHistory.length > 0 && (
+                      <TabsContent value="work-history">
+                        {renderWorkHistory()}
+                      </TabsContent>
+                    )}
+
+                    {(!shareMode || sharedDataOptions?.documentsInfo) && (
+                      <TabsContent value="documents">
+                        <div className="space-y-6">
+                          <h3 className="text-lg font-medium mb-4">Verification Documents</h3>
+                          {renderDocumentRow("uan", "UAN Number")}
+                          {renderDocumentRow("pan", "PAN Number")}
+                          {renderDocumentRow("pf", "PF Number")}
+                          {renderDocumentRow("esic", "ESIC Number")}
+                        </div>
+                      </TabsContent>
+                    )}
+
+                    <TabsContent value="resume">
+                      {renderResumePreview()}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Timeline (1/4th on lg screens) */}
+            <div className="lg:w-1/4 w-full">
+              <Card className="bg-white sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Candidate Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {renderTimeline()}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {!shareMode && (
         <EmployeeDataSelection
@@ -1043,4 +1674,4 @@ const EmployeeProfileDrawer: React.FC<EmployeeProfileDrawerProps> = ({
   );
 };
 
-export default EmployeeProfileDrawer;
+export default EmployeeProfilePage;

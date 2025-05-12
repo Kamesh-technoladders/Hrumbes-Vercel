@@ -1589,6 +1589,7 @@
 
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
@@ -1639,7 +1640,7 @@ import {
   SelectLabel,
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import EmployeeProfileDrawer from "@/components/MagicLinkView/EmployeeProfileDrawer";
+
 import moment from 'moment';
 import { getRoundNameFromResult } from "@/utils/statusTransitionHelper";
 
@@ -1668,6 +1669,7 @@ const CandidatesList = ({
   onRefresh,
   isCareerPage = false
 }: CandidatesListProps) => {
+  const navigate = useNavigate();
   const user = useSelector((state: any) => state.auth.user);
   const organizationId = useSelector((state: any) => state.auth.organization_id);
   const userRole = useSelector((state: any) => state.auth.role);
@@ -2822,8 +2824,9 @@ const CandidatesList = ({
   <div
     className="flex flex-col cursor-pointer"
     onClick={() => {
-      setSelectedDrawerCandidate(candidate);
-      setIsDrawerOpen(true);
+      navigate(`/employee/${candidate.id}/${jobId}`, {
+        state: { candidate, jobId },
+      });
     }}
   >
     <div className="flex items-center gap-2">
@@ -2960,15 +2963,7 @@ const CandidatesList = ({
         />
       )}
 
-      <EmployeeProfileDrawer 
-        open={isDrawerOpen}
-        onClose={() => {
-          setIsDrawerOpen(false);
-          setSelectedDrawerCandidate(null);
-        }}
-        candidate={selectedDrawerCandidate}
-        jobId={jobId}
-      />
+      
 
       <Dialog open={showInterviewModal} onOpenChange={setShowInterviewModal}>
         <DialogContent className="sm:max-w-md">

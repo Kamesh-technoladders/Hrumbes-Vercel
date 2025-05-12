@@ -22,6 +22,9 @@ import GoalPage from "./pages/goals/Index";
 import GoalView from "./pages/goals/EmployeeView";
 import GoalDetail from "./pages/goals/GoalDetail";
 import EmployeeGoalView from "./components/goals/employee/EmployeeGoalDashboard"
+import GoalDetailView from "./components/goals/dashboard/GoalDetailView";
+
+// Jobs
 import Jobs from "./pages/jobs/Jobs";
 import JobView from "./pages/jobs/JobView";
 import JobDescription from "./pages/jobs/JobDescription";
@@ -32,13 +35,18 @@ import StatusSettings from "./pages/jobs/StatusSettings";
 import ResumeAnalysisDetailView from "./pages/jobs/ResumeAnalysisDetailView";
 import SharedProfile from "./pages/jobs/SharedProfile"
 import ReportsPage from "./pages/reports/Index";
-import GoalDetailView from "./components/goals/dashboard/GoalDetailView";
+import EmployeeProfilePage from "./components/MagicLinkView/EmployeeProfileDrawer";
 // Finance & Accounts
 import FinanceIndex from "./pages/finance/Index";
 import PayrollEdit from "./pages/finance/PayrollEdit";
 import InvoicesPage from "./pages/finance/accounts/InvoicesPage";
 import ExpensesPage from "./pages/finance/accounts/ExpensesPage";
 import AccountsOverview from "./pages/finance/accounts/AccountsOverview";
+// Sales Companies and Contacts
+import CompaniesPage from "./pages/sales/CompaniesPage";
+import CompanyDetail from "./pages/sales/CompanyDetail";
+import CompanyEdit from "./pages/sales/CompanyEdit";
+import ContactsPage from "./pages/sales/ContactsPage";
 
 function App() {
   return (
@@ -87,6 +95,7 @@ function App() {
             <Route path="employee/new" element={<EmployeeForm />} />
             <Route path="employee/:id" element={<EmployeeForm />} />
             <Route path="employee/profile/:id" element={<EmployeeProfile />} />
+            <Route path="/employee/:candidateId/:jobId" element={<EmployeeProfilePage />} />
 
             {/* Employee Dashboard Routes */}
             <Route path="/profile" element={<ProfilePageEmployee />} />
@@ -116,6 +125,13 @@ function App() {
           <Route path="/accounts/invoices" element={<InvoicesPage />} />
           <Route path="/accounts/expenses" element={<ExpensesPage />} />
           <Route path="/accounts/overall" element={<AccountsOverview />} />
+
+
+          {/* Sales Companies and Contacts */}
+          <Route path="/companies" element={<CompaniesPage />} />
+          <Route path="/contacts" element={<ContactsPage />} />
+          <Route path="/companies/:id" element={<CompanyDetail />} />
+          <Route path="/companies/:id/edit" element={<CompanyEdit />} />
           </Route>
         </Route>
       </Routes>
