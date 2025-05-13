@@ -849,34 +849,6 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee }: Empl
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="employeeId">Employee ID</Label>
-                  <Input
-                    id="employeeId"
-                    value={paymentRecord.employee_id}
-                    readOnly
-                    className="bg-gray-100 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="designation">Designation</Label>
-                  <Input
-                    id="designation"
-                    value={paymentRecord.designation || ''}
-                    readOnly
-                    className="bg-gray-100 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="joiningDate">Date of Joining</Label>
-                  <Input
-                    id="joiningDate"
-                    type="date"
-                    value={paymentRecord.joining_date || ''}
-                    readOnly
-                    className="bg-gray-100 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="paymentDate">Pay Date *</Label>
                   <Input
                     id="paymentDate"

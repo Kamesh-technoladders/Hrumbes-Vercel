@@ -789,7 +789,6 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
                 <SelectContent className="bg-white border border-gray-200 rounded-lg shadow-lg">
                   <SelectItem value="Success" className="text-green-600 hover:bg-green-50">Success</SelectItem>
                   <SelectItem value="Pending" className="text-yellow-600 hover:bg-yellow-50">Pending</SelectItem>
-                  {/* <SelectItem value="Overdue" className="text-orange-600 hover:bg-orange-50">Overdue</SelectItem> */}
                   <SelectItem value="Unpaid" className="text-red-600 hover:bg-red-50">Unpaid</SelectItem>
                 </SelectContent>
               </Select>
@@ -827,34 +826,6 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employeeId">Employee ID</Label>
-                  <Input
-                    id="employeeId"
-                    value={formData.employeeId}
-                    readOnly
-                    className="bg-gray-100 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="designation">Designation</Label>
-                  <Input
-                    id="designation"
-                    value={formData.designation}
-                    readOnly
-                    className="bg-gray-100 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="joiningDate">Date of Joining</Label>
-                  <Input
-                    id="joiningDate"
-                    type="date"
-                    value={formData.joiningDate}
-                    readOnly
-                    className="bg-gray-100 focus:ring-primary focus:border-primary"
-                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="payPeriod">Pay Period</Label>
@@ -913,131 +884,65 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
 
             <TabsContent value="earnings" className="space-y-4">
               <Card className="p-4">
-                <div className="flex gap-4 mb-6">
-                  <Button onClick={() => setIsCTCMode(true)} variant={isCTCMode ? "default" : "outline"} className="w-full">
-                    CTC Mode
-                  </Button>
-                  <Button onClick={() => setIsCTCMode(false)} variant={!isCTCMode ? "default" : "outline"} className="w-full">
-                    Hourly Mode
-                  </Button>
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800">CTC Calculations</h3>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {isCTCMode ? (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="ctc">CTC (Annual)</Label>
-                        <Input
-                          id="ctc"
-                          value={ctcFormData.ctc}
-                          onChange={(e) => handleCTCChange(e.target.value)}
-                          className="font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="basicPayPercentage">Basic Pay (%)</Label>
-                        <Input
-                          id="basicPayPercentage"
-                          value={ctcFormData.basicPayPercentage}
-                          onChange={(e) => setCtcFormData(prev => ({ ...prev, basicPayPercentage: e.target.value }))}
-                          className="font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="basicPay">Basic Pay</Label>
-                        <Input
-                          id="basicPay"
-                          value={ctcFormData.basicPay}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hra">HRA</Label>
-                        <Input
-                          id="hra"
-                          value={ctcFormData.hra}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="conveyanceAllowance">Conveyance Allowance</Label>
-                        <Input
-                          id="conveyanceAllowance"
-                          value={ctcFormData.conveyanceAllowance}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fixedAllowance">Fixed Allowance</Label>
-                        <Input
-                          id="fixedAllowance"
-                          value={ctcFormData.fixedAllowance}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="hourlyRate">Hourly Rate</Label>
-                        <Input
-                          id="hourlyRate"
-                          value={hourlyFormData.hourlyRate}
-                          onChange={(e) => handleHourlyRateChange(e.target.value)}
-                          className="font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="totalHoursWorked">Total Hours Worked</Label>
-                        <Input
-                          id="totalHoursWorked"
-                          value={hourlyFormData.totalHoursWorked}
-                          onChange={(e) => handleTotalHoursWorkedChange(e.target.value)}
-                          className="font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="basicPay">Basic Pay</Label>
-                        <Input
-                          id="basicPay"
-                          value={hourlyFormData.basicPay}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hra">HRA</Label>
-                        <Input
-                          id="hra"
-                          value={hourlyFormData.hra}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="conveyanceAllowance">Conveyance Allowance</Label>
-                        <Input
-                          id="conveyanceAllowance"
-                          value={hourlyFormData.conveyanceAllowance}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fixedAllowance">Fixed Allowance</Label>
-                        <Input
-                          id="fixedAllowance"
-                          value={hourlyFormData.fixedAllowance}
-                          readOnly
-                          className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
-                        />
-                      </div>
-                    </>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="ctc">CTC (Annual)</Label>
+                    <Input
+                      id="ctc"
+                      value={ctcFormData.ctc}
+                      onChange={(e) => handleCTCChange(e.target.value)}
+                      className="font-mono focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="basicPayPercentage">Basic Pay (%)</Label>
+                    <Input
+                      id="basicPayPercentage"
+                      value={ctcFormData.basicPayPercentage}
+                      onChange={(e) => setCtcFormData(prev => ({ ...prev, basicPayPercentage: e.target.value }))}
+                      className="font-mono focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="basicPay">Basic Pay</Label>
+                    <Input
+                      id="basicPay"
+                      value={ctcFormData.basicPay}
+                      readOnly
+                      className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="hra">HRA</Label>
+                    <Input
+                      id="hra"
+                      value={ctcFormData.hra}
+                      readOnly
+                      className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="conveyanceAllowance">Conveyance Allowance</Label>
+                    <Input
+                      id="conveyanceAllowance"
+                      value={ctcFormData.conveyanceAllowance}
+                      readOnly
+                      className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fixedAllowance">Fixed Allowance</Label>
+                    <Input
+                      id="fixedAllowance"
+                      value={ctcFormData.fixedAllowance}
+                      readOnly
+                      className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-6">
