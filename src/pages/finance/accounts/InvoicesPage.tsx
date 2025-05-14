@@ -96,6 +96,7 @@ const InvoicesPage: React.FC = () => {
       await updateInvoiceStatus(id, status);
     } catch (error) {
       console.error('Error updating status:', error);
+      toast.error('Failed to update status. Please try again.');
     }
   };
 
@@ -141,21 +142,6 @@ const InvoicesPage: React.FC = () => {
       .finally(() => {
         setIsBatchExporting(false);
       });
-  };
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'paid':
-        return 'status-badge-success';
-      case 'unpaid':
-        return 'status-badge-warning';
-      case 'overdue':
-        return 'status-badge-danger';
-      case 'draft':
-        return 'status-badge bg-gray-100 text-gray-700';
-      default:
-        return 'status-badge';
-    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -338,12 +324,50 @@ const InvoicesPage: React.FC = () => {
                           </TableCell>
                           <TableCell>{invoice.dueDate}</TableCell>
                           <TableCell>
-                            <div className="flex items-center">
-                              <span className={getStatusBadgeClass(invoice.status)}>
-                                {getStatusIcon(invoice.status)}
-                                <span className="ml-1">{invoice.status}</span>
-                              </span>
-                            </div>
+                            <Select
+                              value={invoice.status}
+                              onValueChange={(value) => handleStatusChange(invoice.id, value as 'Paid' | 'Unpaid' | 'Overdue' | 'Draft')}
+                            >
+                              <SelectTrigger className={`w-[120px] text-sm border-none ${
+                                invoice.status.toLowerCase() === 'paid' ? 'bg-success-light text-success-dark' :
+                                invoice.status.toLowerCase() === 'unpaid' ? 'bg-warning-light text-warning-dark' :
+                                invoice.status.toLowerCase() === 'overdue' ? 'bg-danger-light text-danger-dark' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                <SelectValue>
+                                  <div className="flex items-center">
+                                    {getStatusIcon(invoice.status)}
+                                    <span className="ml-1">{invoice.status}</span>
+                                  </div>
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Paid">
+                                  <div className="flex items-center">
+                                    <CheckCircle className="h-4 w-4 text-success-dark mr-2" />
+                                    Paid
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="Unpaid">
+                                  <div className="flex items-center">
+                                    <Clock className="h-4 w-4 text-warning-dark mr-2" />
+                                    Unpaid
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="Overdue">
+                                  <div className="flex items-center">
+                                    <AlertTriangle className="h-4 w-4 text-danger-dark mr-2" />
+                                    Overdue
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="Draft">
+                                  <div className="flex items-center">
+                                    <FileText className="h-4 w-4 text-gray-500 mr-2" />
+                                    Draft
+                                  </div>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center space-x-1">
@@ -368,7 +392,7 @@ const InvoicesPage: React.FC = () => {
                                 disabled={exportingInvoiceIds.includes(invoice.id)}
                               >
                                 {exportingInvoiceIds.includes(invoice.id) ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <Loader2 className="h-4 w責任-4 animate-spin" />
                                 ) : (
                                   <Download className="h-4 w-4" />
                                 )}

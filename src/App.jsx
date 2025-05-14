@@ -41,6 +41,7 @@ import FinanceIndex from "./pages/finance/Index";
 import PayrollEdit from "./pages/finance/PayrollEdit";
 import InvoicesPage from "./pages/finance/accounts/InvoicesPage";
 import ExpensesPage from "./pages/finance/accounts/ExpensesPage";
+import Payroll from "./pages/payroll/index";
 import AccountsOverview from "./pages/finance/accounts/AccountsOverview";
 // Sales Companies and Contacts
 import CompaniesPage from "./pages/sales/CompaniesPage";
@@ -124,6 +125,7 @@ function App() {
           <Route path="/payroll/:id/edit" element={<PayrollEdit />} />
           <Route path="/accounts/invoices" element={<InvoicesPage />} />
           <Route path="/accounts/expenses" element={<ExpensesPage />} />
+          <Route path="/payroll" element={<Payroll />} />
           <Route path="/accounts/overall" element={<AccountsOverview />} />
 
 

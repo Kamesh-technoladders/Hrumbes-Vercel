@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAccountsStore, Expense, ExpenseCategory, PaymentMethod } from '@/lib/accounts-data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar, IndianRupee, Upload } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ExpenseFormProps {
   expense?: Expense;
@@ -17,7 +18,6 @@ const formatDateString = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
-  
   return `${day}-${month}-${year}`;
 };
 
@@ -33,41 +33,267 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose }) => {
   const [vendor, setVendor] = useState(expense?.vendor || '');
   const [notes, setNotes] = useState(expense?.notes || '');
   const [receiptUrl, setReceiptUrl] = useState(expense?.receiptUrl || '');
-  
-  // Handle file upload (mock)
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  // Check authentication status on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: userData, error } = await supabase.auth.getUser();
+      if (error || !userData?.user) {
+        setIsAuthenticated(false);
+        toast.error('You must be signed in to add or update expenses.');
+      } else {
+        setIsAuthenticated(true);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Handle file selection
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // In a real app, this would upload the file to storage
-      // For now, just set a placeholder
-      setReceiptUrl(`/uploads/${file.name}`);
+      const validTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (!validTypes.includes(file.type)) {
+        toast.error('Unsupported file type. Please upload JPEG, PNG, or PDF.');
+        return;
+      }
+      if (file.size > maxSize) {
+        toast.error('File size exceeds 5MB limit.');
+        return;
+      }
+      setFileToUpload(file);
+      setReceiptUrl(''); // Clear previous receipt URL until upload is complete
+    } else {
+      setFileToUpload(null);
+      setReceiptUrl(expense?.receiptUrl || '');
     }
   };
-  
+
+  // Upload file to Supabase storage and get signed URL
+  const uploadReceipt = async (file: File): Promise<string | null> => {
+    try {
+      setIsUploading(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `receipts/${fileName}`; // Path for upload
+
+      console.log('Uploading file:', fileName, 'to path:', filePath);
+
+      // Upload the file to Supabase storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError.message);
+        toast.error(`Failed to upload receipt: ${uploadError.message}`);
+        return null;
+      }
+
+      console.log('Upload successful:', uploadData);
+
+      // Verify the file exists in the bucket
+      let retries = 3;
+      let listData: any[] = [];
+      let listError: any = null;
+
+      while (retries > 0) {
+        const result = await supabase.storage
+          .from('receipts')
+          .list('receipts', { search: fileName });
+
+        listData = result.data || [];
+        listError = result.error;
+
+        if (listError) {
+          console.error('Error listing files in bucket:', listError);
+          retries--;
+          if (retries === 0) {
+            toast.error('Failed to verify the uploaded file in the bucket.');
+            return null;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        console.log('Files found in bucket:', listData.map(file => file.name));
+
+        if (listData.some(f => f.name === fileName)) {
+          break;
+        }
+
+        retries--;
+        if (retries === 0) {
+          console.error('File not found in bucket after upload:', fileName);
+          toast.error('File upload succeeded, but the file was not found in the bucket.');
+          return null;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      console.log('File verified in bucket:', fileName);
+
+      // Generate a signed URL for the uploaded file
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('receipts')
+        .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1-year expiry
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        console.error('Failed to generate signed URL:', signedUrlError?.message);
+        toast.error('Failed to generate signed URL for the receipt.');
+        return null;
+      }
+
+      console.log('Signed URL:', signedUrlData.signedUrl);
+      return signedUrlData.signedUrl;
+    } catch (error: any) {
+      console.error('Error uploading receipt:', error.message);
+      toast.error(`An error occurred while uploading the receipt: ${error.message}`);
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const expenseData: Omit<Expense, 'id'> = {
+
+    if (isAuthenticated === false) {
+      toast.error('Authentication required. Please sign in to continue.');
+      return;
+    }
+
+    if (!description.trim()) {
+      toast.error('Description is required.');
+      return;
+    }
+    if (!date.trim()) {
+      toast.error('Date is required.');
+      return;
+    }
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      toast.error('Please enter a valid amount greater than 0.');
+      return;
+    }
+
+    let finalReceiptUrl: string | undefined = receiptUrl;
+
+    if (fileToUpload) {
+      console.log('New file selected for upload:', fileToUpload.name);
+      const uploadedUrl = await uploadReceipt(fileToUpload);
+      if (!uploadedUrl) {
+        toast.error('Failed to upload receipt. Please try again.');
+        return;
+      }
+      finalReceiptUrl = uploadedUrl;
+      console.log('Uploaded receipt URL:', finalReceiptUrl);
+    } else if (!fileToUpload && !receiptUrl && expense?.receiptUrl) {
+      finalReceiptUrl = expense.receiptUrl;
+      console.log('Keeping existing receipt URL:', finalReceiptUrl);
+    } else if (!fileToUpload && !receiptUrl) {
+      finalReceiptUrl = undefined;
+      console.log('No receipt uploaded, setting receiptUrl to undefined');
+    }
+
+    let parsedDate: string;
+    try {
+      const [day, month, year] = date.split('-').map(Number);
+      const dateObj = new Date(year, month - 1, day);
+      if (isNaN(dateObj.getTime())) {
+        throw new Error('Invalid date');
+      }
+      parsedDate = dateObj.toISOString().split('T')[0];
+    } catch (error) {
+      toast.error('Invalid date format. Please use DD-MM-YYYY.');
+      return;
+    }
+
+    const expenseData = {
       category,
       description,
-      date,
+      date: parsedDate,
       amount: parseFloat(amount),
-      paymentMethod,
-      vendor,
-      notes,
-      receiptUrl: receiptUrl || undefined,
+      payment_method: paymentMethod,
+      vendor: vendor || null,
+      notes: notes || null,
+      receipt_url: finalReceiptUrl || null,
     };
-    
-    if (expense) {
-      updateExpense(expense.id, expenseData);
-    } else {
-      addExpense(expenseData);
+
+    console.log('Expense data to be saved:', expenseData);
+
+    try {
+      if (expense) {
+        console.log('Updating expense with ID:', expense.id);
+        const { data, error } = await supabase
+          .from('hr_expenses')
+          .update({
+            category: expenseData.category,
+            description: expenseData.description,
+            date: expenseData.date,
+            amount: expenseData.amount,
+            payment_method: expenseData.payment_method,
+            vendor: expenseData.vendor,
+            notes: expenseData.notes,
+            receipt_url: expenseData.receipt_url,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', expense.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Update error:', error.message);
+          throw new Error(`Failed to update expense: ${error.message}`);
+        }
+        console.log('Updated expense:', data);
+        await updateExpense(expense.id, { ...expenseData, receiptUrl: finalReceiptUrl });
+        toast.success('Expense updated successfully.');
+      } else {
+        console.log('Adding new expense');
+        const { data, error } = await supabase
+          .from('hr_expenses')
+          .insert({
+            category: expenseData.category,
+            description: expenseData.description,
+            date: expenseData.date,
+            amount: expenseData.amount,
+            payment_method: expenseData.payment_method,
+            vendor: expenseData.vendor,
+            notes: expenseData.notes,
+            receipt_url: expenseData.receipt_url,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Insert error:', error.message);
+          throw new Error(`Failed to add expense: ${error.message}`);
+        }
+        console.log('Inserted expense:', data);
+        await addExpense({ ...expenseData, receiptUrl: finalReceiptUrl });
+        toast.success('Expense added successfully.');
+      }
+      onClose();
+    } catch (error: any) {
+      console.error('Error saving expense:', error.message);
+      toast.error(`Failed to save expense: ${error.message}`);
     }
-    
-    onClose();
   };
-  
+
+  if (isAuthenticated === null) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -197,9 +423,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose }) => {
             accept="image/*,.pdf"
             className="hidden"
             onChange={handleFileUpload}
+            disabled={isUploading}
           />
           <span className="ml-3 text-sm text-muted-foreground">
-            {receiptUrl ? 'Receipt uploaded' : 'No file selected'}
+            {isUploading ? 'Uploading...' : fileToUpload ? fileToUpload.name : receiptUrl ? 'Receipt uploaded' : 'No file selected'}
           </span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
@@ -208,10 +435,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose }) => {
       </div>
       
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose} disabled={isUploading}>
           Cancel
         </Button>
-        <Button type="submit">
+        <Button type="submit" disabled={isUploading}>
           {expense ? 'Update Expense' : 'Save Expense'}
         </Button>
       </div>

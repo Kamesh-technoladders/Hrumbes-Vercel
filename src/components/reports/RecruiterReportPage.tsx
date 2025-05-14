@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Download, FileSpreadsheet, Files, ChevronUp, ChevronDown, User } from 'lucide-react';
 import { DateRangePickerField } from './DateRangePickerField';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import FunnelChart from './FunnelChart';
@@ -9,6 +12,10 @@ import { PieChartComponent } from './PieChartComponent';
 import RecruiterRadarChart from './RadarChart';
 import HeatmapChart from './HeatmapChart';
 import { useStatusReport } from '@/hooks/useStatusReport';
+import { supabase } from '@/integrations/supabase/client';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { saveAs } from 'file-saver';
 
 interface RecruiterPerformanceData {
   recruiter: string;
@@ -43,6 +50,155 @@ interface RecruiterPerformanceData {
   };
 }
 
+interface ResumeAnalysisData {
+  recruiter: string;
+  resumes_analyzed: number;
+}
+
+const ResumeAnalysisTable: React.FC<{ data: ResumeAnalysisData[] }> = ({ data }) => {
+  const [sortColumn, setSortColumn] = useState<string>('recruiter');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedData = [...data].sort((a, b) => {
+    const aValue = a[sortColumn as keyof ResumeAnalysisData];
+    const bValue = b[sortColumn as keyof ResumeAnalysisData];
+
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return sortDirection === 'asc'
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
+    }
+
+    return sortDirection === 'asc'
+      ? (aValue as number) - (bValue as number)
+      : (bValue as number) - (aValue as number);
+  });
+
+  const renderSortIndicator = (column: string) => {
+    if (sortColumn === column) {
+      return sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
+    }
+    return null;
+  };
+
+  const exportToCSV = () => {
+    let csv = 'Recruiter,Resumes Analyzed\n';
+    data.forEach(record => {
+      csv += `${record.recruiter},${record.resumes_analyzed}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    saveAs(blob, 'resume_analysis.csv');
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(18);
+    doc.text('Resume Analysis Report', 14, 22);
+
+    const tableData = data.map(record => [
+      record.recruiter,
+      record.resumes_analyzed.toString()
+    ]);
+
+    const headers = ['Recruiter', 'Resumes Analyzed'];
+
+    (doc as any).autoTable({
+      head: [headers],
+      body: tableData,
+      startY: 30,
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [79, 70, 229] },
+      alternateRowStyles: { fillColor: [240, 240, 249] }
+    });
+
+    doc.save('resume_analysis.pdf');
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle>Resume Analysis by Recruiter</CardTitle>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToCSV}
+              className="flex items-center gap-1"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToPDF}
+              className="flex items-center gap-1"
+            >
+              <Files className="h-4 w-4" />
+              PDF
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead
+                className="cursor-pointer whitespace-nowrap"
+                onClick={() => handleSort('recruiter')}
+              >
+                <div className="flex items-center gap-1">
+                  <User className="h-4 w-4" />
+                  Recruiter
+                  {renderSortIndicator('recruiter')}
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer"
+                onClick={() => handleSort('resumes_analyzed')}
+              >
+                <div className="flex items-center gap-1">
+                  Resumes Analyzed
+                  {renderSortIndicator('resumes_analyzed')}
+                </div>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={2} className="text-center">
+                  No resume analysis data available.
+                </TableCell>
+              </TableRow>
+            ) : (
+              sortedData.map((record, index) => (
+                <TableRow key={index}>
+                  <TableCell>{record.recruiter}</TableCell>
+                  <TableCell>{record.resumes_analyzed}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+};
+
 const RecruiterReportPage: React.FC = () => {
   const [dateRange, setDateRange] = useState<{
     startDate: Date;
@@ -56,15 +212,57 @@ const RecruiterReportPage: React.FC = () => {
 
   const { isLoading, error, fetchRecruiterReport } = useStatusReport();
   const [data, setData] = useState<RecruiterPerformanceData[]>([]);
+  const [resumeData, setResumeData] = useState<ResumeAnalysisData[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       if (dateRange.startDate && dateRange.endDate) {
+        // Fetch recruiter performance data
         const reportData = await fetchRecruiterReport(dateRange.startDate, dateRange.endDate);
         setData(reportData);
         const totalSubmitted = reportData.reduce((sum, rec) => sum + rec.profiles_submitted, 0);
         if (totalSubmitted > 87) {
           console.warn(`Total profiles_submitted (${totalSubmitted}) exceeds expected 87 unique candidates. Check deduplication in fetchRecruiterReport.`);
+        }
+
+        // Fetch resume analysis data from resume_analysis table
+        try {
+          const { data: resumeAnalysisData, error: resumeAnalysisError } = await supabase
+            .from('resume_analysis')
+            .select(`
+              created_by,
+              hr_employees!created_by_fkey (
+                first_name,
+                last_name
+              )
+            `)
+            .gte('updated_at', dateRange.startDate.toISOString())
+            .lte('updated_at', dateRange.endDate.toISOString())
+            .not('created_by', 'is', null); // Ensure created_by is not null
+
+          if (resumeAnalysisError) {
+            throw new Error(`Error fetching resume analysis data: ${resumeAnalysisError.message}`);
+          }
+
+          // Group by recruiter and count the number of resumes analyzed
+          const formattedResumeData: ResumeAnalysisData[] = [];
+          const groupedData = resumeAnalysisData.reduce((acc: any, record: any) => {
+            const recruiterName = `${record.hr_employees.first_name} ${record.hr_employees.last_name}`;
+            acc[recruiterName] = (acc[recruiterName] || 0) + 1;
+            return acc;
+          }, {});
+
+          for (const [recruiter, count] of Object.entries(groupedData)) {
+            formattedResumeData.push({
+              recruiter,
+              resumes_analyzed: count as number
+            });
+          }
+
+          setResumeData(formattedResumeData);
+        } catch (err) {
+          console.error(err);
+          setResumeData([]);
         }
       }
     };
@@ -243,13 +441,31 @@ const RecruiterReportPage: React.FC = () => {
         </TabsList>
 
         <TabsContent value="overview">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="mx-auto">
+          <div className="grid grid-cols-1 gap-8">
             <RecruiterPerformanceTable data={data} />
-            <FunnelChart
-              data={getFunnelData()}
-              title="Recruitment Funnel"
-            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <FunnelChart data={getFunnelData()} title="Recruitment Funnel" />
+              <RecruiterRadarChart
+                data={getRadarData()}
+                title="Recruiter Performance Comparison"
+                recruiters={data.map(r => r.recruiter)}
+                colors={COLORS}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <PieChartComponent
+                data={getOfferOutcomesData()}
+                title="Offer Outcomes"
+              />
+              <PieChartComponent
+                data={getJoiningOutcomesData()}
+                title="Joining Outcomes"
+              />
+            </div>
           </div>
+        </div>
         </TabsContent>
 
         <TabsContent value="funnelAnalysis">

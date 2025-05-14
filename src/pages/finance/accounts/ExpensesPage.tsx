@@ -658,9 +658,17 @@ const ExpensesPage: React.FC = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteExpense = (id: string) => {
+  const handleDeleteExpense = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
-      deleteExpense(id);
+      try {
+        await deleteExpense(id);
+        toast.success('Expense deleted successfully.');
+        // Fetch expenses again to ensure the UI is in sync with the database
+        await fetchExpenses();
+      } catch (error: any) {
+        console.error('Error deleting expense:', error.message);
+        toast.error(`Failed to delete expense: ${error.message}`);
+      }
     }
   };
 
@@ -1175,7 +1183,7 @@ const ExpensesPage: React.FC = () => {
       </Dialog>
 
       <Dialog open={isViewDialogOpen} onOpenChange={handleViewDialogClose}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Expense Details</DialogTitle>
           </DialogHeader>

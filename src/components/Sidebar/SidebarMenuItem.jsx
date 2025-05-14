@@ -32,6 +32,7 @@ const menuItemsByRole = {
       dropdown: [
         { icon: FaFileInvoiceDollar, label: "Invoices", path: "/accounts/invoices" },
         { icon: FaSackDollar, label: "Expenses", path: "/accounts/expenses" },
+        { icon: FiBriefcase , label:"Payroll", path: "/payroll"},
         { icon: TbDatabaseDollar, label: "Overall", path: "/accounts/overall" },
       ],
     },

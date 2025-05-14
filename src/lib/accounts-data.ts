@@ -25,6 +25,10 @@ export interface Invoice {
   adjustments?: number;
   paidAmount?: number;
   paymentDate?: string;
+  organizationId?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface InvoiceItem {
@@ -46,6 +50,11 @@ export interface Expense {
   receiptUrl?: string;
   notes?: string;
   vendor?: string;
+  organizationId?: string;
+  createdBy?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AccountsStats {
@@ -232,7 +241,12 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
             quantity: item.quantity,
             rate: item.rate,
             amount: item.amount,
+            taxable: item.taxable || false,
           })),
+        organizationId: invoice.organization_id || undefined,
+        createdBy: invoice.created_by || undefined,
+        createdAt: invoice.created_at || undefined,
+        updatedAt: invoice.updated_at || undefined,
       }));
 
       set({
@@ -269,6 +283,9 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
           created_by: userData?.user?.id || null,
           paid_amount: invoice.status === 'Paid' ? invoice.totalAmount : 0,
           payment_date: invoice.status === 'Paid' ? new Date().toISOString().split('T')[0] : null,
+          organization_id: invoice.organizationId || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -316,6 +333,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       if (data.status) updateData.status = data.status;
       if (data.notes !== undefined) updateData.notes = data.notes;
       if (data.terms !== undefined) updateData.terms = data.terms;
+      if (data.organizationId !== undefined) updateData.organization_id = data.organizationId;
       if (data.status === 'Paid') {
         updateData.paid_amount = data.totalAmount || get().invoices.find((inv) => inv.id === id)?.totalAmount || 0;
         updateData.payment_date = new Date().toISOString().split('T')[0];
@@ -323,6 +341,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         updateData.paid_amount = 0;
         updateData.payment_date = null;
       }
+      updateData.updated_at = new Date().toISOString();
 
       const { error: invoiceError } = await supabase
         .from('hr_invoices')
@@ -370,23 +389,132 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
 
   deleteInvoice: async (id) => {
     try {
-      const { error } = await supabase
-        .from('hr_invoices')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        throw new Error(`Error deleting invoice: ${error.message}`);
+      // Ensure user is authenticated
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        throw new Error('You must be signed in to delete an invoice.');
       }
 
+      console.log('Authenticated User ID:', userData.user.id);
+      console.log('Attempting to delete invoice with ID:', id);
+
+      // Step 1: Fetch the invoice to be deleted
+      const { data: invoiceData, error: fetchInvoiceError } = await supabase
+        .from('hr_invoices')
+        .select('*')
+        .eq('id', id)
+        .eq('created_by', userData.user.id)
+        .single();
+
+      if (fetchInvoiceError) {
+        if (fetchInvoiceError.code === 'PGRST116') {
+          throw new Error('Invoice not found or you do not have permission to delete it.');
+        }
+        throw new Error(`Error fetching invoice: ${fetchInvoiceError.message}`);
+      }
+
+      if (!invoiceData) {
+        throw new Error('Invoice not found or you do not have permission to delete it.');
+      }
+
+      // Step 2: Fetch the associated items
+      const { data: itemsData, error: fetchItemsError } = await supabase
+        .from('hr_invoice_items')
+        .select('*')
+        .eq('invoice_id', id);
+
+      if (fetchItemsError) {
+        throw new Error(`Error fetching invoice items: ${fetchItemsError.message}`);
+      }
+
+      // Step 3: Insert the invoice into backup_invoices
+      const { error: backupInvoiceError } = await supabase
+        .from('backup_invoices')
+        .insert({
+          id: invoiceData.id,
+          invoice_number: invoiceData.invoice_number,
+          client_name: invoiceData.client_name,
+          invoice_date: invoiceData.invoice_date,
+          due_date: invoiceData.due_date,
+          subtotal: invoiceData.subtotal,
+          tax_rate: invoiceData.tax_rate,
+          tax_amount: invoiceData.tax_amount,
+          total_amount: invoiceData.total_amount,
+          status: invoiceData.status,
+          notes: invoiceData.notes,
+          terms: invoiceData.terms,
+          created_at: invoiceData.created_at,
+          updated_at: invoiceData.updated_at,
+          organization_id: invoiceData.organization_id,
+          created_by: invoiceData.created_by,
+          paid_amount: invoiceData.paid_amount,
+          payment_date: invoiceData.payment_date,
+          deleted_at: new Date().toISOString(),
+        });
+
+      if (backupInvoiceError) {
+        throw new Error(`Error backing up invoice: ${backupInvoiceError.message}`);
+      }
+
+      // Step 4: Insert the items into backup_invoice_items (if any)
+      if (itemsData && itemsData.length > 0) {
+        const itemsToInsert = itemsData.map((item: any) => ({
+          id: item.id,
+          invoice_id: item.invoice_id,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount,
+          created_at: item.created_at,
+          deleted_at: new Date().toISOString(),
+        }));
+
+        const { error: backupItemsError } = await supabase
+          .from('backup_invoice_items')
+          .insert(itemsToInsert);
+
+        if (backupItemsError) {
+          // Roll back the backup_invoices entry if items backup fails
+          await supabase
+            .from('backup_invoices')
+            .delete()
+            .eq('id', id);
+          throw new Error(`Error backing up invoice items: ${backupItemsError.message}`);
+        }
+      }
+
+      // Step 5: Delete the invoice from hr_invoices (this will cascade delete items from hr_invoice_items)
+      const { error: deleteError } = await supabase
+        .from('hr_invoices')
+        .delete()
+        .eq('id', id)
+        .eq('created_by', userData.user.id);
+
+      if (deleteError) {
+        // Roll back the backups if deletion fails
+        await supabase
+          .from('backup_invoices')
+          .delete()
+          .eq('id', id);
+        await supabase
+          .from('backup_invoice_items')
+          .delete()
+          .eq('invoice_id', id);
+        throw new Error(`Error deleting invoice: ${deleteError.message}`);
+      }
+
+      // Step 6: Update the local state by refetching invoices
       await get().fetchInvoices();
+
+      // Step 7: Update selectedInvoice if necessary
       set((state) => ({
         selectedInvoice: state.selectedInvoice?.id === id ? null : state.selectedInvoice,
       }));
+
       toast.success('Invoice deleted successfully');
     } catch (error) {
       console.error('Error deleting invoice:', error);
-      toast.error('Failed to delete invoice. Please try again.');
+      toast.error(error.message || 'Failed to delete invoice. Please try again.');
     }
   },
 
@@ -527,6 +655,11 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         receiptUrl: expense.receipt_url || undefined,
         notes: expense.notes || undefined,
         vendor: expense.vendor || undefined,
+        organizationId: expense.organization_id || undefined,
+        createdBy: expense.created_by || undefined,
+        status: expense.status || undefined,
+        createdAt: expense.created_at || undefined,
+        updatedAt: expense.updated_at || undefined,
       }));
 
       set({
@@ -576,6 +709,9 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         vendor: expense.vendor || null,
         created_by: userData.user.id,
         status: 'Pending',
+        organization_id: expense.organizationId || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       const { error: expenseError } = await supabase
@@ -629,6 +765,8 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       if (receiptUrl !== undefined) updateData.receipt_url = receiptUrl || null;
       if (data.notes !== undefined) updateData.notes = data.notes;
       if (data.vendor !== undefined) updateData.vendor = data.vendor;
+      if (data.organizationId !== undefined) updateData.organization_id = data.organizationId;
+      if (data.status !== undefined) updateData.status = data.status;
       updateData.updated_at = new Date().toISOString();
 
       const { error } = await supabase
@@ -662,20 +800,71 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         throw new Error('You must be signed in to delete an expense.');
       }
 
-      const { error } = await supabase
+      // Step 1: Fetch the expense to be deleted
+      const { data: expenseData, error: fetchError } = await supabase
+        .from('hr_expenses')
+        .select('*')
+        .eq('id', id)
+        .eq('created_by', userData.user.id)
+        .single();
+
+      if (fetchError) {
+        throw new Error(`Error fetching expense: ${fetchError.message}`);
+      }
+
+      if (!expenseData) {
+        throw new Error('Expense not found or you do not have permission to delete it.');
+      }
+
+      // Step 2: Insert the expense into backup_expenses
+      const { error: backupError } = await supabase
+        .from('backup_expenses')
+        .insert({
+          id: expenseData.id,
+          category: expenseData.category,
+          description: expenseData.description,
+          date: expenseData.date,
+          amount: expenseData.amount,
+          payment_method: expenseData.payment_method,
+          receipt_url: expenseData.receipt_url,
+          notes: expenseData.notes,
+          vendor: expenseData.vendor,
+          created_at: expenseData.created_at,
+          updated_at: expenseData.updated_at,
+          organization_id: expenseData.organization_id,
+          created_by: expenseData.created_by,
+          status: expenseData.status,
+          deleted_at: new Date().toISOString(),
+        });
+
+      if (backupError) {
+        throw new Error(`Error backing up expense: ${backupError.message}`);
+      }
+
+      // Step 3: Delete the expense from hr_expenses
+      const { error: deleteError } = await supabase
         .from('hr_expenses')
         .delete()
         .eq('id', id)
         .eq('created_by', userData.user.id);
 
-      if (error) {
-        throw new Error(`Error deleting expense: ${error.message}`);
+      if (deleteError) {
+        // Roll back the backup if deletion fails
+        await supabase
+          .from('backup_expenses')
+          .delete()
+          .eq('id', id);
+        throw new Error(`Error deleting expense: ${deleteError.message}`);
       }
 
+      // Step 4: Update the local state by refetching expenses
       await get().fetchExpenses();
+
+      // Step 5: Update selectedExpense if necessary
       set((state) => ({
         selectedExpense: state.selectedExpense?.id === id ? null : state.selectedExpense,
       }));
+
       toast.success('Expense deleted successfully');
     } catch (error) {
       console.error('Error deleting expense:', error);
