@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -12,6 +12,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ComparisonSelector } from './ComparisonSelector';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+
+// Define color palettes to match IndividualReport
+const COMPARISON_COLORS = {
+  first: '#2563EB',  // Deep Blue from OFFERED_COLORS[0]
+  second: '#0D9488', // Teal from PROCESSED_COLORS[0]
+};
 
 interface ComparisonChartProps {
   data: any[];
@@ -51,7 +57,7 @@ export const ComparisonChart: React.FC<ComparisonChartProps> = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+        <CardTitle className="flex items-center justify-between text-2xl font-bold">
           <span>Comparison View</span>
           <div className="flex gap-4">
             <ComparisonSelector
@@ -72,24 +78,56 @@ export const ComparisonChart: React.FC<ComparisonChartProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar
+        <ResponsiveContainer width="100%" height={400} minWidth={300}>
+          <AreaChart
+            data={data}
+            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+            style={{ fontFamily: 'Arial, sans-serif' }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="date"
+              style={{ fontSize: '12px', fill: '#666' }}
+            />
+            <YAxis style={{ fontSize: '12px', fill: '#666' }} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                padding: '10px',
+                fontSize: '12px',
+              }}
+              itemStyle={{ color: '#333' }}
+              cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+            />
+            <Legend
+              verticalAlign="top"
+              align="right"
+              layout="vertical"
+              wrapperStyle={{ fontSize: '12px', color: '#333' }}
+            />
+            <Area
+              type="monotone"
               dataKey={selectedFirst}
-              fill="#1e90ff"
+              stackId="1"
+              stroke={COMPARISON_COLORS.first}
+              fill={COMPARISON_COLORS.first}
+              fillOpacity={0.7}
               name={items.find(item => item.id === selectedFirst)?.name}
+              style={{ transition: 'all 0.3s ease-in-out' }}
             />
-            <Bar
+            <Area
+              type="monotone"
               dataKey={selectedSecond}
-              fill="#f97316"
+              stackId="1"
+              stroke={COMPARISON_COLORS.second}
+              fill={COMPARISON_COLORS.second}
+              fillOpacity={0.7}
               name={items.find(item => item.id === selectedSecond)?.name}
+              style={{ transition: 'all 0.3s ease-in-out' }}
             />
-          </BarChart>
+          </AreaChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>

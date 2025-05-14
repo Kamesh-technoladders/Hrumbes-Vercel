@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Sankey, Layer, Rectangle } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Sankey, Layer, Rectangle, AreaChart, Area } from 'recharts';
 import { useStatusReport } from '@/hooks/useStatusReport';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -18,14 +18,52 @@ import { CSVLink } from 'react-csv';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-const COLORS = [
-  '#8B5CF6', '#7C3AED', '#A78BFA', '#C4B5FD', '#6D28D9', '#9333EA',
-  '#A855F7', '#D8B4FE', '#E9D5FF', '#5B21B6', '#4C1D95', '#7E22CE',
-  '#9D4EDD', '#BF94E4', '#D9D6FE', '#E0B0FF', '#D6BCFA', '#B794F4',
-  '#C084FC', '#E879F9', '#F0ABFC', '#F5D0FE', '#C7D2FE', '#A5B4FC',
-  '#818CF8', '#6366F1',
+// Define color palettes for each stage
+const JOINED_COLORS = [
+  '#ffc658', // Vibrant Green for "Joined - Joined"
+  '#ffc658', // Slightly lighter green for "Joined - No Show"
 ];
 
+const JOINED_COLORS_PER = [
+  '#82ca9d', // Vibrant Green for "Joined - Joined"
+  '#82ca9d', // Slightly lighter green for "Joined - No Show"
+];
+
+const OFFERED_COLORS = [
+  '#2563EB', // Deep Blue for "Offered - Offer Issued"
+  '#3B82F6', // Lighter Blue for "Offered - Offer On Hold"
+];
+
+const INTERVIEW_COLORS = [
+  '#4F46E5', // Indigo for "Interview - Technical Assessment"
+  '#5B21B6', // Deep Purple for "Interview - Reschedule Interview"
+  '#7C3AED', // Purple for "Interview - Technical Assessment Selected"
+  '#6D28D9', // Slightly darker Purple for "Interview - Technical Assessment Rejected"
+  '#8B5CF6', // Light Purple for "Interview - L1"
+  '#A78BFA', // Lighter Purple for "Interview - L1 Selected"
+  '#C4B5FD', // Very light Purple for "Interview - L1 Rejected"
+  '#7E22CE', // Deep Purple for "Interview - L2"
+  '#9D4EDD', // Purple for "Interview - L2 Selected"
+  '#D8B4FE', // Light Purple for "Interview - L2 Rejected"
+  '#A855F7', // Vibrant Purple for "Interview - L3"
+  '#E879F9', // Pinkish Purple for "Interview - L3 Selected"
+  '#F0ABFC', // Light Pinkish Purple for "Interview - L3 Rejected"
+  '#D6BCFA', // Soft Purple for "Interview - End Client Round"
+  '#C084FC', // Light Purple for "Interview - End Client Selected"
+  '#E0B0FF', // Very light Purple for "Interview - End Client Rejected"
+];
+
+const PROCESSED_COLORS = [
+  '#0D9488', // Teal for "Processed - Processed (Internal)"
+  '#14B8A6', // Lighter Teal for "Processed - Processed (Client)"
+  '#0F766E', // Darker Teal for "Processed - Duplicate (Internal)"
+  '#5EEAD4', // Soft Cyan for "Processed - Duplicate (Client)"
+  '#2DD4BF', // Bright Cyan for "Processed - Internal Reject"
+  '#36CFC9', // Light Cyan for "Processed - Client Reject"
+  '#15BEB2', // Muted Cyan for "Processed - Candidate on hold"
+];
+
+// Define status order and stages
 const statusOrder = [
   'Processed - Processed (Internal)',
   'Processed - Processed (Client)',
@@ -67,6 +105,37 @@ const positiveOutcomes = [
 ];
 
 const stages = ['Processed', 'Interview', 'Offered', 'Joined'];
+
+// Map each status to a color based on its stage
+const STATUS_COLORS = statusOrder.reduce((acc, status, index) => {
+  if (status.startsWith('Joined')) {
+    acc[status] = JOINED_COLORS[index % JOINED_COLORS.length];
+  } else if (status.startsWith('Offered')) {
+    acc[status] = OFFERED_COLORS[index % OFFERED_COLORS.length];
+  } else if (status.startsWith('Interview')) {
+    const interviewIndex = statusOrder
+      .filter((s) => s.startsWith('Interview'))
+      .indexOf(status);
+    acc[status] = INTERVIEW_COLORS[interviewIndex % INTERVIEW_COLORS.length];
+  } else if (status.startsWith('Processed')) {
+    const processedIndex = statusOrder
+      .filter((s) => s.startsWith('Processed'))
+      .indexOf(status);
+    acc[status] = PROCESSED_COLORS[processedIndex % PROCESSED_COLORS.length];
+  }
+  return acc;
+}, {} as Record<string, string>);
+
+// Map stages to colors for Sankey diagram
+const STAGE_COLORS = {
+  Processed: PROCESSED_COLORS[0], // Use the first color for Processed (Teal)
+  Interview: INTERVIEW_COLORS[0], // Use the first color for Interview
+  Offered: OFFERED_COLORS[0],     // Use the first color for Offered
+  Joined: JOINED_COLORS[0],       // Use the first color for Joined
+};
+
+// Define failure color for performance chart
+const FAILURE_COLOR = '#F87171'; // Muted red for failure rate
 
 const IndividualReport: React.FC = () => {
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
@@ -299,6 +368,7 @@ const IndividualReport: React.FC = () => {
 
   // Custom Node for Sankey Diagram
   const CustomNode = ({ x, y, width, height, index, payload }: any) => {
+    const stage = payload.name;
     return (
       <Layer>
         <Rectangle
@@ -306,7 +376,7 @@ const IndividualReport: React.FC = () => {
           y={y}
           width={width}
           height={height}
-          fill={COLORS[index % COLORS.length]}
+          fill={STAGE_COLORS[stage] || '#CCCCCC'}
           fillOpacity={0.4}
         />
         <text
@@ -323,7 +393,7 @@ const IndividualReport: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-[95vw] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="w-full max-w-[95vw] mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-2xl font-bold">Individual Report</h2>
         <DateRangePickerField
@@ -436,7 +506,7 @@ const IndividualReport: React.FC = () => {
           <TabsList className="flex flex-wrap gap-2">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="comparison">Comparison</TabsTrigger>
-            <TabsTrigger value="flow">Flow</TabsTrigger>
+            {/* <TabsTrigger value="flow">Flow</TabsTrigger> */}
             <TabsTrigger value="performance">Performance</TabsTrigger>
           </TabsList>
 
@@ -478,12 +548,12 @@ const IndividualReport: React.FC = () => {
                         layout="vertical"
                         wrapperStyle={{ fontSize: '12px', color: '#333', maxWidth: '200px', overflowY: 'auto', maxHeight: '300px' }}
                       />
-                      {selectedStatuses.map((status, index) => (
+                      {selectedStatuses.map((status) => (
                         <Bar
                           key={status}
                           dataKey={`statusBreakdown[${filteredReportData[0]?.statusBreakdown.findIndex((s: any) => s.statusName === status)}].count`}
                           name={status}
-                          fill={COLORS[index % COLORS.length]}
+                          fill={STATUS_COLORS[status] || '#CCCCCC'}
                           stackId="a"
                           radius={[5, 5, 0, 0]}
                           style={{ transition: 'all 0.3s ease-in-out' }}
@@ -537,7 +607,7 @@ const IndividualReport: React.FC = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="flow">
+          {/* <TabsContent value="flow">
             <Card>
               <CardHeader>
                 <CardTitle>Candidate Flow by Stage</CardTitle>
@@ -550,7 +620,7 @@ const IndividualReport: React.FC = () => {
                       node={<CustomNode />}
                       nodeWidth={15}
                       nodePadding={50}
-                      link={{ stroke: '#8B5CF6', strokeOpacity: 0.4 }}
+                      link={{ stroke: '#666', strokeOpacity: '0.4' }}
                       margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                     >
                       <Tooltip
@@ -568,7 +638,7 @@ const IndividualReport: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
+          </TabsContent> */}
 
           <TabsContent value="performance">
             <Card>
@@ -578,7 +648,7 @@ const IndividualReport: React.FC = () => {
               <CardContent>
                 <div className="w-full">
                   <ResponsiveContainer width="100%" height={400} minWidth={300}>
-                    <BarChart
+                    <AreaChart
                       data={performanceData}
                       margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                       style={{ fontFamily: 'Arial, sans-serif' }}
@@ -604,27 +674,33 @@ const IndividualReport: React.FC = () => {
                         cursor={{ fill: 'transparent' }}
                         formatter={(value: number, name: string) => [`${value}%`, name]}
                       />
-                      {/* <Legend
+                      <Legend
                         verticalAlign="top"
                         align="right"
                         layout="vertical"
                         wrapperStyle={{ fontSize: '12px', color: '#333' }}
-                      /> */}
-                      <Bar
+                      />
+                      <Area
+                        type="monotone"
                         dataKey="successRate"
                         name="Success Rate"
-                        fill="#8B5CF6"
+                        stroke={JOINED_COLORS_PER[0]}
+                        fill={JOINED_COLORS_PER[0]}
+                        fillOpacity={0.7}
                         stackId="a"
-                        radius={[5, 5, 0, 0]}
+                        style={{ transition: 'all 0.3s ease-in-out' }}
                       />
-                      <Bar
+                      <Area
+                        type="monotone"
                         dataKey="failureRate"
                         name="Failure Rate"
-                        fill="#E879F9"
+                        stroke={FAILURE_COLOR}
+                        fill={FAILURE_COLOR}
+                        fillOpacity={0.7}
                         stackId="a"
-                        radius={[5, 5, 0, 0]}
+                        style={{ transition: 'all 0.3s ease-in-out' }}
                       />
-                    </BarChart>
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>

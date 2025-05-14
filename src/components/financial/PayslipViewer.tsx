@@ -6,6 +6,7 @@ import { PayslipData } from '@/utils/payslip-extractor';
 import { formatINR } from '@/utils/currency';
 import { numberToWords } from '@/utils/file-utils';
 import { toast } from 'sonner';
+import TechnoladdersLogo from '../../../public/hrumbles_logo2.png';
 
 interface ExtendedPayslipData extends PayslipData {
   bankAccountNo?: string;
@@ -58,14 +59,16 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslipData }) => {
       <CardContent className="p-6">
         {/* Header */}
         <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-2xl font-bold uppercase">
-              Technoladders Solutions Private Limited
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Tidel Park, 1st Floor D Block, Module 115, D North Block, 1st Floor,
-              No.4 Rajiv Gandhi Salai, Taramani Chennai Tamil Nadu 600113 India
-            </p>
+        <div className="flex gap-4">
+            <div className="w-20 h-14 flex-shrink-0 pt-7">
+              <img src={TechnoladdersLogo} alt="Company Logo" className="w-full" />
+            </div>
+            <div className="max-w-md">
+  <h1 className="text-xl font-bold">Technoladders Solutions Private Limited</h1>
+  <p className="text-sm text-gray-600 whitespace-normal break-words">
+    Tidel Park, 1st Floor D Block, Module 115, D North Block, 1st Floor, No.4 Rajiv Gandhi Salai, Taramani Chennai Tamil Nadu 600113 India.
+  </p>
+</div>
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold">
@@ -155,7 +158,6 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslipData }) => {
                   <tr className="border-b">
                     <th className="py-2 text-sm text-left font-semibold">Earnings</th>
                     <th className="py-2 text-sm text-right font-semibold">Amount</th>
-                    <th className="py-2 text-sm text-right font-semibold">YTD</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -164,17 +166,11 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslipData }) => {
                     <td className="py-2 text-right font-mono text-sm">
                       {formatINR(payslipData.basicSalary)}
                     </td>
-                    <td className="py-2 text-right font-mono text-sm">
-                      {payslipData.basicSalaryYTD ? formatINR(payslipData.basicSalaryYTD) : 'N/A'}
-                    </td>
                   </tr>
                   <tr className="border-b">
                     <td className="py-2 text-sm">House Rent Allowance</td>
                     <td className="py-2 text-right font-mono text-sm">
                       {formatINR(payslipData.houseRentAllowance)}
-                    </td>
-                    <td className="py-2 text-right font-mono text-sm">
-                      {payslipData.houseRentAllowanceYTD ? formatINR(payslipData.houseRentAllowanceYTD) : 'N/A'}
                     </td>
                   </tr>
                   <tr className="border-b">
@@ -182,26 +178,17 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslipData }) => {
                     <td className="py-2 text-right font-mono text-sm">
                       {formatINR(payslipData.conveyanceAllowance)}
                     </td>
-                    <td className="py-2 text-right font-mono text-sm">
-                      {payslipData.conveyanceAllowanceYTD ? formatINR(payslipData.conveyanceAllowanceYTD) : 'N/A'}
-                    </td>
                   </tr>
                   <tr className="border-b">
                     <td className="py-2 text-sm">Fixed Allowance</td>
                     <td className="py-2 text-right font-mono text-sm">
                       {formatINR(payslipData.specialAllowance)}
                     </td>
-                    <td className="py-2 text-right font-mono text-sm">
-                      {payslipData.specialAllowanceYTD ? formatINR(payslipData.specialAllowanceYTD) : 'N/A'}
-                    </td>
                   </tr>
                   <tr className="border-t-2">
                     <td className="py-2 font-semibold text-sm">Gross Earnings</td>
                     <td className="py-2 text-right font-mono font-semibold text-sm">
                       {formatINR(payslipData.totalEarnings)}
-                    </td>
-                    <td className="py-2 text-right font-mono font-semibold text-sm">
-                      {payslipData.totalEarningsYTD ? formatINR(payslipData.totalEarningsYTD) : 'N/A'}
                     </td>
                   </tr>
                 </tbody>
@@ -215,7 +202,6 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslipData }) => {
                   <tr className="border-b">
                     <th className="py-2 text-sm text-left font-semibold">Deductions</th>
                     <th className="py-2 text-sm text-right font-semibold">Amount</th>
-                    <th className="py-2 text-sm text-right font-semibold">YTD</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -224,26 +210,17 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslipData }) => {
                     <td className="py-2 text-right font-mono text-sm">
                       {formatINR(payslipData.providentFund)}
                     </td>
-                    <td className="py-2 text-right font-mono text-sm">
-                      {payslipData.providentFundYTD ? formatINR(payslipData.providentFundYTD) : 'N/A'}
-                    </td>
                   </tr>
                   <tr className="border-b">
                     <td className="py-2 text-sm">Income Tax</td>
                     <td className="py-2 text-right font-mono text-sm">
                       {formatINR(payslipData.incomeTax)}
                     </td>
-                    <td className="py-2 text-right font-mono text-sm">
-                      {payslipData.incomeTaxYTD ? formatINR(payslipData.incomeTaxYTD) : 'N/A'}
-                    </td>
                   </tr>
                   <tr className="border-b">
                     <td className="py-2 text-sm">Professional Tax</td>
                     <td className="py-2 text-right font-mono text-sm">
                       {formatINR(payslipData.professionalTax)}
-                    </td>
-                    <td className="py-2 text-right font-mono text-sm">
-                      {payslipData.professionalTaxYTD ? formatINR(payslipData.professionalTaxYTD) : 'N/A'}
                     </td>
                   </tr>
                   {payslipData.loanDeduction > 0 && (
@@ -252,18 +229,12 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslipData }) => {
                       <td className="py-2 text-right font-mono text-sm">
                         {formatINR(payslipData.loanDeduction)}
                       </td>
-                      <td className="py-2 text-right font-mono text-sm">
-                        {payslipData.loanDeductionYTD ? formatINR(payslipData.loanDeductionYTD) : 'N/A'}
-                      </td>
                     </tr>
                   )}
                   <tr className="border-t-2">
                     <td className="py-2 font-semibold text-sm">Total Deductions</td>
                     <td className="py-2 text-right font-mono font-semibold text-sm">
                       {formatINR(payslipData.totalDeductions)}
-                    </td>
-                    <td className="py-2 text-right font-mono font-semibold text-sm">
-                      {payslipData.totalDeductionsYTD ? formatINR(payslipData.totalDeductionsYTD) : 'N/A'}
                     </td>
                   </tr>
                 </tbody>
