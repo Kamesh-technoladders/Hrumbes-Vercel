@@ -5,7 +5,7 @@ import { MdDashboardCustomize, MdOutlineManageAccounts, MdOutlineEmojiPeople, Md
 import { ImProfile } from "react-icons/im";
 import { GoGoal } from "react-icons/go";
 import { AiOutlineProfile } from "react-icons/ai";
-import { FaFileInvoiceDollar, FaSackDollar } from "react-icons/fa6";
+import { FaFileInvoiceDollar, FaSackDollar, FaArrowsDownToPeople } from "react-icons/fa6";
 import { TbDatabaseDollar } from "react-icons/tb";
 import { GoOrganization } from "react-icons/go";
 import { VscOrganization } from "react-icons/vsc";
@@ -20,7 +20,7 @@ const menuItemsByRole = {
   organization_superadmin: [
     { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
     { icon: FiUsers, label: "Employees", path: "/employee" },
-    { icon: MdOutlineEmojiPeople, label: "Clients", path: "/clients" },
+    { icon: MdOutlineEmojiPeople, label: "Projects", path: "/projects" },
     { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
     { icon: GoGoal, label: "Goals", path: "/goals" },
     { icon: ImProfile, label: "My Profile", path: "/profile" },
@@ -43,7 +43,7 @@ const menuItemsByRole = {
   admin: [
     { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
     { icon: FiUsers, label: "Employees", path: "/employee" },
-    { icon: MdOutlineEmojiPeople, label: "Clients", path: "/clients" },
+    { icon: MdOutlineEmojiPeople, label: "Projects", path: "/projects" },
     { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
     { icon: GoGoal, label: "Goals", path: "/goals" },
     { icon: ImProfile, label: "My Profile", path: "/profile" },

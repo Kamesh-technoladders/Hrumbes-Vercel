@@ -82,7 +82,7 @@ function App() {
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             {/* <Route path="/employees" element={<Employee/>} /> */}
-            <Route path="/clients" element={<Clients />} />
+            <Route path="/projects" element={<Clients />} />
             <Route path="/client/:id" element={<ClientDashboard />} />
             <Route path="/project/:id" element={<ProjectDashboard />} />
             <Route path="/user-management" element={<UserManagement />} />

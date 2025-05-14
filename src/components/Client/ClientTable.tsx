@@ -35,7 +35,9 @@ const ClientTable = () => {
       const { data, error } = await supabase
         .from("hr_clients")
         .select("*")
-        .eq("organization_id", organization_id);
+        .eq("organization_id", organization_id)
+        .contains("service_type", ["contractual"]) 
+        // .not("service_type", "eq", ["permanent"]); 
  
       if (error) throw error;
       return data || [];
