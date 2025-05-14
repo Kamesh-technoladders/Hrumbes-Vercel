@@ -39,6 +39,11 @@ export const requiresSpecialInteraction = (
     return true;
   }
   
+  // Actual CTC required
+  if (newSubStatusName === 'Processed (Client)') {
+    return true;
+  }
+  
   return false;
 };
 
@@ -48,7 +53,7 @@ export const requiresSpecialInteraction = (
 export const getRequiredInteractionType = (
   oldSubStatusName: string | undefined, 
   newSubStatusName: string
-): 'interview-schedule' | 'interview-feedback' | 'reschedule' | 'joining' | 'reject' | null => {
+): 'interview-schedule' | 'interview-feedback' | 'reschedule' | 'joining' | 'reject' | 'actual-ctc' | null => {
   if (!requiresSpecialInteraction(oldSubStatusName, newSubStatusName)) {
     return null;
   }
@@ -76,6 +81,10 @@ export const getRequiredInteractionType = (
   
   if (newSubStatusName.includes('Reject')) {
     return 'reject';
+  }
+  
+  if (newSubStatusName === 'Processed (Client)') {
+    return 'actual-ctc';
   }
   
   return null;

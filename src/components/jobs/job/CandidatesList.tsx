@@ -1687,6 +1687,22 @@ const CandidatesList = ({
     queryFn: () => getCandidatesByJobId(jobId, "Applied"),
   });
 
+  const formatINR = (value: string): string => {
+    if (!value) return '';
+    // Remove non-numeric characters
+    const numericValue = value.replace(/[^0-9]/g, '');
+    if (!numericValue) return '';
+    // Format with INR-style commas (e.g., 40,00,000)
+    const chars = numericValue.split('').reverse();
+    let formatted = [];
+    for (let i = 0; i < chars.length; i++) {
+      if (i === 3) formatted.push(',');
+      if (i > 3 && (i - 3) % 2 === 0) formatted.push(',');
+      formatted.push(chars[i]);
+    }
+    return formatted.reverse().join('');
+  };
+
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>([]);
   const [activeTab, setActiveTab] = useState("All Candidates");
@@ -1710,6 +1726,7 @@ const CandidatesList = ({
   const [showInterviewModal, setShowInterviewModal] = useState(false);
   const [showInterviewFeedbackModal, setShowInterviewFeedbackModal] = useState(false);
   const [showJoiningModal, setShowJoiningModal] = useState(false);
+  const [showActualCtcModal, setShowActualCtcModal] = useState(false); 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [interviewDate, setInterviewDate] = useState("");
   const [interviewTime, setInterviewTime] = useState("");
@@ -1719,6 +1736,7 @@ const CandidatesList = ({
   const [interviewFeedback, setInterviewFeedback] = useState("");
   const [interviewResult, setInterviewResult] = useState("selected");
   const [ctc, setCtc] = useState("");
+  const [actualCtc, setActualCtc] = useState<string>('');
   const [joiningDate, setJoiningDate] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [rejectType, setRejectType] = useState("internal");
@@ -1999,6 +2017,11 @@ const CandidatesList = ({
       
       if (interactionType === 'joining') {
         setShowJoiningModal(true);
+        return;
+      }
+
+      if (interactionType === 'actual-ctc') {
+        setShowActualCtcModal(true);
         return;
       }
       
@@ -2410,6 +2433,71 @@ const CandidatesList = ({
       toast.error("Failed to save joining details");
     }
   };
+
+  const handleActualCtcSubmit = async () => {
+    if (!currentCandidateId || !currentSubStatusId) return;
+  
+    // Convert to number (actualCtc is already numeric-only)
+    const cleanedCtc = parseFloat(actualCtc);
+    if (isNaN(cleanedCtc) || cleanedCtc <= 0) {
+      toast.error('Please enter a valid CTC');
+      return;
+    }
+  
+    try {
+      // Update or insert into hr_candidate_accrual_ctc (uses actual_ctc)
+      const { data: existingDetails, error: fetchError } = await supabase
+        .from('hr_candidate_accrual_ctc')
+        .select('*')
+        .eq('candidate_id', currentCandidateId)
+        .eq('job_id', jobId)
+        .maybeSingle();
+  
+      if (fetchError && !fetchError.message.includes('No rows found')) {
+        throw fetchError;
+      }
+  
+      if (existingDetails) {
+        const { error } = await supabase
+          .from('hr_candidate_accrual_ctc')
+          .update({
+            actual_ctc: cleanedCtc,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingDetails.id);
+  
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('hr_candidate_accrual_ctc')
+          .insert({
+            candidate_id: currentCandidateId,
+            job_id: jobId,
+            actual_ctc: cleanedCtc,
+            created_by: user.id,
+          });
+  
+        if (error) throw error;
+      }
+  
+      // Prepare data for hr_job_candidates (uses accrual_ctc)
+      const additionalData = {
+        accrual_ctc: cleanedCtc,
+      };
+  
+      // Update candidate status with accrual_ctc for hr_job_candidates
+      await updateCandidateStatus(currentCandidateId, currentSubStatusId, user.id, additionalData);
+  
+      setShowActualCtcModal(false);
+      setActualCtc('');
+      await onRefresh();
+      toast.success('Accrual CTC saved');
+    } catch (error) {
+      console.error('Error saving actual CTC:', error);
+      toast.error('Failed to save actual CTC');
+    }
+  };
+
 
   const handleRejectSubmit = async () => {
     if (!currentCandidateId || !currentSubStatusId) return;
@@ -3148,6 +3236,39 @@ const CandidatesList = ({
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setShowRejectModal(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleRejectSubmit}>Reject Candidate</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showActualCtcModal} onOpenChange={setShowActualCtcModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Client Submission</DialogTitle>
+            <DialogDescription>
+              Enter the CTC for the candidate in Client Submission for accrual profit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right" htmlFor="actual-ctc">Accrual CTC</Label>
+              <input
+          id="actual-ctc"
+          type="text" // Changed from number to text to allow comma formatting
+          value={formatINR(actualCtc)}
+          onChange={(e) => {
+            // Remove commas and non-numeric characters for internal state
+            const rawValue = e.target.value.replace(/[^0-9]/g, '');
+            setActualCtc(rawValue);
+          }}
+          className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
+          placeholder="e.g., 10,00,000"
+          required
+        />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowActualCtcModal(false)}>Cancel</Button>
+            <Button onClick={handleActualCtcSubmit}>Save</Button>
           </div>
         </DialogContent>
       </Dialog>
