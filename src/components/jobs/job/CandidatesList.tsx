@@ -1638,6 +1638,13 @@ import {
   SelectValue,
   SelectGroup,
   SelectLabel,
+  Select1,
+  SelectGroup2,
+  SelectValue3,
+  SelectTrigger4,
+  SelectContent7,
+  SelectLabel8,
+  SelectItem9,
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -1737,6 +1744,8 @@ const CandidatesList = ({
   const [interviewResult, setInterviewResult] = useState("selected");
   const [ctc, setCtc] = useState("");
   const [actualCtc, setActualCtc] = useState<string>('');
+  const [currencyType, setCurrencyType] = useState("INR");
+  const [budgetType, setBudgetType] = useState("LPA");
   const [joiningDate, setJoiningDate] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [rejectType, setRejectType] = useState("internal");
@@ -1745,6 +1754,14 @@ const CandidatesList = ({
   const [currentRound, setCurrentRound] = useState<string | null>(null);
   const [needsReschedule, setNeedsReschedule] = useState(false);
   const [candidateFilter, setCandidateFilter] = useState<"All" | "Yours">("All"); // New filter state
+
+  const currencies = [
+    { value: "INR", symbol: "₹" },
+    { value: "USD", symbol: "$" },
+  ];
+
+  // Budget type options
+  const budgetTypes = ["LPA", "Monthly", "Hourly"];
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -2379,53 +2396,81 @@ const CandidatesList = ({
 
   const handleJoiningSubmit = async () => {
     if (!currentCandidateId || !currentSubStatusId) return;
-    
-    const joiningData = {
-      ctc,
-      joining_date: joiningDate
-    };
-    
+
+    // Convert to number (ctc is numeric-only)
+    const cleanedCtc = parseFloat(ctc);
+    if (isNaN(cleanedCtc) || cleanedCtc <= 0) {
+      toast.error("Please enter a valid CTC");
+      return;
+    }
+
+    if (!joiningDate) {
+      toast.error("Please select a joining date");
+      return;
+    }
+
     try {
+      // Get current currency symbol
+      const currentCurrency = currencies.find((c) => c.value === currencyType) || currencies[0];
+
+      // Format client_budget
+      const clientBudget = `${currentCurrency.symbol}${cleanedCtc} ${budgetType}`;
+
+      // Update or insert into hr_candidate_joining_details
       const { data: existingDetails, error: fetchError } = await supabase
-        .from('hr_candidate_joining_details')
-        .select('*')
-        .eq('candidate_id', currentCandidateId)
+        .from("hr_candidate_joining_details")
+        .select("*")
+        .eq("candidate_id", currentCandidateId)
         .maybeSingle();
-        
-      if (fetchError && !fetchError.message.includes('No rows found')) {
+
+      if (fetchError && !fetchError.message.includes("No rows found")) {
         throw fetchError;
       }
-      
+
       if (existingDetails) {
         const { error } = await supabase
-          .from('hr_candidate_joining_details')
+          .from("hr_candidate_joining_details")
           .update({
             joining_date: joiningDate,
-            final_salary: parseFloat(ctc),
-            updated_at: new Date().toISOString()
+            final_salary: cleanedCtc,
+            currency_type: currencyType,
+            budget_type: budgetType,
+            client_budget: clientBudget,
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', existingDetails.id);
-          
+          .eq("id", existingDetails.id);
+
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('hr_candidate_joining_details')
+          .from("hr_candidate_joining_details")
           .insert({
             candidate_id: currentCandidateId,
             joining_date: joiningDate,
-            final_salary: parseFloat(ctc),
+            final_salary: cleanedCtc,
+            currency_type: currencyType,
+            budget_type: budgetType,
+            client_budget: clientBudget,
             created_by: user.id,
-            onboarding_status: 'pending'
+            onboarding_status: "pending",
           });
-          
+
         if (error) throw error;
       }
-      
+
+      // Prepare data for updateCandidateStatus
+      const joiningData = {
+        ctc: clientBudget,
+        joining_date: joiningDate,
+      };
+
       await updateCandidateStatus(currentCandidateId, currentSubStatusId, user.id, joiningData);
-      
+
       setShowJoiningModal(false);
-      setCtc('');
-      setJoiningDate('');
+      setCtc("");
+      setJoiningDate("");
+      setCurrencyType("INR");
+      setBudgetType("LPA");
       await onRefresh();
       toast.success("Joining details saved");
     } catch (error) {
@@ -2434,69 +2479,86 @@ const CandidatesList = ({
     }
   };
 
+
   const handleActualCtcSubmit = async () => {
     if (!currentCandidateId || !currentSubStatusId) return;
-  
+
     // Convert to number (actualCtc is already numeric-only)
     const cleanedCtc = parseFloat(actualCtc);
     if (isNaN(cleanedCtc) || cleanedCtc <= 0) {
-      toast.error('Please enter a valid CTC');
+      toast.error("Please enter a valid CTC");
       return;
     }
-  
+
     try {
-      // Update or insert into hr_candidate_accrual_ctc (uses actual_ctc)
+      // Get current currency symbol
+      const currentCurrency = currencies.find((c) => c.value === currencyType) || currencies[0];
+
+      // Format clientBudget
+      const clientBudget = `${currentCurrency.symbol}${cleanedCtc} ${budgetType}`;
+
+      // Update or insert into hr_candidate_accrual_ctc
       const { data: existingDetails, error: fetchError } = await supabase
-        .from('hr_candidate_accrual_ctc')
-        .select('*')
-        .eq('candidate_id', currentCandidateId)
-        .eq('job_id', jobId)
+        .from("hr_candidate_accrual_ctc")
+        .select("*")
+        .eq("candidate_id", currentCandidateId)
+        .eq("job_id", jobId)
         .maybeSingle();
-  
-      if (fetchError && !fetchError.message.includes('No rows found')) {
+
+      if (fetchError && !fetchError.message.includes("No rows found")) {
         throw fetchError;
       }
-  
+
       if (existingDetails) {
         const { error } = await supabase
-          .from('hr_candidate_accrual_ctc')
+          .from("hr_candidate_accrual_ctc")
           .update({
             actual_ctc: cleanedCtc,
+            currency_type: currencyType,
+            budget_type: budgetType,
+            client_budget: clientBudget,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', existingDetails.id);
-  
+          .eq("id", existingDetails.id);
+
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('hr_candidate_accrual_ctc')
+    
+          .from("hr_candidate_accrual_ctc")
           .insert({
             candidate_id: currentCandidateId,
             job_id: jobId,
             actual_ctc: cleanedCtc,
+            currency_type: currencyType,
+            budget_type: budgetType,
+            client_budget: clientBudget,
             created_by: user.id,
           });
-  
+
         if (error) throw error;
       }
-  
+
       // Prepare data for hr_job_candidates (uses accrual_ctc)
       const additionalData = {
-        accrual_ctc: cleanedCtc,
+        accrual_ctc: clientBudget,
       };
-  
+
       // Update candidate status with accrual_ctc for hr_job_candidates
       await updateCandidateStatus(currentCandidateId, currentSubStatusId, user.id, additionalData);
-  
+
       setShowActualCtcModal(false);
-      setActualCtc('');
+      setActualCtc("");
+      setCurrencyType("INR");
+      setBudgetType("LPA");
       await onRefresh();
-      toast.success('Accrual CTC saved');
+      toast.success("Accrual CTC saved");
     } catch (error) {
-      console.error('Error saving actual CTC:', error);
-      toast.error('Failed to save actual CTC');
+      console.error("Error saving actual CTC:", error);
+      toast.error("Failed to save actual CTC");
     }
   };
+
 
 
   const handleRejectSubmit = async () => {
@@ -3174,44 +3236,82 @@ const CandidatesList = ({
       </Dialog>
 
       <Dialog open={showJoiningModal} onOpenChange={setShowJoiningModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Joining Details</DialogTitle>
-            <DialogDescription>
-              Enter the CTC and date of joining for the candidate.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right" htmlFor="ctc">CTC</Label>
-              <input 
-                id="ctc" 
-                type="number" 
-                value={ctc} 
-                onChange={e => setCtc(e.target.value)} 
-                className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
-                placeholder="Annual CTC"
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Joining Details</DialogTitle>
+          <DialogDescription>
+            Enter the CTC and date of joining for the candidate.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right" htmlFor="ctc">
+              CTC
+            </Label>
+            <div className="col-span-3 flex">
+              <Select1 value={currencyType} onValueChange={setCurrencyType}>
+                <SelectTrigger4 className="w-[80px] rounded-r-none border-r-0">
+                  <SelectValue3 />
+                </SelectTrigger4>
+                <SelectContent7>
+                  <SelectGroup2>
+                    <SelectLabel8>Currency</SelectLabel8>
+                    {currencies.map((currency) => (
+                      <SelectItem9 key={currency.value} value={currency.value}>
+                        {currency.symbol} {currency.value}
+                      </SelectItem9>
+                    ))}
+                  </SelectGroup2>
+                </SelectContent7>
+              </Select1>
+              <input
+                id="ctc"
+                type="text"
+                value={formatINR(ctc)}
+                onChange={(e) => {
+                  const rawValue = e.target.value.replace(/[^0-9]/g, "");
+                  setCtc(rawValue);
+                }}
+                className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2"
+                placeholder="e.g., 10,00,000"
                 required
               />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right" htmlFor="joining-date">Joining Date</Label>
-              <input 
-                id="joining-date" 
-                type="date" 
-                value={joiningDate} 
-                onChange={e => setJoiningDate(e.target.value)} 
-                className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
-                required
-              />
+              <Select1 value={budgetType} onValueChange={setBudgetType}>
+                <SelectTrigger4 className="w-[110px] rounded-l-none border-l-0">
+                  <SelectValue3 />
+                </SelectTrigger4>
+                <SelectContent7>
+                  {budgetTypes.map((type) => (
+                    <SelectItem9 key={type} value={type}>
+                      {type}
+                    </SelectItem9>
+                  ))}
+                </SelectContent7>
+              </Select1>
             </div>
           </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setShowJoiningModal(false)}>Cancel</Button>
-            <Button onClick={handleJoiningSubmit}>Save</Button>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right" htmlFor="joining-date">
+              Joining Date
+            </Label>
+            <input
+              id="joining-date"
+              type="date"
+              value={joiningDate}
+              onChange={(e) => setJoiningDate(e.target.value)}
+              className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
+              required
+            />
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" onClick={() => setShowJoiningModal(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleJoiningSubmit}>Save</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
       <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
         <DialogContent className="sm:max-w-md">
@@ -3241,37 +3341,69 @@ const CandidatesList = ({
       </Dialog>
 
       <Dialog open={showActualCtcModal} onOpenChange={setShowActualCtcModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Client Submission</DialogTitle>
-            <DialogDescription>
-              Enter the CTC for the candidate in Client Submission for accrual profit.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right" htmlFor="actual-ctc">Accrual CTC</Label>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Client Submission</DialogTitle>
+          <DialogDescription>
+            Enter the CTC for the candidate in Client Submission for accrual profit.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right" htmlFor="actual-ctc">
+              Accrual CTC
+            </Label>
+            <div className="col-span-3 flex">
+              <Select1 value={currencyType} onValueChange={setCurrencyType}>
+                <SelectTrigger4 className="w-[80px] rounded-r-none border-r-0">
+                  <SelectValue3 />
+                </SelectTrigger4>
+                <SelectContent7>
+                  <SelectGroup2>
+                    <SelectLabel8>Currency</SelectLabel8>
+                    {currencies.map((currency) => (
+                      <SelectItem9 key={currency.value} value={currency.value}>
+                        {currency.symbol} {currency.value}
+                      </SelectItem9>
+                    ))}
+                  </SelectGroup2>
+                </SelectContent7>
+              </Select1>
               <input
-          id="actual-ctc"
-          type="text" // Changed from number to text to allow comma formatting
-          value={formatINR(actualCtc)}
-          onChange={(e) => {
-            // Remove commas and non-numeric characters for internal state
-            const rawValue = e.target.value.replace(/[^0-9]/g, '');
-            setActualCtc(rawValue);
-          }}
-          className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
-          placeholder="e.g., 10,00,000"
-          required
-        />
+                id="actual-ctc"
+                type="text"
+                value={formatINR(actualCtc)}
+                onChange={(e) => {
+                  const rawValue = e.target.value.replace(/[^0-9]/g, "");
+                  setActualCtc(rawValue);
+                }}
+                className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2"
+                placeholder="e.g., 10,00,000"
+                required
+              />
+              <Select1 value={budgetType} onValueChange={setBudgetType}>
+                <SelectTrigger4 className="w-[110px] rounded-l-none border-l-0">
+                  <SelectValue3 />
+                </SelectTrigger4>
+                <SelectContent7>
+                  {budgetTypes.map((type) => (
+                    <SelectItem9 key={type} value={type}>
+                      {type}
+                    </SelectItem9>
+                  ))}
+                </SelectContent7>
+              </Select1>
             </div>
           </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setShowActualCtcModal(false)}>Cancel</Button>
-            <Button onClick={handleActualCtcSubmit}>Save</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" onClick={() => setShowActualCtcModal(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleActualCtcSubmit}>Save</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 };

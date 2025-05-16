@@ -28,11 +28,14 @@ import {
   Download,
   Banknote,
   FileText,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Candidate } from "@/lib/types";
 import { FaLinkedin } from "react-icons/fa";
 import { supabase } from "@/integrations/supabase/client";
+import axios from 'axios';
 
 interface EmployeeProfilePageProps {
   shareMode?: boolean;
@@ -47,6 +50,17 @@ interface DocumentState {
   verificationDate: string | null;
   error: string | null;
   isEditing: boolean;
+  isUANResultsOpen?: boolean;
+  results?: Array<{
+    DateOfExitEpf: string;
+    Doj: string;
+    EstablishmentName: string;
+    MemberId: string;
+    fatherOrHusbandName: string;
+    name: string;
+    uan: string;
+    Overlapping: string;
+  }>;
 }
 
 interface ResumeAnalysis {
@@ -79,6 +93,7 @@ interface WorkHistory {
   company_name: string;
   designation: string;
   years: string;
+  overlapping?: string;
 }
 
 interface TimelineEvent {
@@ -115,6 +130,253 @@ interface TimelineEvent {
   created_by_name: string;
   created_at: string;
 }
+
+interface TruthScreenResponse {
+  requestData?: string;
+  responseData?: string;
+  error?: string;
+  msg?: Array<{
+    DateOfExitEpf: string;
+    Doj: string;
+    EstablishmentName: string;
+    MemberId: string;
+    fatherOrHusbandName: string;
+    name: string;
+    uan: string;
+    Overlapping: string;
+  }>;
+  status?: number;
+  transId?: string;
+  tsTransId?: string;
+}
+
+const API_BASE_URL = 'http://localhost:3000';
+
+const dualEncryptData = async (transID: string, uan: string, employer_name: string): Promise<string> => {
+  try {
+    console.log('Encrypting data with:', { transID, docType: '464', uan, employer_name });
+    const response = await axios.post<TruthScreenResponse>(
+      `${API_BASE_URL}/api/dual/dual-encrypt`,
+      {
+        transID,
+        docType: '464',
+        uan,
+        employer_name,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.includes('application/json')) {
+      console.error('Non-JSON response received:', response.data);
+      throw new Error(`Invalid response format: Expected JSON, received ${contentType}`);
+    }
+
+    console.log('Dual Encryption response:', response.data);
+
+    if (!response.data || typeof response.data !== 'object') {
+      throw new Error('Invalid response format from dual encryption service');
+    }
+    if (response.data.error) {
+      throw new Error(response.data.error);
+    }
+    if (!response.data.requestData) {
+      throw new Error('Missing requestData in response');
+    }
+
+    return response.data.requestData;
+  } catch (error: any) {
+    console.error('Dual Encryption error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers,
+    });
+    let errorMessage = 'Failed to encrypt dual employment data';
+    if (error.message.includes('Network Error')) {
+      errorMessage = 'Network error: Unable to reach encryption service.';
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+const dualVerifyData = async (requestData: string): Promise<string> => {
+  try {
+    console.log('Verifying data with:', { requestData });
+    const response = await axios.post<TruthScreenResponse>(
+      `${API_BASE_URL}/api/dual/dual-verify`,
+      {
+        requestData,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.includes('application/json')) {
+      console.error('Non-JSON response received:', response.data);
+      throw new Error(`Invalid response format: Expected JSON, received ${contentType}`);
+    }
+
+    console.log('Dual Verification response:', response.data);
+
+    if (!response.data || typeof response.data !== 'object') {
+      throw new Error('Invalid response format from verification service');
+    }
+    if (response.data.error) {
+      throw new Error(response.data.error);
+    }
+    if (!response.data.responseData) {
+      throw new Error('Missing responseData in response');
+    }
+
+    return response.data.responseData;
+  } catch (error: any) {
+    console.error('Dual Verification error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers,
+    });
+    let errorMessage = 'Failed to verify dual employment data';
+    if (error.message.includes('Network Error')) {
+      errorMessage = 'Network error: Unable to reach verification service.';
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+const dualDecryptData = async (responseData: string): Promise<TruthScreenResponse> => {
+  try {
+    console.log('Decrypting data with:', { responseData });
+    const response = await axios.post<TruthScreenResponse>(
+      `${API_BASE_URL}/api/dual/dual-decrypt`,
+      {
+        responseData,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.includes('application/json')) {
+      console.error('Non-JSON response received:', response.data);
+      throw new Error(`Invalid response format: Expected JSON, received ${contentType}`);
+    }
+
+    console.log('Dual Decryption response:', response.data);
+
+    if (!response.data || typeof response.data !== 'object') {
+      throw new Error('Invalid response format from decryption service');
+    }
+    if (response.data.error) {
+      throw new Error(response.data.error);
+    }
+    if (!response.data.msg || response.data.status === undefined || !response.data.tsTransId) {
+      throw new Error('Missing required fields (msg, status, tsTransId) in response');
+    }
+
+    // Normalize the keys in the msg array to match TruthScreenResponse interface
+    const normalizedMsg = response.data.msg.map((entry: any) => ({
+      DateOfExitEpf: entry.DateOfExitEpf,
+      Doj: entry.Doj,
+      EstablishmentName: entry['Establishment Name'] || entry.EstablishmentName,
+      MemberId: entry.MemberId,
+      fatherOrHusbandName: entry['father or Husband Name'] || entry.fatherOrHusbandName,
+      name: entry.name,
+      uan: entry.uan,
+      Overlapping: entry.Overlapping,
+    }));
+
+    return {
+      ...response.data,
+      msg: normalizedMsg,
+    };
+  } catch (error: any) {
+    console.error('Dual Decryption error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers,
+    });
+    let errorMessage = 'Failed to decrypt dual employment data';
+    if (error.message.includes('Network Error')) {
+      errorMessage = 'Network error: Unable to reach decryption service.';
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+const verifyDualUAN = async (transID: string, uan: string, employer_name: string, candidateId: string): Promise<TruthScreenResponse> => {
+  try {
+    if (!/^\d{12}$/.test(uan)) {
+      throw new Error('UAN must be a 12-digit number');
+    }
+    if (!employer_name) {
+      throw new Error('Employer name is required for dual employment check');
+    }
+
+    const requestData = await dualEncryptData(transID, uan, employer_name);
+    console.log('Encrypted requestData:', requestData);
+    const responseData = await dualVerifyData(requestData);
+    console.log('Verified responseData:', responseData);
+    const decryptedData = await dualDecryptData(responseData);
+    console.log('Decrypted data:', decryptedData);
+
+    const { error } = await supabase.from('hr_dual_uan_verifications').insert({
+      candidate_id: candidateId,
+      uan,
+      trans_id: decryptedData.transId || transID,
+      ts_trans_id: decryptedData.tsTransId,
+      status: decryptedData.status,
+      msg: decryptedData.msg,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error('Supabase insert error:', error);
+      throw new Error('Failed to save dual UAN verification to database: ' + error.message);
+    }
+
+    return decryptedData;
+  } catch (error: any) {
+    console.error('Dual UAN verification error:', error);
+
+    await supabase.from('hr_dual_uan_verifications').insert({
+      candidate_id: candidateId,
+      uan,
+      trans_id: transID,
+      ts_trans_id: null,
+      status: 0,
+      msg: [],
+      created_at: new Date().toISOString(),
+    });
+
+    throw new Error(error.message || 'Dual UAN verification failed');
+  }
+};
 
 const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
   shareMode = false,
@@ -156,6 +418,8 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
       verificationDate: null,
       error: null,
       isEditing: false,
+      isUANResultsOpen: false,
+      results: [],
     },
     pan: {
       value: "",
@@ -189,8 +453,8 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Type guard to validate Candidate object
   const isValidCandidate = (data: any): data is Candidate => {
     return (
       data &&
@@ -203,7 +467,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     );
   };
 
-  // Fetch candidate data
   useEffect(() => {
     const fetchCandidate = async () => {
       try {
@@ -212,49 +475,16 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
 
         console.log("URL candidateId:", candidateId);
         console.log("URL jobId:", jobId);
+        console.log("Location state:", location.state);
 
+        let candidateData: Candidate | null = null;
+        let uanVerificationData: any = null;
+
+        // Fetch candidate data
         const state = location.state as { candidate?: Candidate; jobId?: string };
-        console.log("Location state:", state);
-
-        const initialCandidate = state?.candidate;
-
-        if (initialCandidate && isValidCandidate(initialCandidate)) {
-          console.log("Setting candidate from location state:", initialCandidate);
-          setCandidate(initialCandidate);
-          setDocuments({
-            uan: {
-              value: initialCandidate.metadata?.uan || "N/A",
-              isVerifying: false,
-              isVerified: false,
-              verificationDate: null,
-              error: null,
-              isEditing: false,
-            },
-            pan: {
-              value: initialCandidate.metadata?.pan || "N/A",
-              isVerifying: false,
-              isVerified: false,
-              verificationDate: null,
-              error: null,
-              isEditing: false,
-            },
-            pf: {
-              value: initialCandidate.metadata?.pf || "N/A",
-              isVerifying: false,
-              isVerified: false,
-              verificationDate: null,
-              error: null,
-              isEditing: false,
-            },
-            esic: {
-              value: initialCandidate.metadata?.esicNumber || "N/A",
-              isVerifying: false,
-              isVerified: false,
-              verificationDate: null,
-              error: null,
-              isEditing: false,
-            },
-          });
+        if (state?.candidate && isValidCandidate(state.candidate)) {
+          console.log("Setting candidate from location state:", state.candidate);
+          candidateData = state.candidate;
         } else if (candidateId) {
           console.log("Fetching candidate from Supabase with ID:", candidateId);
           const { data, error } = await supabase
@@ -270,47 +500,82 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
 
           if (isValidCandidate(data)) {
             console.log("Setting candidate from Supabase:", data);
-            setCandidate(data);
-            setDocuments({
-              uan: {
-                value: data.metadata?.uan || "N/A",
-                isVerifying: false,
-                isVerified: false,
-                verificationDate: null,
-                error: null,
-                isEditing: false,
-              },
-              pan: {
-                value: data.metadata?.pan || "N/A",
-                isVerifying: false,
-                isVerified: false,
-                verificationDate: null,
-                error: null,
-                isEditing: false,
-              },
-              pf: {
-                value: data.metadata?.pf || "N/A",
-                isVerifying: false,
-                isVerified: false,
-                verificationDate: null,
-                error: null,
-                isEditing: false,
-              },
-              esic: {
-                value: data.metadata?.esicNumber || "N/A",
-                isVerifying: false,
-                isVerified: false,
-                verificationDate: null,
-                error: null,
-                isEditing: false,
-              },
-            });
+            candidateData = data;
           } else {
             throw new Error("Invalid candidate data received from Supabase");
           }
         } else {
           throw new Error("No candidate data provided and no candidateId in URL");
         }
+
+        // Fetch Dual UAN verification data for the candidate
+        if (candidateData?.id) {
+          console.log("Fetching Dual UAN verification data for candidateId:", candidateData.id);
+          const { data: verificationData, error: verificationError } = await supabase
+            .from("hr_dual_uan_verifications")
+            .select("uan, created_at, msg")
+            .eq("candidate_id", candidateData.id)
+            .eq("status", 1)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+console.log("verificationError",verificationData)
+          if (verificationError) {
+            if (verificationError.code === 'PGRST116') {
+              console.log("No Dual UAN verification data found for candidateId:", candidateData.id);
+            } else {
+              console.error("Supabase Dual UAN verification fetch error:", verificationError);
+              throw new Error("Failed to fetch Dual UAN verification data: " + verificationError.message);
+            }
+          } else {
+            console.log("Dual UAN verification data fetched:", verificationData);
+            uanVerificationData = verificationData;
+          }
+        } else {
+          console.warn("Skipping Dual UAN verification fetch: No candidate ID available");
+        }
+
+        // Set candidate and documents state
+        setCandidate(candidateData);
+        const uanState: DocumentState = {
+          value: candidateData?.metadata?.uan || uanVerificationData?.uan || "",
+          isVerifying: false,
+          isVerified: !!uanVerificationData,
+          verificationDate: uanVerificationData ? new Date(uanVerificationData.created_at).toLocaleString() : null,
+          error: null,
+          isEditing: false,
+          isUANResultsOpen: !!uanVerificationData,
+          results: uanVerificationData?.msg || [],
+        };
+        console.log("Setting documents.uan state:", uanState);
+
+        setDocuments({
+          uan: uanState,
+          pan: {
+            value: candidateData?.metadata?.pan || "",
+            isVerifying: false,
+            isVerified: false,
+            verificationDate: null,
+            error: null,
+            isEditing: false,
+          },
+          pf: {
+            value: candidateData?.metadata?.pf || "",
+            isVerifying: false,
+            isVerified: false,
+            verificationDate: null,
+            error: null,
+            isEditing: false,
+          },
+          esic: {
+            value: candidateData?.metadata?.esicNumber || "",
+            isVerifying: false,
+            isVerified: false,
+            verificationDate: null,
+            error: null,
+            isEditing: false,
+          },
+        });
       } catch (err: any) {
         console.error("Error fetching candidate:", err);
         setError(err.message || "Failed to load candidate data.");
@@ -327,7 +592,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     fetchCandidate();
   }, [candidateId, location.state, toast]);
 
-  // Fetch shared data in share mode, resume analysis, and work history
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -355,15 +619,17 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
               setCandidate(data.candidate);
               setDocuments({
                 uan: {
-                  value: data.candidate.metadata?.uan || "N/A",
+                  value: data.candidate.metadata?.uan || "",
                   isVerifying: false,
                   isVerified: false,
                   verificationDate: null,
                   error: null,
                   isEditing: false,
+                  isUANResultsOpen: false,
+                  results: [],
                 },
                 pan: {
-                  value: data.candidate.metadata?.pan || "N/A",
+                  value: data.candidate.metadata?.pan || "",
                   isVerifying: false,
                   isVerified: false,
                   verificationDate: null,
@@ -371,7 +637,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                   isEditing: false,
                 },
                 pf: {
-                  value: data.candidate.metadata?.pf || "N/A",
+                  value: data.candidate.metadata?.pf || "",
                   isVerifying: false,
                   isVerified: false,
                   verificationDate: null,
@@ -379,7 +645,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                   isEditing: false,
                 },
                 esic: {
-                  value: data.candidate.metadata?.esicNumber || "N/A",
+                  value: data.candidate.metadata?.esicNumber || "",
                   isVerifying: false,
                   isVerified: false,
                   verificationDate: null,
@@ -431,6 +697,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
               company_name: item.companies?.name || "Unknown Company",
               designation: item.designation || "-",
               years: item.years || "-",
+              overlapping: "N/A",
             }));
             console.log("Work History fetched:", formattedWorkHistory);
             setWorkHistory(formattedWorkHistory);
@@ -453,7 +720,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     }
   }, [shareMode, shareId, jobId, candidate, sharedDataOptions, toast]);
 
-  // Fetch timeline data with created_by employee details
   useEffect(() => {
     const fetchTimeline = async () => {
       if (!candidateId || shareMode) return;
@@ -507,13 +773,11 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     fetchTimeline();
   }, [candidateId, shareMode, toast]);
 
-  // Normalize skills to an array of strings
   const normalizeSkills = (skills: any[] | undefined): string[] => {
     if (!skills || !skills.length) return ["N/A"];
     return skills.map((skill) => (typeof skill === "string" ? skill : skill?.name || "Unknown"));
   };
 
-  // Format INR
   const formatINR = (amount: number | string) => {
     const num = typeof amount === "string" ? parseFloat(amount) : amount;
     return isNaN(num)
@@ -525,7 +789,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         }).format(num);
   };
 
-  // Format timeline date
   const formatTimelineDate = (date: string) => {
     return new Date(date).toLocaleString("en-US", {
       month: "short",
@@ -537,7 +800,16 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     });
   };
 
-  // Employee data for normal mode
+  const getLatestEmployer = (workHistory: WorkHistory[]): string => {
+    if (!workHistory.length) return "";
+    const sortedHistory = [...workHistory].sort((a, b) => {
+      const startYearA = parseInt(a.years.split("-")[0], 10) || 0;
+      const startYearB = parseInt(b.years.split("-")[0], 10) || 0;
+      return startYearB - startYearA;
+    });
+    return sortedHistory[0].company_name;
+  };
+
   const employeeNormal = candidate
     ? {
         id: candidate.id || "emp001",
@@ -547,7 +819,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         joinDate: candidate.appliedDate || "N/A",
         status: candidate.status || "Applied",
         tags: candidate.metadata?.tags || ["N/A"],
-        profileImage: candidate.metadata?.profileImage || "/lovable-uploads/placeholder.png",
+        profileImage: candidate.metadata?.profileImage || "/lovable-Uploads/placeholder.png",
         email: candidate.email || "N/A",
         phone: candidate.phone || "N/A",
         location: candidate.metadata?.currentLocation || "N/A",
@@ -575,7 +847,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         joinDate: "N/A",
         status: "N/A",
         tags: ["N/A"],
-        profileImage: "/lovable-uploads/placeholder.png",
+        profileImage: "/lovable-Uploads/placeholder.png",
         email: "N/A",
         phone: "N/A",
         location: "N/A",
@@ -591,7 +863,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         offerDetails: "N/A",
       };
 
-  // Employee data for shared mode
   const employeeShared = {
     id: shareId || "unknown",
     name: sharedDataOptions?.personalInfo && candidate?.name ? candidate.name : "Shared Employee Profile",
@@ -600,7 +871,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     joinDate: sharedDataOptions?.personalInfo && candidate?.appliedDate ? candidate.appliedDate : "N/A",
     status: "Shared",
     tags: sharedDataOptions?.personalInfo && candidate?.metadata?.tags ? candidate.metadata.tags : [],
-    profileImage: sharedDataOptions?.personalInfo && candidate?.metadata?.profileImage ? candidate.metadata.profileImage : "/lovable-uploads/placeholder.png",
+    profileImage: sharedDataOptions?.personalInfo && candidate?.metadata?.profileImage ? candidate.metadata.profileImage : "/lovable-Uploads/placeholder.png",
     email: sharedDataOptions?.contactInfo && candidate?.email ? candidate.email : "N/A",
     phone: sharedDataOptions?.contactInfo && candidate?.phone ? candidate.phone : "N/A",
     location: sharedDataOptions?.contactInfo && candidate.metadata?.currentLocation ? candidate.metadata.currentLocation : "N/A",
@@ -623,7 +894,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
 
   const employee = shareMode ? employeeShared : employeeNormal;
 
-  // Documents for shared mode
   const documentsShared = {
     uan: {
       value: sharedDataOptions?.documentsInfo && candidate?.metadata?.uan ? candidate.metadata.uan : "Restricted",
@@ -632,6 +902,8 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
       verificationDate: null,
       error: null,
       isEditing: false,
+      isUANResultsOpen: false,
+      results: [],
     },
     pan: {
       value: sharedDataOptions?.documentsInfo && candidate?.metadata?.pan ? candidate.metadata.pan : "Restricted",
@@ -659,7 +931,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     },
   };
 
-  // Handle document value change
   const handleDocumentChange = (type: keyof typeof documents, value: string) => {
     if (shareMode) return;
     setDocuments((prev) => ({
@@ -671,7 +942,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     }));
   };
 
-  // Toggle editing state
   const toggleEditing = (type: keyof typeof documents) => {
     if (shareMode) return;
     if (documents[type].isVerified) {
@@ -692,8 +962,17 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     }));
   };
 
-  // Handle document verification
-  const verifyDocument = (type: keyof typeof documents) => {
+  const toggleUANResults = () => {
+    setDocuments((prev) => ({
+      ...prev,
+      uan: {
+        ...prev.uan,
+        isUANResultsOpen: !prev.uan.isUANResultsOpen,
+      },
+    }));
+  };
+
+  const verifyDocument = async (type: keyof typeof documents) => {
     if (shareMode) return;
     if (!documents[type].value.trim()) {
       toast({
@@ -713,47 +992,164 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
       },
     }));
 
-    setTimeout(() => {
-      const isSuccess = Math.random() > 0.3;
-
-      if (isSuccess) {
-        setDocuments((prev) => ({
-          ...prev,
-          [type]: {
-            ...prev[type],
-            isVerifying: false,
-            isVerified: true,
-            verificationDate: new Date().toLocaleString(),
-            error: null,
-            isEditing: false,
-          },
-        }));
-
-        toast({
-          title: "Verification Successful",
-          description: `${type.charAt(0).toUpperCase() + type.slice(1)} number has been verified successfully.`,
+    if (type === 'uan') {
+      try {
+        const transID = crypto.randomUUID ? crypto.randomUUID() : `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0;
+          const v = c === "x" ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
         });
-      } else {
+        const employer_name = getLatestEmployer(workHistory);
+        if (!employer_name) {
+          throw new Error('No employer name available from work history');
+        }
+        const result = await verifyDualUAN(transID, documents.uan.value, employer_name, candidateId || '');
+        console.log('Dual UAN Verification Result:', result);
+
+        if (result.msg && result.status === 1) {
+          const updatedWorkHistory = result.msg.map((entry, index) => ({
+            company_id: index + 1,
+            company_name: entry.EstablishmentName,
+            designation: "N/A",
+            years: entry.Doj + (entry.DateOfExitEpf !== "NA" ? ` - ${entry.DateOfExitEpf}` : ""),
+            overlapping: entry.Overlapping,
+          }));
+          setWorkHistory(updatedWorkHistory);
+
+          setDocuments((prev) => ({
+            ...prev,
+            uan: {
+              ...prev.uan,
+              isVerifying: false,
+              isVerified: true,
+              verificationDate: new Date().toLocaleString(),
+              error: null,
+              isEditing: false,
+              isUANResultsOpen: true,
+              results: result.msg,
+            },
+          }));
+
+          toast({
+            title: "Dual Employment Verification Successful",
+            description: `UAN number verified successfully. Work history updated.`,
+          });
+        } else {
+          throw new Error('Invalid Dual UAN verification response');
+        }
+      } catch (error: any) {
+        console.error('Dual UAN Verification Failed:', error.message);
         setDocuments((prev) => ({
           ...prev,
-          [type]: {
-            ...prev[type],
+          uan: {
+            ...prev.uan,
             isVerifying: false,
             isVerified: false,
-            error: "Verification failed. Please check the document number.",
+            error: error.message || 'Dual UAN verification failed. Please check the number and try again.',
+            isUANResultsOpen: false,
+            results: [],
           },
         }));
 
         toast({
           title: "Verification Failed",
-          description: "Unable to verify document. Please check the number and try again.",
+          description: error.message || 'Dual UAN verification failed. Please check the number and try again.',
           variant: "destructive",
         });
       }
-    }, 1500);
+    } else {
+      setTimeout(() => {
+        const isSuccess = Math.random() > 0.3;
+
+        if (isSuccess) {
+          setDocuments((prev) => ({
+            ...prev,
+            [type]: {
+              ...prev[type],
+              isVerifying: false,
+              isVerified: true,
+              verificationDate: new Date().toLocaleString(),
+              error: null,
+              isEditing: false,
+            },
+          }));
+
+          toast({
+            title: "Verification Successful",
+            description: `${type.charAt(0).toUpperCase() + type.slice(1)} number has been verified successfully.`,
+          });
+        } else {
+          setDocuments((prev) => ({
+            ...prev,
+            [type]: {
+              ...prev[type],
+              isVerifying: false,
+              isVerified: false,
+              error: "Verification failed. Please check the document number.",
+            },
+          }));
+
+          toast({
+            title: "Verification Failed",
+            description: "Unable to verify document. Please check the number and try again.",
+            variant: "destructive",
+          });
+        }
+      }, 1500);
+    }
   };
 
-  // Handle opening the data selection dialog
+  const saveDocuments = async () => {
+    if (shareMode || !candidateId) return;
+
+    setIsSaving(true);
+
+    try {
+      const updatedMetadata = {
+        ...candidate?.metadata,
+        uan: documents.uan.value || null,
+        pan: documents.pan.value || null,
+        pf: documents.pf.value || null,
+        esicNumber: documents.esic.value || null,
+      };
+
+      const { error } = await supabase
+        .from("hr_job_candidates")
+        .update({
+          metadata: updatedMetadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", candidateId);
+
+      if (error) {
+        throw new Error("Failed to update document data: " + error.message);
+      }
+
+      setCandidate((prev) => prev ? { ...prev, metadata: updatedMetadata } : prev);
+
+      toast({
+        title: "Documents Updated",
+        description: "Document numbers have been successfully updated.",
+      });
+
+      setDocuments((prev) => ({
+        uan: { ...prev.uan, isEditing: false },
+        pan: { ...prev.pan, isEditing: false },
+        pf: { ...prev.pf, isEditing: false },
+        esic: { ...prev.esic, isEditing: false },
+      }));
+    } catch (err: any) {
+      console.error("Error saving documents:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to save document data.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleShareClick = () => {
     if (!candidate) {
       toast({
@@ -766,7 +1162,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     setShowDataSelection(true);
   };
 
-  // Create and share magic link with selected data options
   const generateMagicLink = async (dataOptions: DataSharingOptions) => {
     if (!candidate) {
       toast({
@@ -826,7 +1221,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     }
   };
 
-  // Copy magic link to clipboard
   const copyMagicLink = () => {
     if (magicLink) {
       navigator.clipboard.writeText(magicLink);
@@ -841,7 +1235,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     }
   };
 
-  // Render verification status
   const renderVerificationStatus = (doc: DocumentState) => {
     if (shareMode) return null;
     if (doc.isVerifying) {
@@ -874,7 +1267,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     return null;
   };
 
-  // Render document verification row
   const renderDocumentRow = (type: keyof typeof documents, label: string) => {
     const doc = documents[type];
 
@@ -898,21 +1290,69 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                   className="mt-1 h-8 text-sm w-full sm:w-1/2"
                 />
               ) : (
-                <p className="text-xs text-muted-foreground">{doc.value}</p>
+                <p className="text-xs text-muted-foreground">{doc.value || "Not Provided"}</p>
               )}
               {renderVerificationStatus(doc)}
+              {type === 'uan' && doc.results && doc.results.length > 0 && (
+                <div className="mt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleUANResults}
+                    className="flex items-center text-indigo-600 hover:text-indigo-800"
+                  >
+                    {doc.isUANResultsOpen ? (
+                      <ChevronUp className="w-4 h-4 mr-1" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 mr-1" />
+                    )}
+                    {doc.isUANResultsOpen ? 'Hide Verification Details' : 'Show Verification Details'}
+                  </Button>
+                  {doc.isUANResultsOpen && (
+                    <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                      <h4 className="text-sm font-medium mb-2">Dual Employment Verification Results</h4>
+                      <div className="space-y-4">
+                        {doc.results.map((entry, index) => (
+                          <div key={index} className="border-b pb-2">
+                            <p className="text-xs font-medium">{entry.EstablishmentName}</p>
+                            <p className="text-xs text-gray-600">Join Date: {entry.Doj}</p>
+                            <p className="text-xs text-gray-600">Exit Date: {entry.DateOfExitEpf === 'NA' ? 'Currently Employed' : entry.DateOfExitEpf}</p>
+                            <p className="text-xs text-gray-600">Overlapping: {entry.Overlapping}</p>
+                            <p className="text-xs text-gray-600">Member ID: {entry.MemberId}</p>
+                            <p className="text-xs text-gray-600">Name: {entry.name}</p>
+                            <p className="text-xs text-gray-600">Father/Husband: {entry.fatherOrHusbandName}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {!shareMode && (
               <div className="flex space-x-2">
                 <Button
+                  onClick={() => toggleEditing(type)}
+                  variant="outline"
+                  size="sm"
+                  disabled={doc.isVerifying || doc.isVerified}
+                  className={cn(doc.isEditing && "bg-indigo-100 text-indigo-800 hover:bg-indigo-200")}
+                >
+                  {doc.isEditing ? "Cancel" : "Edit"}
+                </Button>
+                <Button
                   onClick={() => verifyDocument(type)}
                   variant="secondary"
                   size="sm"
-                  disabled={doc.isVerifying || (doc.isVerified && !doc.error)}
+                  disabled={doc.isVerifying}
                   className={cn(doc.isVerified && "bg-green-100 text-green-800 hover:bg-green-200")}
                 >
                   {doc.isVerifying ? (
                     <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : doc.isVerified && type === 'uan' ? (
+                    <>
+                      Reverify <CheckCircle2 className="ml-1 h-3 w-3" />
+                    </>
                   ) : doc.isVerified ? (
                     <>
                       Verified <CheckCircle2 className="ml-1 h-3 w-3" />
@@ -929,7 +1369,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     );
   };
 
-  // Render employee skills section
   const renderSkills = () => {
     if (shareMode && !sharedDataOptions?.personalInfo) return null;
     return (
@@ -950,7 +1389,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     );
   };
 
-  // Render resume analysis
   const renderResumeAnalysis = () => {
     if (!resumeAnalysis) return null;
 
@@ -1087,11 +1525,9 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     );
   };
 
-  // Render work history as a timeline
   const renderWorkHistory = () => {
     if (workHistory.length === 0) return null;
 
-    // Sort work history by start year (descending)
     const sortedWorkHistory = [...workHistory].sort((a, b) => {
       const startYearA = parseInt(a.years.split("-")[0], 10) || 0;
       const startYearB = parseInt(b.years.split("-")[0], 10) || 0;
@@ -1103,12 +1539,10 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         <h3 className="text-lg font-medium">Work History</h3>
         <div className="space-y-6">
           {sortedWorkHistory.map((history, index) => {
-            // Parse years to detect gaps
             const [startYear, endYear] = history.years.split("-").map((year) => parseInt(year.trim(), 10) || 0);
             let hasGap = false;
             let gapText = "";
 
-            // Check for gaps by comparing with the next entry (if exists)
             if (index < sortedWorkHistory.length - 1) {
               const nextHistory = sortedWorkHistory[index + 1];
               const nextStartYear = parseInt(nextHistory.years.split("-")[0], 10) || 0;
@@ -1121,15 +1555,12 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
 
             return (
               <div key={index} className="relative pl-8 pb-6">
-                {/* Timeline dot and line */}
                 <div className="absolute left-0 top-0 h-full">
                   <div className="w-4 h-4 bg-indigo-500 rounded-full"></div>
                   {index < sortedWorkHistory.length - 1 && (
                     <div className="absolute top-4 left-[7px] w-[2px] h-full bg-indigo-200"></div>
                   )}
                 </div>
-
-                {/* Timeline content */}
                 <div>
                   <p className={cn("text-xs", hasGap ? "text-red-600" : "text-gray-500")}>
                     {history.years}
@@ -1137,6 +1568,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                   </p>
                   <p className="text-sm font-medium text-gray-900 mt-1">{history.company_name}</p>
                   <p className="text-xs text-gray-600">{history.designation}</p>
+                  <p className="text-xs text-gray-600">Overlapping: {history.overlapping}</p>
                 </div>
               </div>
             );
@@ -1146,7 +1578,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     );
   };
 
-  // Render timeline
   const renderTimeline = () => {
     if (shareMode) return null;
 
@@ -1179,15 +1610,12 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
       <div className="space-y-6">
         {timeline.map((event, index) => (
           <div key={event.id} className="relative pl-8 pb-6">
-            {/* Timeline dot and line */}
             <div className="absolute left-0 top-0 h-full">
               <div className="w-4 h-4 bg-indigo-500 rounded-full"></div>
               {index < timeline.length - 1 && (
                 <div className="absolute top-4 left-[7px] w-[2px] h-full bg-indigo-200"></div>
               )}
             </div>
-
-            {/* Timeline content */}
             <div>
               <p className="text-xs text-gray-500">{formatTimelineDate(event.created_at)}</p>
               <p className="text-sm text-gray-600">
@@ -1196,12 +1624,9 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
               <p className="text-xs font-medium text-gray-900 mt-1">
                 {event.event_data.action}: {event.previous_state.subStatusName} → {event.new_state.subStatusName}
               </p>
-              
               <p className="text-xs text-gray-600">
                 Created by: {event.created_by_name}
               </p>
-
-              {/* Additional event details */}
               {event.event_data.round && (
                 <div className="mt-2 text-xs text-gray-600">
                   <p>Round: {event.event_data.round}</p>
@@ -1249,7 +1674,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     );
   };
 
-  // Render resume preview
   const renderResumePreview = () => {
     return (
       <div className="space-y-6">
@@ -1267,7 +1691,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     );
   };
 
-  // Available tabs based on sharedDataOptions and fetched data, in specified order
   const availableTabs = [
     resumeAnalysis && "resume-analysis",
     (!shareMode || sharedDataOptions?.skillinfo) && "skill-matrix",
@@ -1382,7 +1805,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  // className="sm:absolute sm:right-4 sm:top-6"
                                   onClick={copyMagicLink}
                                 >
                                   {isCopied ? (
@@ -1591,12 +2013,11 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                               >
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                                   <p className="text-sm font-medium">{skill.name}</p>
-                            {skill.experienceYears !== undefined && skill.experienceMonths !== undefined && (
-
-                                  <span className="text-xs text-gray-500 mt-1 sm:mt-0">
-                                    {`${skill.experienceYears}.${skill.experienceMonths} years`}
-                                  </span>
-                            )}
+                                  {skill.experienceYears !== undefined && skill.experienceMonths !== undefined && (
+                                    <span className="text-xs text-gray-500 mt-1 sm:mt-0">
+                                      {`${skill.experienceYears}.${skill.experienceMonths} years`}
+                                    </span>
+                                  )}
                                   <div className="flex mt-2 sm:mt-0">
                                     {[1, 2, 3, 4, 5].map((star) => (
                                       <svg
@@ -1630,7 +2051,26 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                     {(!shareMode || sharedDataOptions?.documentsInfo) && (
                       <TabsContent value="documents">
                         <div className="space-y-6">
-                          <h3 className="text-lg font-medium mb-4">Verification Documents</h3>
+                          <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-medium">Verification Documents</h3>
+                            {!shareMode && (
+                              <Button
+                                onClick={saveDocuments}
+                                variant="secondary"
+                                size="sm"
+                                disabled={isSaving || !Object.values(documents).some(doc => doc.isEditing)}
+                              >
+                                {isSaving ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Saving...
+                                  </>
+                                ) : (
+                                  "Save Changes"
+                                )}
+                              </Button>
+                            )}
+                          </div>
                           {renderDocumentRow("uan", "UAN Number")}
                           {renderDocumentRow("pan", "PAN Number")}
                           {renderDocumentRow("pf", "PF Number")}
@@ -1675,3 +2115,5 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
 };
 
 export default EmployeeProfilePage;
+
+// 

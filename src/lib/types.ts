@@ -129,6 +129,7 @@ export interface JobData {
     clientBudget?: string;
     endClient?: string;
     pointOfContact?: string;
+    currency_type?: string;
   };
   jobCategory?: string;
   primarySkills?: string[];

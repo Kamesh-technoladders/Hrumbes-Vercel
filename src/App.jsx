@@ -13,6 +13,9 @@ import Clients from "./pages/Client";
 import ClientDashboard from "./components/Client/ClientDashboard";
 import ProjectDashboard from "./components/Client/ProjectDashboard";
 import Index from "./pages/Index";
+
+// Password change
+import PasswordChange from "./pages/ChangeEmployeePassword";
 // import EmployeeProfile from "./pages/EmployeeProfile";
 import ProfilePageEmployee from "./pages/ProfilePageEmployee";
 import EmployeeList from "./pages/EmployeeList";
@@ -49,6 +52,9 @@ import CompanyDetail from "./pages/sales/CompanyDetail";
 import CompanyEdit from "./pages/sales/CompanyEdit";
 import ContactsPage from "./pages/sales/ContactsPage";
 
+// Clients
+import ClientPage from "./pages/clients/ClientDashboard";
+
 function App() {
   return (
     <Router>
@@ -82,6 +88,10 @@ function App() {
         >
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+
+            {/* Password Change */}
+            <Route path="/password" element={<PasswordChange />} />
+
             {/* <Route path="/employees" element={<Employee/>} /> */}
             <Route path="/projects" element={<Clients />} />
             <Route path="/client/:id" element={<ClientDashboard />} />
@@ -92,6 +102,8 @@ function App() {
               element={<GlobalSuperadminDashboard />}
             />
 
+            {/* Employee */}
+
             <Route path="employee" element={<EmployeeList />} />
             <Route path="employee/new" element={<EmployeeForm />} />
             <Route path="employee/:id" element={<EmployeeForm />} />
@@ -100,6 +112,9 @@ function App() {
 
             {/* Employee Dashboard Routes */}
             <Route path="/profile" element={<ProfilePageEmployee />} />
+
+            {/* Clients */}
+            <Route path="/clients" element={<ClientPage />} />
 
             {/* Goals */}
             <Route path="/goals" element={<GoalPage />} />

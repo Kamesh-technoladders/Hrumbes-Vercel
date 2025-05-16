@@ -17,11 +17,78 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { Badge } from "../../components/ui/badge";
+import { Calendar } from "../../components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../components/ui/popover";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSelector } from "react-redux";
 import supabase from "../../config/supabaseClient";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { CalendarIcon, X } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "../../lib/utils";
+
+// Mock hr_clients data (replace with actual data fetching if needed)
+const hrClients = [
+  {
+    id: "f25b71eb-283d-4e28-a3ea-8945ec379674",
+    display_name: "Buhler",
+    currency: "INR",
+  },
+  {
+    id: "7fa12834-d986-478c-a583-1f25cf2af502",
+    display_name: "CAI",
+    currency: "INR",
+  },
+  {
+    id: "7f890a98-3ad0-4856-b9e0-04059f2e2735",
+    display_name: "Wilco Source a CitiusTech Company",
+    currency: "INR",
+  },
+  {
+    id: "63c69b34-d638-42e1-9b92-641d8f1ed436",
+    display_name: "Spruce",
+    currency: "INR",
+  },
+  {
+    id: "0a401c89-a44a-4f24-ac7f-2f0ea5a5feda",
+    display_name: "Sanbrix",
+    currency: "INR",
+  },
+  {
+    id: "292b757a-fc32-42be-9f5f-9bcddb470c4d",
+    display_name: "Bruhm",
+    currency: "INR",
+  },
+  {
+    id: "835d036c-14bd-4747-9fdb-ff1018698d31",
+    display_name: "Mindteck",
+    currency: "INR",
+  },
+  {
+    id: "8be04b1d-777b-43f5-9b83-ecfea0ce42a6",
+    display_name: "FeOs Technologies",
+    currency: "INR",
+  },
+  {
+    id: "afb615d7-a7b7-42bf-b1bb-89cfe22a01d2",
+    display_name: "Ascendion",
+    currency: "INR",
+  },
+  {
+    id: "fe0c65a5-62db-4b59-b939-899a7a121445",
+    display_name: "Inno Valley Works",
+    currency: "USD",
+  },
+  {
+    id: "da30dcae-b3f2-43f6-b6ae-5f2a7e3fa37e",
+    display_name: "Object Edge",
+    currency: "USD",
+  },
+];
 
 interface AssignEmployeeDialogProps {
   open: boolean;
@@ -46,11 +113,19 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
       end_date: string;
       salary: string;
       client_billing: string;
+      billing_type: string; // Added billing_type
       status: string;
       sowFile: File | null;
       noOfDays: number;
     }[]
-  >([]); // Initialize as empty array
+  >([]);
+
+  // Get client currency
+  const client = hrClients.find((c) => c.id === clientId);
+  const currencySymbol = client?.currency === "USD" ? "$" : "₹";
+
+  // Billing type options
+  const billingTypeOptions = ["LPA", "Monthly", "Hourly"];
 
   // Fetch employees from `hr_employees`
   useEffect(() => {
@@ -83,6 +158,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
           end_date: "",
           salary: employee.salary?.toString() || "0",
           client_billing: "",
+          billing_type: "Monthly", // Default billing type
           status: "active",
           sowFile: null,
           noOfDays: 0,
@@ -101,7 +177,12 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
   // Handle field changes
   const handleFieldChange = (index: number, field: string, value: any) => {
     const updatedList = [...employeeAssignments];
-    updatedList[index][field] = value;
+    if (field === "start_date" || field === "end_date") {
+      const dateStr = value instanceof Date ? format(value, "yyyy-MM-dd") : "";
+      updatedList[index][field] = dateStr;
+    } else {
+      updatedList[index][field] = value;
+    }
 
     // Calculate duration dynamically when start or end date changes
     if (field === "start_date" || field === "end_date") {
@@ -144,8 +225,14 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
 
       // Validate required fields
       for (const assignment of employeeAssignments) {
-        if (!assignment.assign_employee || !assignment.start_date || !assignment.end_date || !assignment.client_billing) {
-          toast.error("Please fill in all required fields (Employee, Start Date, End Date, Client Billing)");
+        if (
+          !assignment.assign_employee ||
+          !assignment.start_date ||
+          !assignment.end_date ||
+          !assignment.client_billing ||
+          !assignment.billing_type
+        ) {
+          toast.error("Please fill in all required fields (Employee, Start Date, End Date, Client Billing, Billing Type)");
           return;
         }
       }
@@ -171,6 +258,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
             end_date: employee.end_date,
             salary: parseFloat(employee.salary) || 0,
             client_billing: parseFloat(employee.client_billing) || 0,
+            billing_type: employee.billing_type, // Include billing_type
             status: employee.status,
             sow: sowUrl,
             organization_id,
@@ -198,11 +286,11 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto p-6 rounded-lg shadow-xl">
+      <DialogContent className="w-full max-w-[90vw] sm:max-w-4xl max-h-[80vh] overflow-y-auto p-4 sm:p-6 rounded-lg shadow-xl">
         <DialogHeader>
-          <DialogTitle>Assign Employees to Project</DialogTitle>
+          <DialogTitle className="text-lg sm:text-xl">Assign Employees to Project</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Employee Selection */}
           <div>
             <Label htmlFor="employee" className="text-sm font-medium">
@@ -234,7 +322,9 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
                   const employee = employees.find((e) => e.id === employeeId);
                   return (
                     <Badge key={employeeId} variant="secondary" className="p-1 px-2">
-                      {employee?.first_name} {employee?.last_name}
+                      <span className="truncate max-w-[150px]">
+                        {employee?.first_name} {employee?.last_name}
+                      </span>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -252,73 +342,162 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
 
           {/* Employee Assignment Details */}
           {employeeAssignments.length > 0 && (
-            <div className="space-y-4 border rounded-md p-4">
-              <div className="grid grid-cols-7 gap-4 font-medium text-sm py-2 px-1 border-b">
-                <div>Employee</div>
-                <div>Start Date*</div>
-                <div>End Date*</div>
-                <div>Days</div>
-                <div>Salary</div>
-                <div>Client Billing*</div>
-                <div>SOW</div>
-              </div>
-              {employeeAssignments.map((assignment, index) => {
-                const employee = employees.find((e) => e.id === assignment.assign_employee);
-                return (
-                  <div key={index} className="grid grid-cols-7 gap-4 items-center">
-                    <div>
-                      {employee?.first_name} {employee?.last_name}
-                    </div>
-                    <div>
-                      <Input
-                        type="date"
-                        value={assignment.start_date}
-                        onChange={(e) => handleFieldChange(index, "start_date", e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="date"
-                        value={assignment.end_date}
-                        onChange={(e) => handleFieldChange(index, "end_date", e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Input type="number" value={assignment.noOfDays} disabled />
-                    </div>
-                    <div>
-                      <Input
-                        type="number"
-                        value={assignment.salary}
-                        disabled
-                        className="bg-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="number"
-                        value={assignment.client_billing}
-                        onChange={(e) => handleFieldChange(index, "client_billing", e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        type="file"
-                        accept=".pdf,.png,.jpg"
-                        onChange={(e) => handleFileUpload(index, e)}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+  <div className="space-y-4 border rounded-md p-4 overflow-x-auto">
+    {/* Header Row */}
+    <div className="grid grid-cols-7 gap-4 font-medium text-sm py-2 px-2 border-b min-w-[900px]">
+      <div className="min-w-[120px]">Employee</div>
+      <div className="min-w-[140px]">Start Date*</div>
+      <div className="min-w-[140px]">End Date*</div>
+      <div className="min-w-[80px]">Days</div>
+      <div className="min-w-[100px]">Salary</div>
+      <div className="min-w-[200px]">Client Billing*</div>
+      <div className="min-w-[150px]">SOW</div>
+    </div>
+    {/* Employee Rows */}
+    {employeeAssignments.map((assignment, index) => {
+      const employee = employees.find((e) => e.id === assignment.assign_employee);
+      const startDate = assignment.start_date ? new Date(assignment.start_date) : null;
+      const endDate = assignment.end_date ? new Date(assignment.end_date) : null;
+      return (
+        <div
+          key={index}
+          className="grid grid-cols-7 gap-4 items-center py-2 px-2 min-w-[900px]"
+        >
+          {/* Employee Name */}
+          <div className="text-sm min-w-[120px]">
+            {employee?.first_name} {employee?.last_name}
+          </div>
+          {/* Start Date */}
+          <div className="min-w-[140px]">
+            <Label className="text-sm font-medium block mb-1">Start Date*</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal text-sm",
+                    !startDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {startDate ? format(startDate, "PPP") : "Select Date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={startDate}
+                  onSelect={(date) => handleFieldChange(index, "start_date", date)}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                  fromDate={new Date()}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          {/* End Date */}
+          <div className="min-w-[140px]">
+            <Label className="text-sm font-medium block mb-1">End Date*</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal text-sm",
+                    !endDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? format(endDate, "PPP") : "Select Date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={endDate}
+                  onSelect={(date) => handleFieldChange(index, "end_date", date)}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                  fromDate={startDate || new Date()}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          {/* Days */}
+          <div className="min-w-[80px]">
+            <Label className="text-sm font-medium block mb-1">Days</Label>
+            <Input
+              type="number"
+              value={assignment.noOfDays}
+              disabled
+              className="w-full text-sm bg-gray-100"
+            />
+          </div>
+          {/* Salary */}
+          <div className="min-w-[100px]">
+            <Label className="text-sm font-medium block mb-1">Salary</Label>
+            <Input
+              type="number"
+              value={assignment.salary}
+              disabled
+              className="w-full text-sm bg-gray-100"
+            />
+          </div>
+          {/* Client Billing */}
+          <div className="min-w-[200px] flex items-end gap-2">
+            <div className="relative flex-1">
+              <Label className="text-sm font-medium block mb-1">Client Billing*</Label>
+              <span className="absolute left-2 top-[60%] -translate-y-1/2 text-sm text-gray-500">
+                {currencySymbol}
+              </span>
+              <Input
+                type="number"
+                value={assignment.client_billing}
+                onChange={(e) => handleFieldChange(index, "client_billing", e.target.value)}
+                placeholder="Enter billing amount"
+                required
+                className="w-full pl-6 text-sm rounded-r-none"
+              />
             </div>
-          )}
+            <Select
+              value={assignment.billing_type}
+              onValueChange={(value) => handleFieldChange(index, "billing_type", value)}
+              required
+            >
+              <SelectTrigger className="w-[110px] text-sm rounded-l-none border-l-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {billingTypeOptions.map((type) => (
+                  <SelectItem key={type} value={type} className="text-sm">
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* SOW */}
+          <div className="min-w-[150px]">
+            <Label className="text-sm font-medium block mb-1">SOW</Label>
+            <Input
+              type="file"
+              accept=".pdf,.png,.jpg"
+              onChange={(e) => handleFileUpload(index, e)}
+              className="w-full text-sm file:mr-2 file:text-sm"
+            />
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
             <Button
@@ -326,9 +505,15 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId }: Assig
               disabled={
                 employeeAssignments.length === 0 ||
                 employeeAssignments.some(
-                  (a) => !a.assign_employee || !a.start_date || !a.end_date || !a.client_billing
+                  (a) =>
+                    !a.assign_employee ||
+                    !a.start_date ||
+                    !a.end_date ||
+                    !a.client_billing ||
+                    !a.billing_type
                 )
               }
+              className="w-full sm:w-auto"
             >
               Assign Employees
             </Button>
