@@ -387,32 +387,36 @@ const ClientWiseReport: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      <Card>
-        <CardHeader>
+      <Card className="shadow-lg border-0 overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
           <CardTitle>Detailed Report</CardTitle>
+          </div>
           <div className="flex space-x-2">
-            <Button onClick={exportToCSV} variant="outline">
+            <Button onClick={exportToCSV} variant="secondary" className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 transition-all duration-200 rounded-lg">
               Download CSV
             </Button>
-            <Button onClick={exportToPDF} variant="outline">
+            <Button onClick={exportToPDF} variant="secondary" className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 transition-all duration-200 rounded-lg">
               Download PDF
             </Button>
-            <Button onClick={sendReport} variant="outline">
+            <Button onClick={sendReport} variant="secondary" className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 transition-all duration-200 rounded-lg">
               Send Email
             </Button>
+          </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-white">Client Name</TableHead>
-                  <TableHead>Total Candidates</TableHead>
+                <TableRow className="bg-indigo-50 border-b border-indigo-100">
+                  <TableHead className="sticky left-0 bg-white cursor-pointer whitespace-nowrap text-indigo-900 font-semibold hover:bg-indigo-100 transition-colors duration-200 py-4 sticky left-0 bg-white whitespace-nowrap">Client Name</TableHead>
+                  <TableHead className="cursor-pointer whitespace-nowrap text-indigo-900 font-semibold hover:bg-indigo-100 transition-colors duration-200 py-4 sticky left-0 bg-white whitespace-nowrap">Total Candidates</TableHead>
                   {reportData[0]?.statusBreakdown.map(status => (
                     <TableHead
                       key={status.statusName}
-                      className="max-w-[150px] truncate"
+                      className="max-w-[150px] truncate cursor-pointer whitespace-nowrap text-indigo-900 font-semibold hover:bg-indigo-100 transition-colors duration-200 py-4 sticky left-0 bg-white whitespace-nowrap"
                       title={status.statusName === 'Interview' ? 'Interviewed' : status.statusName}
                     >
                       {status.statusName === 'Interview' ? 'Interviewed' : status.statusName}

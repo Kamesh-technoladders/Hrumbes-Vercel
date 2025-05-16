@@ -43,6 +43,9 @@ import InvoicesPage from "./pages/finance/accounts/InvoicesPage";
 import ExpensesPage from "./pages/finance/accounts/ExpensesPage";
 import Payroll from "./pages/payroll/index";
 import AccountsOverview from "./pages/finance/accounts/AccountsOverview";
+import PayrollRun from '././pages/payroll/index';
+import PayrollDetails from './pages/payroll/PayrollDetails';
+
 // Sales Companies and Contacts
 import CompaniesPage from "./pages/sales/CompaniesPage";
 import CompanyDetail from "./pages/sales/CompanyDetail";
@@ -127,6 +130,8 @@ function App() {
           <Route path="/accounts/expenses" element={<ExpensesPage />} />
           <Route path="/payroll" element={<Payroll />} />
           <Route path="/accounts/overall" element={<AccountsOverview />} />
+          <Route path="/payrollrun" element={<PayrollRun />} />
+          <Route path="/payroll/:year/:month" element={<PayrollDetails />} />
 
 
           {/* Sales Companies and Contacts */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAccountsStore, Expense, ExpenseCategory, PaymentMethod } from '@/lib/accounts-data';
+import { useAccountsStore, ExpenseCategory, PaymentMethod } from '@/lib/accounts-data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface ExpenseFormProps {
-  expense?: Expense;
+  expense?: {
+    id: string;
+    category: ExpenseCategory;
+    description: string;
+    date: string;
+    amount: number;
+    paymentMethod: PaymentMethod;
+    receiptUrl?: string;
+    notes?: string;
+    vendor?: string;
+    organizationId?: string;
+    createdBy?: string;
+    status?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
   onClose: () => void;
 }
 
@@ -23,7 +38,7 @@ const formatDateString = (date: Date): string => {
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose }) => {
   const { addExpense, updateExpense } = useAccountsStore();
-  
+
   // Form state
   const [category, setCategory] = useState<ExpenseCategory>(expense?.category || 'Office Supplies');
   const [description, setDescription] = useState(expense?.description || '');
@@ -221,10 +236,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose }) => {
       description,
       date: parsedDate,
       amount: parseFloat(amount),
-      payment_method: paymentMethod,
-      vendor: vendor || null,
-      notes: notes || null,
-      receipt_url: finalReceiptUrl || null,
+      paymentMethod,
+      vendor: vendor || undefined,
+      notes: notes || undefined,
+      receiptUrl: finalReceiptUrl,
     };
 
     console.log('Expense data to be saved:', expenseData);
@@ -232,55 +247,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose }) => {
     try {
       if (expense) {
         console.log('Updating expense with ID:', expense.id);
-        const { data, error } = await supabase
-          .from('hr_expenses')
-          .update({
-            category: expenseData.category,
-            description: expenseData.description,
-            date: expenseData.date,
-            amount: expenseData.amount,
-            payment_method: expenseData.payment_method,
-            vendor: expenseData.vendor,
-            notes: expenseData.notes,
-            receipt_url: expenseData.receipt_url,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', expense.id)
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Update error:', error.message);
-          throw new Error(`Failed to update expense: ${error.message}`);
-        }
-        console.log('Updated expense:', data);
-        await updateExpense(expense.id, { ...expenseData, receiptUrl: finalReceiptUrl });
+        await updateExpense(expense.id, expenseData);
         toast.success('Expense updated successfully.');
       } else {
         console.log('Adding new expense');
-        const { data, error } = await supabase
-          .from('hr_expenses')
-          .insert({
-            category: expenseData.category,
-            description: expenseData.description,
-            date: expenseData.date,
-            amount: expenseData.amount,
-            payment_method: expenseData.payment_method,
-            vendor: expenseData.vendor,
-            notes: expenseData.notes,
-            receipt_url: expenseData.receipt_url,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Insert error:', error.message);
-          throw new Error(`Failed to add expense: ${error.message}`);
-        }
-        console.log('Inserted expense:', data);
-        await addExpense({ ...expenseData, receiptUrl: finalReceiptUrl });
+        await addExpense(expenseData);
         toast.success('Expense added successfully.');
       }
       onClose();
