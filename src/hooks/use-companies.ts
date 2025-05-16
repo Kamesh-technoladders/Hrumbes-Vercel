@@ -39,7 +39,7 @@ function parseFinancialValue(value: any): number | null { /* ... (your existing 
       const number = parseFloat(numStr);
       return !isNaN(number) ? number * multiplier : null;
     } catch (e) {
-      console.warn("Could not parse financial value string:", value, e);
+      // console.warn("Could not parse financial value string:", value, e); // Reduced logging
       return null;
     }
   }
@@ -57,7 +57,7 @@ function fixMalformedJson(text: string): string { /* ... (your existing function
   }
   fixedText = fixedText.substring(firstBrace, lastBrace + 1);
   try { fixedText = fixedText.replace(/,\s*([\}\]])/g, '$1'); }
-  catch(e) { console.warn("Regex for trailing comma removal failed:", e); }
+  catch(e) { /* console.warn("Regex for trailing comma removal failed:", e); */ } // Reduced logging
   fixedText = fixedText.replace(/,\s*$/, '');
   if (fixedText.includes('"key_people"')) {
       fixedText = fixedText.replace(/"key_people"\s*:\s*\[\s*,/g, '"key_people": [');
@@ -162,9 +162,14 @@ export const useCompanyDetails = (id: number | string | undefined) => { /* ... (
 }
 
 // Define a type for the data we expect from resume_analysis
-type ResumeAnalysisInfo = Pick<Database['public']['Tables']['resume_analysis']['Row'], 
+type ResumeAnalysisData = Pick<Database['public']['Tables']['resume_analysis']['Row'], 
   'candidate_id' | 'job_id' | 'candidate_name' | 'email' | 'phone_number' | 'linkedin'
 >;
+// Define a type for the data we expect from candidate_resume_analysis
+type CandidateResumeAnalysisData = Pick<Database['public']['Tables']['candidate_resume_analysis']['Row'], 
+  'candidate_id' | 'job_id' | 'candidate_name' | 'email' | 'phone_number' | 'linkedin'
+>;
+
 
 // --- Hook to fetch associated employees for a specific company ---
 export const useCompanyEmployees = (companyId: number | string | undefined) => {
@@ -229,90 +234,139 @@ export const useCompanyEmployees = (companyId: number | string | undefined) => {
           throw newAssocError; 
         }
 
-        const resumeAnalysisLookups: { candidate_id: string; job_id: string }[] = [];
+        // --- Consolidate (candidate_id, job_id) pairs for lookups ---
+        const lookups: { candidate_id: string; job_id: string | null }[] = [];
         (legacyLinks || []).forEach(link => {
-            if (link.candidate_id && link.job_id) {
-                resumeAnalysisLookups.push({ candidate_id: String(link.candidate_id), job_id: String(link.job_id) });
+            if (link.candidate_id) { // job_id can be null here if we want to try matching only by candidate_id later
+                lookups.push({ candidate_id: String(link.candidate_id), job_id: link.job_id ? String(link.job_id) : null });
             }
         });
         (newAssociations || []).forEach(assoc => {
-            if (assoc.candidate_id && assoc.job_id) {
-                 resumeAnalysisLookups.push({ candidate_id: String(assoc.candidate_id), job_id: String(assoc.job_id) });
-            } else if (assoc.candidate_id && !assoc.job_id) {
-                 console.warn(`Employee association (id: ${assoc.id}) for candidate ${assoc.candidate_id} has a null job_id. Cannot look up in resume_analysis precisely by (candidate_id, job_id) pair for this record.`);
+            if (assoc.candidate_id) {
+                 lookups.push({ candidate_id: String(assoc.candidate_id), job_id: assoc.job_id ? String(assoc.job_id) : null });
             }
         });
         
-        const uniqueResumeAnalysisLookups = Array.from(new Set(resumeAnalysisLookups.map(l => JSON.stringify(l)))).map(s => JSON.parse(s));
+        const uniqueLookups = Array.from(new Set(lookups.map(l => JSON.stringify(l)))).map(s => JSON.parse(s));
 
-        let resumeAnalysisDetailsMap = new Map<string, ResumeAnalysisInfo>(); 
-
-        if (uniqueResumeAnalysisLookups.length > 0) {
-          console.log(`useCompanyEmployees: Fetching resume_analysis details for pairs:`, uniqueResumeAnalysisLookups);
-          
-          // CORRECTED .or() filter syntax
-          const filterConditions = uniqueResumeAnalysisLookups
-            .map(lookup => `and(candidate_id.eq.${lookup.candidate_id},job_id.eq.${lookup.job_id})`) // Each 'and' is a single condition string
-            .join(','); // Comma separate each 'and' group for the 'or'
-          
-          if (filterConditions) {
-            const { data: raData, error: raError } = await supabase
-              .from('resume_analysis') 
-              .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
-              .or(filterConditions); // Apply the OR filter
-            
-            if (raError) {
-              console.error('useCompanyEmployees: Error fetching resume_analysis details:', raError);
-            } else {
-              (raData || []).forEach(ra => {
-                if (ra.candidate_id && ra.job_id) {
-                    resumeAnalysisDetailsMap.set(`${String(ra.candidate_id)}|${String(ra.job_id)}`, ra as ResumeAnalysisInfo);
+        // --- Fetch from candidate_resume_analysis ---
+        let candidateResumeAnalysisMap = new Map<string, CandidateResumeAnalysisData>();
+        if (uniqueLookups.length > 0) {
+            const craLookups = uniqueLookups.filter(l => l.job_id && /^[0-9a-fA-F-]{36}$/.test(l.job_id)); // Only if job_id is a valid UUID for this table
+            if (craLookups.length > 0) {
+                const craFilterConditions = craLookups
+                    .map(lookup => `and(candidate_id.eq.${lookup.candidate_id},job_id.eq.${lookup.job_id})`)
+                    .join(',');
+                console.log(`useCompanyEmployees: Fetching candidate_resume_analysis details for pairs:`, craLookups);
+                const { data: craData, error: craError } = await supabase
+                    .from('candidate_resume_analysis')
+                    .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
+                    .or(craFilterConditions);
+                if (craError) {
+                    console.error('useCompanyEmployees: Error fetching candidate_resume_analysis details:', craError);
+                } else {
+                    (craData || []).forEach(cra => {
+                        if (cra.candidate_id && cra.job_id) {
+                            candidateResumeAnalysisMap.set(`${String(cra.candidate_id)}|${String(cra.job_id)}`, cra as CandidateResumeAnalysisData);
+                        }
+                    });
+                    console.log(`useCompanyEmployees: Successfully fetched ${candidateResumeAnalysisMap.size} candidate_resume_analysis details.`);
                 }
-              });
-              console.log(`useCompanyEmployees: Successfully fetched ${resumeAnalysisDetailsMap.size} resume_analysis details.`);
             }
-          } else {
-            console.log("useCompanyEmployees: No valid filter conditions for resume_analysis.");
-          }
         }
 
+        // --- Fetch from resume_analysis ---
+        let resumeAnalysisDetailsMap = new Map<string, ResumeAnalysisData>();
+        if (uniqueLookups.length > 0) {
+            // For resume_analysis, job_id is TEXT, so all job_id types from source are fine
+            const raLookups = uniqueLookups.filter(l => l.job_id); // Must have a job_id
+            if (raLookups.length > 0) {
+                const raFilterConditions = raLookups
+                    .map(lookup => `and(candidate_id.eq.${lookup.candidate_id},job_id.eq.${lookup.job_id})`)
+                    .join(',');
+                console.log(`useCompanyEmployees: Fetching resume_analysis details for pairs:`, raLookups);
+                const { data: raData, error: raError } = await supabase
+                    .from('resume_analysis') 
+                    .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
+                    .or(raFilterConditions);
+                if (raError) {
+                    console.error('useCompanyEmployees: Error fetching resume_analysis details:', raError);
+                } else {
+                    (raData || []).forEach(ra => {
+                        if (ra.candidate_id && ra.job_id) {
+                            resumeAnalysisDetailsMap.set(`${String(ra.candidate_id)}|${String(ra.job_id)}`, ra as ResumeAnalysisData);
+                        }
+                    });
+                    console.log(`useCompanyEmployees: Successfully fetched ${resumeAnalysisDetailsMap.size} resume_analysis details.`);
+                }
+            }
+        }
+        
         const mappedLegacyDetails: CandidateDetail[] = (legacyLinks || []).map((ccLink): CandidateDetail => {
-          const resumeKey = (ccLink.candidate_id && ccLink.job_id) ? `${String(ccLink.candidate_id)}|${String(ccLink.job_id)}` : null;
+          const jobKeyPart = ccLink.job_id ? String(ccLink.job_id) : "NULL_JOB"; // Handle null job_id for map key
+          const candResumeKey = (ccLink.candidate_id && ccLink.job_id && /^[0-9a-fA-F-]{36}$/.test(ccLink.job_id)) ? `${String(ccLink.candidate_id)}|${jobKeyPart}` : null;
+          const resumeKey = (ccLink.candidate_id && ccLink.job_id) ? `${String(ccLink.candidate_id)}|${jobKeyPart}` : null;
+          
+          const candAnalysisDetail = candResumeKey ? candidateResumeAnalysisMap.get(candResumeKey) : null;
           const analysisDetail = resumeKey ? resumeAnalysisDetailsMap.get(resumeKey) : null;
+
+          const name = candAnalysisDetail?.candidate_name && candAnalysisDetail.candidate_name !== 'Unknown' 
+                       ? candAnalysisDetail.candidate_name 
+                       : (analysisDetail?.candidate_name && analysisDetail.candidate_name !== 'Unknown' 
+                          ? analysisDetail.candidate_name 
+                          : `Legacy: ${String(ccLink.candidate_id)?.substring(0,8) ?? 'N/A'}`);
+          const email = candAnalysisDetail?.email || analysisDetail?.email || null;
+          const phone = candAnalysisDetail?.phone_number || analysisDetail?.phone_number || null;
+          const linkedin = candAnalysisDetail?.linkedin || analysisDetail?.linkedin || null;
+
           return {
             id: `cc-${ccLink.candidate_id}-${ccLink.job_id}-${ccLink.company_id}`,
             candidate_id: String(ccLink.candidate_id),
-            name: analysisDetail?.candidate_name || `Legacy: ${String(ccLink.candidate_id)?.substring(0,8) ?? 'N/A'}`,
-            email: analysisDetail?.email || null,
-            phone_number: analysisDetail?.phone_number || null,
-            linkedin: analysisDetail?.linkedin || null,
+            name: name,
+            email: email,
+            phone_number: phone,
+            linkedin: linkedin,
             designation: ccLink.designation || null,
             contact_owner: ccLink.contact_owner || null,
             contact_stage: ccLink.contact_stage || null,
             source_table: 'candidate_companies',
             company_id: ccLink.company_id,
-            job_id: String(ccLink.job_id),
+            job_id: ccLink.job_id ? String(ccLink.job_id) : null,
             years: ccLink.years || null,
             association_id: null,
           };
         });
 
         const mappedNewDetails: CandidateDetail[] = (newAssociations || []).map((assoc): CandidateDetail => {
-             const resumeKey = (assoc.candidate_id && assoc.job_id) ? `${String(assoc.candidate_id)}|${String(assoc.job_id)}` : null;
+             const jobKeyPart = assoc.job_id ? String(assoc.job_id) : "NULL_JOB";
+             const candResumeKey = (assoc.candidate_id && assoc.job_id && /^[0-9a-fA-F-]{36}$/.test(assoc.job_id)) ? `${String(assoc.candidate_id)}|${jobKeyPart}` : null;
+             const resumeKey = (assoc.candidate_id && assoc.job_id) ? `${String(assoc.candidate_id)}|${jobKeyPart}` : null;
+
+             const candAnalysisDetail = candResumeKey ? candidateResumeAnalysisMap.get(candResumeKey) : null;
              const analysisDetail = resumeKey ? resumeAnalysisDetailsMap.get(resumeKey) : null;
+
+             const name = candAnalysisDetail?.candidate_name && candAnalysisDetail.candidate_name !== 'Unknown' 
+                          ? candAnalysisDetail.candidate_name 
+                          : (analysisDetail?.candidate_name && analysisDetail.candidate_name !== 'Unknown' 
+                             ? analysisDetail.candidate_name 
+                             : `Assoc: ${String(assoc.candidate_id)?.substring(0,8) ?? 'N/A'}`);
+             const email = candAnalysisDetail?.email || analysisDetail?.email || null;
+             const phone = candAnalysisDetail?.phone_number || analysisDetail?.phone_number || null;
+             const linkedin = candAnalysisDetail?.linkedin || analysisDetail?.linkedin || null;
+
              return {
                id: String(assoc.id), 
                candidate_id: String(assoc.candidate_id),
-               name: analysisDetail?.candidate_name || `Assoc: ${String(assoc.candidate_id)?.substring(0,8) ?? 'N/A'}`,
-               email: analysisDetail?.email || null,
-               phone_number: analysisDetail?.phone_number || null,
-               linkedin: analysisDetail?.linkedin || null,
+               name: name,
+               email: email,
+               phone_number: phone,
+               linkedin: linkedin,
                designation: assoc.designation || null,
                contact_owner: assoc.contact_owner || null,
                contact_stage: assoc.contact_stage || null,
                source_table: 'employee_associations',
                company_id: assoc.company_id,
-               job_id: String(assoc.job_id),
+               job_id: assoc.job_id ? String(assoc.job_id) : null,
                association_id: String(assoc.id),
                association_start_date: assoc.start_date,
                association_end_date: assoc.end_date,
@@ -343,7 +397,7 @@ export const useCompanyEmployees = (companyId: number | string | undefined) => {
 
 
 // --- Hook to get company and employee counts ---
-export const useCompanyCounts = () => { /* ... (your existing hook, ensure it's correct) ... */ 
+export const useCompanyCounts = () => { /* ... (your existing hook) ... */ 
   return useQuery<{ companies: number; employees: number }, Error>({
     queryKey: ['company-counts'],
     queryFn: async () => {
