@@ -1,844 +1,278 @@
-
-// import React from "react";
-// import { useForm } from "react-hook-form";
-// import { zodResolver } from "@hookform/resolvers/zod";
-// import { z } from "zod";
-// import { useMutation, useQueryClient } from "@tanstack/react-query";
-// import { supabase } from "@/integrations/supabase/client";
-// import { CompanyDetail } from "@/types/company";
-// import { Button } from "@/components/ui/button";
-// import { Input } from "@/components/ui/input";
-// import { Textarea } from "@/components/ui/textarea";
-// import {
-//   Form,
-//   FormControl,
-//   FormField,
-//   FormItem,
-//   FormLabel,
-//   FormMessage,
-// } from "@/components/ui/form";
-// import {
-//   Select,
-//   SelectContent,
-//   SelectItem,
-//   SelectTrigger,
-//   SelectValue,
-// } from "@/components/ui/select";
-// import { useToast } from "@/hooks/use-toast";
-// import { DialogFooter } from "@/components/ui/dialog";
-
-// const formSchema = z.object({
-//   name: z.string().min(1, "Company name is required"),
-//   status: z.string().optional(),
-//   domain: z.string().optional(),
-//   website: z.string().optional(),
-//   about: z.string().optional(),
-//   logo_url: z.string().optional(),
-//   employee_count: z.union([
-//     z.string().transform(val => {
-//       if (val === "") return null;
-//       const parsed = parseInt(val);
-//       return isNaN(parsed) ? null : parsed;
-//     }),
-//     z.number().nullable(),
-//   ]).optional(),
-//   revenue: z.union([ /* ... parsing logic ... */ ]).optional().nullable(),
-//   cashflow: z.union([ /* ... parsing logic ... */ ]).optional().nullable(),
-// });
-
-// type FormValues = z.infer<typeof formSchema>;
-
-// interface CompanyEditFormProps {
-//   company: CompanyDetail | null;
-// }
-
-// const CompanyEditForm: React.FC<CompanyEditFormProps> = ({ company }) => {
-//   const { toast } = useToast();
-//   const queryClient = useQueryClient();
-  
-//   const form = useForm<FormValues>({
-//     resolver: zodResolver(formSchema),
-//     defaultValues: {
-//       name: company?.name || "",
-//       status: company?.status || "Customer",
-//       domain: company?.domain || "",
-//       website: company?.website || "",
-//       about: company?.about || "",
-//       logo_url: company?.logo_url || "",
-//       employee_count: company?.employee_count || null,
-//     },
-//   });
-  
-//   const updateCompany = useMutation({
-//     mutationFn: async (data: FormValues) => {
-//       if (!company) throw new Error("No company selected");
-      
-//       const { error } = await supabase
-//         .from('companies')
-//         .update(data)
-//         .eq('id', company.id);
-        
-//       if (error) throw error;
-//     },
-//     onSuccess: () => {
-//       toast({
-//         title: "Company updated",
-//         description: "Company information has been successfully updated",
-//       });
-//       queryClient.invalidateQueries({ queryKey: ['companies'] });
-//       queryClient.invalidateQueries({ queryKey: ['company', company?.id] });
-//     },
-//     onError: (error) => {
-//       toast({
-//         title: "Update failed",
-//         description: error.message,
-//         variant: "destructive",
-//       });
-//     }
-//   });
-  
-//   const onSubmit = (data: FormValues) => {
-//     updateCompany.mutate(data);
-//   };
-  
-//   return (
-//     <Form {...form}>
-//       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-//         <FormField
-//           control={form.control}
-//           name="name"
-//           render={({ field }) => (
-//             <FormItem>
-//               <FormLabel>Company Name*</FormLabel>
-//               <FormControl>
-//                 <Input placeholder="Enter company name" {...field} />
-//               </FormControl>
-//               <FormMessage />
-//             </FormItem>
-//           )}
-//         />
-        
-//         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-//           <FormField
-//             control={form.control}
-//             name="status"
-//             render={({ field }) => (
-//               <FormItem>
-//                 <FormLabel>Status</FormLabel>
-//                 <Select 
-//                   onValueChange={field.onChange} 
-//                   defaultValue={field.value}
-//                 >
-//                   <FormControl>
-//                     <SelectTrigger>
-//                       <SelectValue placeholder="Select status" />
-//                     </SelectTrigger>
-//                   </FormControl>
-//                   <SelectContent>
-//                     <SelectItem value="Customer">Customer</SelectItem>
-//                     <SelectItem value="Prospect">Prospect</SelectItem>
-//                     <SelectItem value="Partner">Partner</SelectItem>
-//                     <SelectItem value="Vendor">Vendor</SelectItem>
-//                   </SelectContent>
-//                 </Select>
-//                 <FormMessage />
-//               </FormItem>
-//             )}
-//           />
-          
-//           <FormField
-//             control={form.control}
-//             name="employee_count"
-//             render={({ field }) => (
-//               <FormItem>
-//                 <FormLabel>Employees</FormLabel>
-//                 <FormControl>
-//                   <Input 
-//                     type="number" 
-//                     placeholder="Number of employees" 
-//                     {...field} 
-//                     value={field.value === null ? "" : field.value}
-//                     onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value))}
-//                   />
-//                 </FormControl>
-//                 <FormMessage />
-//               </FormItem>
-//             )}
-//           />
-//         </div>
-        
-//         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-//           <FormField
-//             control={form.control}
-//             name="domain"
-//             render={({ field }) => (
-//               <FormItem>
-//                 <FormLabel>Domain</FormLabel>
-//                 <FormControl>
-//                   <Input placeholder="Company domain" {...field} />
-//                 </FormControl>
-//                 <FormMessage />
-//               </FormItem>
-//             )}
-//           />
-          
-//           <FormField
-//             control={form.control}
-//             name="website"
-//             render={({ field }) => (
-//               <FormItem>
-//                 <FormLabel>Website</FormLabel>
-//                 <FormControl>
-//                   <Input placeholder="Company website" {...field} />
-//                 </FormControl>
-//                 <FormMessage />
-//               </FormItem>
-//             )}
-//           />
-//         </div>
-        
-//         <FormField
-//           control={form.control}
-//           name="logo_url"
-//           render={({ field }) => (
-//             <FormItem>
-//               <FormLabel>Logo URL</FormLabel>
-//               <FormControl>
-//                 <Input placeholder="URL of company logo" {...field} />
-//               </FormControl>
-//               <FormMessage />
-//             </FormItem>
-//           )}
-//         />
-        
-//         <FormField
-//           control={form.control}
-//           name="about"
-//           render={({ field }) => (
-//             <FormItem>
-//               <FormLabel>About</FormLabel>
-//               <FormControl>
-//                 <Textarea 
-//                   placeholder="Description of the company" 
-//                   className="min-h-[60px] max-h-[120px]" 
-//                   {...field} 
-//                 />
-//               </FormControl>
-//               <FormMessage />
-//             </FormItem>
-//           )}
-//         />
-        
-//         <DialogFooter className="mt-4">
-//           <Button type="button" variant="outline" size="sm" className="h-9">
-//             Cancel
-//           </Button>
-//           <Button type="submit" size="sm" className="h-9" disabled={updateCompany.isPending}>
-//             {updateCompany.isPending ? "Saving..." : "Save Changes"}
-//           </Button>
-//         </DialogFooter>
-//       </form>
-//     </Form>
-//   );
-// };
-
-// export default CompanyEditForm;
-
-
-
-
-// // src/components/CompanyEditForm.tsx
-// import React, { useEffect } from "react";
-// // If used as a standalone page, uncomment:
-// // import { useNavigate } from "react-router-dom";
-// // import { useParams } from "react-router-dom";
-// import { useMutation, useQueryClient } from "@tanstack/react-query";
-// import { supabase } from "@/integrations/supabase/client";
-// import { z } from "zod";
-// import { zodResolver } from "@hookform/resolvers/zod";
-// import { useForm } from "react-hook-form";
-// import { Button } from "@/components/ui/button";
-// import { Input } from "@/components/ui/input";
-// import { Textarea } from "@/components/ui/textarea";
-// import {
-//   Select,
-//   SelectContent,
-//   SelectItem,
-//   SelectTrigger,
-//   SelectValue,
-// } from "@/components/ui/select"; // Keep Select import
-// import {
-//   Form,
-//   FormControl,
-//   FormField,
-//   FormItem,
-//   FormLabel,
-//   FormMessage,
-// } from "@/components/ui/form";
-// import { useToast } from "@/hooks/use-toast";
-// // Use the more detailed type if available, otherwise base Company
-// import { CompanyDetail as CompanyDetailType, Company } from "@/types/company";
-// import { Database } from "@/types/database.types"; // Import generated types
-
-// // Define possible stages for dropdown (if used)
-// const STAGES = ['Current Client', 'Cold', 'Active Opportunity', 'Dead Opportunity', 'Do Not Prospect'];
-
-// // Define possible statuses for dropdown
-// const STATUSES = ["Customer", "Prospect", "Partner", "Vendor", "Former Customer", "Other"]; // Add more as needed
-
-// // Define props for the component
-// interface CompanyEditFormProps {
-//   company: Company | CompanyDetailType | null; // Accept the company data
-//   onClose: () => void; // Callback to close the modal (required if used in modal)
-// }
-
-// // Alias for Supabase Update type
-// type CompanyUpdate = Database['public']['Tables']['companies']['Update'];
-
-// // --- UPDATED Zod Schema ---
-// // Includes all editable fields from your companies table definition
-// const formSchema = z.object({
-//   name: z.string().min(1, "Company name is required"),
-//   website: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-//   domain: z.string().optional().nullable(),
-//   status: z.string().optional().nullable(), // e.g., Customer, Prospect
-//   about: z.string().optional().nullable(),
-//   start_date: z.string().optional().nullable(), // Keep as string for date input
-//   ceo: z.string().optional().nullable(),
-//   employee_count: z.union([
-//     z.string()
-//       .transform(val => (val === "" || val == null || isNaN(Number(val))) ? null : parseInt(String(val), 10)) // Convert empty string/null/NaN to null, else parse
-//       .refine(val => val === null || !isNaN(val), { message: "Must be a valid number" }), // Ensure result is null or number
-//     z.number().int().positive().nullable() // Allow direct number input or null
-//   ]).optional().nullable(), // Make the whole field optional and nullable
-//   address: z.string().optional().nullable(),
-//   linkedin: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-//   industry: z.string().optional().nullable(),
-//   stage: z.string().optional().nullable(), // Consider enum if using Select
-//   location: z.string().optional().nullable(),
-//   account_owner: z.string().optional().nullable(), // <<< ADDED
-//   twitter: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-//   facebook: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-//   // --- ADDED FINANCIAL FIELDS ---
-//   revenue: z.union([
-//      z.string().transform(val => (val === "" || val == null) ? null : parseFloat(String(val).replace(/[$,€£¥₹,\s]/g, ''))).refine(val => val === null || !isNaN(val), { message: "Invalid number" }).nullable(),
-//      z.number().nullable()
-//   ]).optional().nullable(),
-//   cashflow: z.union([
-//      z.string().transform(val => (val === "" || val == null) ? null : parseFloat(String(val).replace(/[$,€£¥₹,\s]/g, ''))).refine(val => val === null || !isNaN(val), { message: "Invalid number" }).nullable(),
-//      z.number().nullable()
-//   ]).optional().nullable(),
-//   // Exclude: id, created_at, updated_at, logo_url (handle logo separately if needed)
-// });
-
-// // Infer TS type from Zod schema
-// type FormValues = z.infer<typeof formSchema>;
-
-// const CompanyEditForm = ({ company, onClose }: CompanyEditFormProps) => {
-//   // If used as standalone page, uncomment:
-//   // const navigate = useNavigate();
-//   // const { id } = useParams<{ id: string }>();
-//   // const companyId = company?.id || (id ? parseInt(id) : 0); // Get ID from prop or params
-
-//   const companyId = company?.id; // Get ID from the passed company object
-//   const queryClient = useQueryClient();
-//   const { toast } = useToast();
-
-//   const form = useForm<FormValues>({
-//     resolver: zodResolver(formSchema),
-//     // Initialize with empty strings or nulls, then populate via useEffect
-//     defaultValues: {
-//       name: "", website: "", domain: "", status: "Customer", // Default status
-//       about: "", start_date: "", ceo: "", employee_count: null, address: "",
-//       linkedin: "", industry: "", stage: "Cold", // Default stage
-//       location: "", account_owner: "", twitter: "", facebook: "",
-//       revenue: null, cashflow: null, // Initialize new fields
-//     },
-//   });
-
-//   // Populate form when company data is loaded or changes
-//   useEffect(() => {
-//     if (company) {
-//       form.reset({
-//         name: company.name || "",
-//         website: company.website || "",
-//         domain: company.domain || "",
-//         status: company.status || "Customer", // Use default if null
-//         about: company.about || "",
-//         start_date: company.start_date || "", // Assuming start_date is string YYYY-MM-DD
-//         ceo: company.ceo || "",
-//         employee_count: company.employee_count ?? null, // Handle potential null
-//         address: company.address || "",
-//         linkedin: company.linkedin || "",
-//         industry: company.industry || "",
-//         stage: company.stage || "Cold", // Use default if null
-//         location: company.location || "",
-//         account_owner: company.account_owner || "", // <<< ADDED
-//         twitter: company.twitter || "",
-//         facebook: company.facebook || "",
-//         revenue: company.revenue ?? null, // <<< ADDED
-//         cashflow: company.cashflow ?? null, // <<< ADDED
-//       });
-//     }
-//   }, [company, form]); // Rerun effect if company data changes
-
-//   // Mutation for updating the company
-//   const updateCompanyMutation = useMutation({
-//     mutationFn: async (data: FormValues) => {
-//       if (!companyId) throw new Error("Company ID is missing for update.");
-
-//       // Prepare data for Supabase, ensuring correct types and nulls
-//       // Explicitly type to ensure all fields are considered
-//       const updateData: CompanyUpdate = {
-//         name: data.name,
-//         website: data.website || null,
-//         domain: data.domain || null,
-//         status: data.status || null,
-//         about: data.about || null,
-//         start_date: data.start_date || null,
-//         ceo: data.ceo || null,
-//         employee_count: data.employee_count ?? null, // Already number | null from Zod
-//         address: data.address || null,
-//         linkedin: data.linkedin || null,
-//         industry: data.industry || null,
-//         stage: data.stage || null,
-//         location: data.location || null,
-//         account_owner: data.account_owner || null, // <<< ADDED
-//         twitter: data.twitter || null,
-//         facebook: data.facebook || null,
-//         revenue: data.revenue ?? null, // <<< ADDED (already number | null from Zod)
-//         cashflow: data.cashflow ?? null, // <<< ADDED (already number | null from Zod)
-//         // Exclude non-editable fields like id, created_at, updated_at, logo_url
-//       };
-
-//       // Remove undefined properties just in case (though Zod should handle it)
-//       Object.keys(updateData).forEach(key => updateData[key as keyof CompanyUpdate] === undefined && delete updateData[key as keyof CompanyUpdate]);
-
-
-//       console.log("Updating company ID:", companyId, "with data:", updateData);
-
-//       const { error } = await supabase
-//         .from('companies')
-//         .update(updateData)
-//         .eq('id', companyId); // Use the correct company ID
-
-//       if (error) {
-//           console.error("Supabase update error:", error);
-//           throw error;
-//       }
-//     },
-//     onSuccess: () => {
-//       toast({
-//         title: "Company Updated",
-//         description: "Information saved successfully.",
-//       });
-//       // Invalidate queries to refetch data
-//       queryClient.invalidateQueries({ queryKey: ['company', companyId] }); // Detail view
-//       queryClient.invalidateQueries({ queryKey: ['companies'] }); // List view
-//       onClose(); // Close the modal passed from parent
-//     },
-//     onError: (error: any) => {
-//       toast({
-//         title: "Update Failed",
-//         description: error.message || "Could not save changes.",
-//         variant: "destructive",
-//       });
-//     }
-//   });
-
-//   // Form submission handler
-//   const onSubmit = (data: FormValues) => {
-//     updateCompanyMutation.mutate(data);
-//   };
-
-//   // Prevent rendering if essential data is missing
-//   if (!company) {
-//     return <div className="p-4 text-center text-muted-foreground">Company data not available.</div>;
-//   }
-
-//   return (
-//     // Removed outer Card, assuming this is inside DialogContent
-//     <Form {...form}>
-//       {/* Added more vertical spacing between field groups */}
-//       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pt-4">
-
-//         {/* Grouping related fields */}
-//         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//             <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Company Name*</FormLabel><FormControl><Input placeholder="Enter company name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-//             <FormField control={form.control} name="domain" render={({ field }) => (<FormItem><FormLabel>Domain</FormLabel><FormControl><Input placeholder="example.com" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//         </div>
-
-//         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//             <FormField control={form.control} name="website" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//             <FormField control={form.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn</FormLabel><FormControl><Input type="url" placeholder="https://linkedin.com/company/..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//             <FormField control={form.control} name="twitter" render={({ field }) => (<FormItem><FormLabel>Twitter / X</FormLabel><FormControl><Input type="url" placeholder="https://twitter.com/..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//             <FormField control={form.control} name="facebook" render={({ field }) => (<FormItem><FormLabel>Facebook</FormLabel><FormControl><Input type="url" placeholder="https://facebook.com/..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//         </div>
-
-//         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//             <FormField control={form.control} name="ceo" render={({ field }) => (<FormItem><FormLabel>CEO</FormLabel><FormControl><Input placeholder="CEO name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//             <FormField control={form.control} name="start_date" render={({ field }) => (<FormItem><FormLabel>Founded Date</FormLabel><FormControl><Input placeholder="YYYY or YYYY-MM-DD" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//              {/* Consider using a proper Date Picker component */}
-//         </div>
-
-//         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//              <FormField control={form.control} name="employee_count" render={({ field }) => (<FormItem><FormLabel>Employees</FormLabel><FormControl><Input type="number" placeholder="Approximate count" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//              <FormField control={form.control} name="industry" render={({ field }) => (<FormItem><FormLabel>Industry</FormLabel><FormControl><Input placeholder="e.g., Software, Finance" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//         </div>
-
-//          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//              <FormField control={form.control} name="location" render={({ field }) => (<FormItem><FormLabel>Location</FormLabel><FormControl><Input placeholder="City, Country" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//              <FormField control={form.control} name="address" render={({ field }) => (<FormItem><FormLabel>Full Address</FormLabel><FormControl><Input placeholder="Company address" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//          </div>
-
-//          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//               {/* --- ADDED Account Owner Field --- */}
-//              <FormField control={form.control} name="account_owner" render={({ field }) => (<FormItem><FormLabel>Account Owner</FormLabel><FormControl><Input placeholder="Internal owner name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//               {/* --- END Account Owner Field --- */}
-//               <FormField control={form.control} name="stage" render={({ field }) => (<FormItem><FormLabel>Company Stage</FormLabel>
-//                 <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined} value={field.value ?? undefined}>
-//                   <FormControl>
-//                     <SelectTrigger>
-//                       <SelectValue placeholder="Select stage" />
-//                     </SelectTrigger>
-//                   </FormControl>
-//                   <SelectContent>
-//                     <SelectItem value="">(Clear Stage)</SelectItem>
-//                     {STAGES.map(stage => (
-//                       <SelectItem key={stage} value={stage}>{stage}</SelectItem>
-//                     ))}
-//                   </SelectContent>
-//                 </Select>
-//               <FormMessage /></FormItem>)} />
-//                {/* --- ADDED Status Field (using Select) --- */}
-//               <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel>
-//                   <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined} value={field.value ?? undefined}>
-//                       <FormControl>
-//                           <SelectTrigger>
-//                               <SelectValue placeholder="Select status" />
-//                           </SelectTrigger>
-//                       </FormControl>
-//                       <SelectContent>
-//                            <SelectItem value="">(Clear Status)</SelectItem>
-//                            {STATUSES.map(status => (
-//                                <SelectItem key={status} value={status}>{status}</SelectItem>
-//                            ))}
-//                       </SelectContent>
-//                   </Select>
-//               <FormMessage /></FormItem>)} />
-//                {/* --- END Status Field --- */}
-//          </div>
-
-//           {/* --- ADDED Financial Fields --- */}
-//          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//               <FormField control={form.control} name="revenue" render={({ field }) => (<FormItem><FormLabel>Est. Revenue</FormLabel><FormControl><Input type="text" placeholder="e.g., 50M or 50000000" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//               <FormField control={form.control} name="cashflow" render={({ field }) => (<FormItem><FormLabel>Est. Cash Flow</FormLabel><FormControl><Input type="text" placeholder="e.g., 10M or 10000000" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-//          </div>
-//          {/* --- END Financial Fields --- */}
-
-//         <FormField control={form.control} name="about" render={({ field }) => (<FormItem><FormLabel>About</FormLabel><FormControl><Textarea placeholder="Brief description..." className="min-h-[80px]" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-
-//         {/* Footer with buttons */}
-//         {/* Using div instead of CardFooter as Card is removed */}
-//         <div className="flex justify-end gap-2 pt-6">
-//           {/* Use the onClose prop passed from the parent modal */}
-//           <Button type="button" variant="outline" onClick={onClose}>
-//             Cancel
-//           </Button>
-//           <Button type="submit" disabled={updateCompanyMutation.isPending}>
-//             {updateCompanyMutation.isPending ? "Saving..." : "Save Changes"}
-//           </Button>
-//         </div>
-//       </form>
-//     </Form>
-//   );
-// };
-
-// export default CompanyEditForm;
-
-
 // src/components/CompanyEditForm.tsx
-import React, { useEffect } from "react";
-// If used as a standalone page, you might need useNavigate
-// import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { useToast } from "@/hooks/use-toast";
-// Import the specific type needed, likely CompanyDetail for editing
-import { CompanyDetail as CompanyDetailType, Company } from "@/types/company";
-import { Database } from "@/types/database.types"; // Import generated types
+import React, { useState, useEffect } from 'react';
+import { CompanyDetail, KeyPerson } from '@/types/company'; // Ensure KeyPerson is imported if used
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
-// Define possible stages for dropdown
-const STAGES = ['Current Client', 'Cold', 'Active Opportunity', 'Dead Opportunity', 'Do Not Prospect'];
-// Define possible statuses for dropdown
-const STATUSES = ["Customer", "Prospect", "Partner", "Vendor", "Former Customer", "Other"];
-
-// Special value for clearing selection in Select components
-const CLEAR_SELECTION_VALUE = "__clear__";
-
-// Define props for the component
 interface CompanyEditFormProps {
-  company: Company | CompanyDetailType | null; // Accept the full company data for editing
-  onClose: () => void; // Callback to close the modal
+  company: CompanyDetail;
+  onClose: () => void; // Changed from onSave/onCancel to a single onClose prop
 }
 
-// Alias for Supabase Update type from generated types
-type CompanyUpdate = Database['public']['Tables']['companies']['Update'];
+const CompanyEditForm: React.FC<CompanyEditFormProps> = ({ company, onClose }) => {
+  // Initialize formData more explicitly to avoid issues with extra fields from CompanyDetail
+  const getInitialFormData = (comp: CompanyDetail): Partial<CompanyDetail> => ({
+    name: comp.name,
+    website: comp.website,
+    linkedin: comp.linkedin,
+    logo_url: comp.logo_url,
+    status: comp.status,
+    domain: comp.domain,
+    about: comp.about,
+    start_date: comp.start_date,
+    employee_count: comp.employee_count,
+    address: comp.address,
+    industry: comp.industry,
+    stage: comp.stage, // CRM stage
+    location: comp.location,
+    account_owner: comp.account_owner,
+    revenue: comp.revenue, // Assuming revenue might be string from AI, DB might be numeric or text
+    cashflow: comp.cashflow,
+    founded_as: comp.founded_as,
+    employee_count_date: comp.employee_count_date,
+    competitors: comp.competitors ? [...comp.competitors] : null, // Defensive copy
+    products: comp.products ? [...comp.products] : null,       // Defensive copy
+    services: comp.services ? [...comp.services] : null,       // Defensive copy
+    key_people: comp.key_people ? comp.key_people.map(kp => ({...kp})) : null, // Deep copy for objects
+  });
 
-// --- UPDATED Zod Schema ---
-// Includes all relevant editable fields from your companies table definition
-const formSchema = z.object({
-  name: z.string().min(1, "Company name is required"),
-  website: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-  domain: z.string().optional().nullable(),
-  status: z.string().optional().nullable(),
-  about: z.string().optional().nullable(),
-  start_date: z.string().optional().nullable(), // Keep as string for simple date input for now
-  ceo: z.string().optional().nullable(),
-  employee_count: z.union([
-    z.string()
-      .transform(val => (val === "" || val == null || isNaN(Number(val))) ? null : parseInt(String(val), 10))
-      .refine(val => val === null || (!isNaN(val) && Number.isInteger(val) && val >= 0), { message: "Must be a valid non-negative whole number" }),
-    z.number().int().nonnegative().nullable() // Allow direct non-negative integer input or null
-  ]).optional().nullable(),
-  address: z.string().optional().nullable(),
-  linkedin: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-  industry: z.string().optional().nullable(),
-  stage: z.string().optional().nullable(),
-  location: z.string().optional().nullable(),
-  account_owner: z.string().optional().nullable(), // Added
-  twitter: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-  facebook: z.string().url({ message: "Invalid URL (e.g., https://...)" }).optional().or(z.literal('')).nullable(),
-  // Added financial fields with parsing for strings like "$10M" or numbers
-  revenue: z.union([
-     z.string().transform(val => (val === "" || val == null) ? null : parseFloat(String(val).replace(/[$,€£¥₹,\s]/g, ''))).refine(val => val === null || !isNaN(val), { message: "Invalid number format" }).nullable(),
-     z.number().nullable() // Allow direct number input
-  ]).optional().nullable(),
-  cashflow: z.union([
-     z.string().transform(val => (val === "" || val == null) ? null : parseFloat(String(val).replace(/[$,€£¥₹,\s]/g, ''))).refine(val => val === null || !isNaN(val), { message: "Invalid number format" }).nullable(),
-     z.number().nullable() // Allow direct number input
-  ]).optional().nullable(),
-  // Excluded: id, created_at, updated_at, logo_url (assuming logo is handled elsewhere or not editable here)
-  // Excluded: license_usage (assuming not user-editable)
-});
-
-// Infer TS type from Zod schema
-type FormValues = z.infer<typeof formSchema>;
-
-const CompanyEditForm = ({ company, onClose }: CompanyEditFormProps) => {
-  // If used as standalone page, uncomment/adjust:
-  // const navigate = useNavigate();
-  // const { id } = useParams<{ id: string }>();
-  // const companyId = company?.id || (id ? parseInt(id) : 0);
-
-  const companyId = company?.id; // Get ID from the passed company object
-  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState<Partial<CompanyDetail>>(getInitialFormData(company));
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    // Initialize with defaults, will be overwritten by useEffect
-    defaultValues: {
-      name: "", website: "", domain: "", status: "Customer", about: "", start_date: "",
-      ceo: "", employee_count: null, address: "", linkedin: "", industry: "",
-      stage: "Cold", location: "", account_owner: "", twitter: "", facebook: "",
-      revenue: null, cashflow: null,
-    },
-  });
-
-  // Populate form when company data is loaded or changes
   useEffect(() => {
-    if (company) {
-      form.reset({
-        name: company.name || "",
-        website: company.website || "",
-        domain: company.domain || "",
-        status: company.status || null, // Use null if empty, let Select handle placeholder
-        about: company.about || "",
-        start_date: company.start_date || "",
-        ceo: company.ceo || "",
-        employee_count: company.employee_count ?? null,
-        address: company.address || "",
-        linkedin: company.linkedin || "",
-        industry: company.industry || "",
-        stage: company.stage || null, // Use null if empty
-        location: company.location || "",
-        account_owner: company.account_owner || "", // Added
-        twitter: company.twitter || "",
-        facebook: company.facebook || "",
-        revenue: company.revenue ?? null, // Added
-        cashflow: company.cashflow ?? null, // Added
-      });
-    }
-  }, [company, form]); // Rerun effect if company data changes
+    setFormData(getInitialFormData(company));
+    setError(null); // Clear errors when company changes
+  }, [company]);
 
-  // Mutation for updating the company
-  const updateCompanyMutation = useMutation({
-    mutationFn: async (formData: FormValues) => {
-      if (!companyId) throw new Error("Company ID is missing for update.");
-
-      // Prepare data for Supabase update, ensuring correct types and nulls
-      const updateData: CompanyUpdate = {
-        name: formData.name,
-        website: formData.website || null,
-        domain: formData.domain || null,
-        status: formData.status || null, // Ensure null if cleared
-        about: formData.about || null,
-        start_date: formData.start_date || null,
-        ceo: formData.ceo || null,
-        employee_count: formData.employee_count ?? null, // Zod already handled parsing
-        address: formData.address || null,
-        linkedin: formData.linkedin || null,
-        industry: formData.industry || null,
-        stage: formData.stage || null, // Ensure null if cleared
-        location: formData.location || null,
-        account_owner: formData.account_owner || null, // Added
-        twitter: formData.twitter || null,
-        facebook: formData.facebook || null,
-        revenue: formData.revenue ?? null, // Added (Zod handled parsing)
-        cashflow: formData.cashflow ?? null, // Added (Zod handled parsing)
-        // Ensure non-editable fields are not included
-      };
-
-      // Remove undefined properties (though Zod/defaults should prevent this)
-      Object.keys(updateData).forEach(key => updateData[key as keyof CompanyUpdate] === undefined && delete updateData[key as keyof CompanyUpdate]);
-
-      console.log("Updating company ID:", companyId, "with data:", updateData);
-
-      const { error } = await supabase
-        .from('companies')
-        .update(updateData)
-        .eq('id', companyId);
-
-      if (error) {
-          console.error("Supabase update error:", error);
-          throw error; // Let onError handle toast
-      }
-    },
-    onSuccess: () => {
-      toast({ title: "Company Updated", description: "Information saved successfully." });
-      queryClient.invalidateQueries({ queryKey: ['company', companyId] });
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-      onClose(); // Close the modal
-    },
-    onError: (error: any) => {
-      toast({ title: "Update Failed", description: error.message || "Could not save changes.", variant: "destructive" });
-    }
-  });
-
-  // Form submission handler
-  const onSubmit = (data: FormValues) => {
-    updateCompanyMutation.mutate(data);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      // Set to null if empty, otherwise use the value
+      [name]: value.trim() === '' ? null : value,
+    }));
+    setError(null); // Clear error on change
   };
 
-  if (!company) {
-    return <div className="p-4 text-center text-muted-foreground">Loading company data...</div>;
-  }
+  const handleNumericChange = (fieldName: keyof CompanyDetail, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: value === '' ? null : Number(value),
+    }));
+    setError(null);
+  };
+
+  const handleArrayChange = (fieldName: keyof CompanyDetail, value: string) => {
+    const arrayValue = value.split(',').map(item => item.trim()).filter(Boolean);
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: arrayValue.length > 0 ? arrayValue : null,
+    }));
+    setError(null);
+  };
+
+  const handleKeyPeopleChange = (value: string) => {
+    setError(null);
+    if (value.trim() === '') {
+      setFormData(prev => ({ ...prev, key_people: null }));
+      return;
+    }
+    try {
+      const parsed = JSON.parse(value) as KeyPerson[]; // Assume KeyPerson[] type
+      if (Array.isArray(parsed) && parsed.every(p => typeof p === 'object' && p !== null && 'name' in p && 'title' in p)) {
+        setFormData(prev => ({ ...prev, key_people: parsed }));
+      } else {
+        throw new Error("Key People array must contain objects with 'name' and 'title' properties.");
+      }
+    } catch (e: any) {
+      console.error("Invalid JSON for key_people:", e);
+      setError(`Invalid format for Key People. Example: [{"name": "Name", "title": "Title"}]. Error: ${e.message}`);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!formData.name || formData.name.trim() === "") {
+      const msg = "Company name is required.";
+      setError(msg);
+      toast({ title: "Validation Error", description: msg, variant: "destructive" });
+      return;
+    }
+
+    setIsSaving(true);
+
+    // Prepare data for Supabase: only include fields that are actually in formData
+    // and ensure numeric fields are numbers.
+    const updateData: { [key: string]: any } = {};
+    Object.keys(formData).forEach(key => {
+      const formKey = key as keyof Partial<CompanyDetail>;
+      if (formData[formKey] !== undefined) { // Only include if defined in formData
+        if (formKey === 'employee_count' || formKey === 'cashflow') {
+          updateData[formKey] = formData[formKey] === null || formData[formKey] === '' ? null : Number(formData[formKey]);
+        } else {
+          updateData[formKey] = formData[formKey];
+        }
+      }
+    });
+    
+    // Remove id from updateData if it was included, as it's used in .eq()
+    if (updateData.id) {
+        delete updateData.id;
+    }
+    // Remove created_at and updated_at if they are part of formData, as they shouldn't be manually set
+    if (updateData.created_at) delete updateData.created_at;
+    if (updateData.updated_at) delete updateData.updated_at;
+
+
+    try {
+      const { error: supabaseError } = await supabase
+        .from('companies')
+        .update(updateData)
+        .eq('id', company.id);
+
+      if (supabaseError) throw supabaseError;
+
+      toast({ title: "Success!", description: `${formData.name || 'Company'} updated successfully.` });
+      if (typeof onClose === 'function') {
+        onClose(); // Call onClose to trigger parent's closing logic (and data refetch)
+      }
+    } catch (err: any) {
+      console.error("Error updating company:", err);
+      const errorMessage = err.message || "An unexpected error occurred.";
+      setError(`Failed to update company: ${errorMessage}`);
+      toast({ title: "Update Failed", description: errorMessage, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    if (typeof onClose === 'function') {
+      onClose(); // Call parent's onClose handler
+    }
+  };
+
+  // Using more descriptive class names that might align with a UI framework like Tailwind/ShadCN
+  const inputClassName = "mt-1 block w-full border-input border rounded-md p-2 shadow-sm focus:ring-ring focus:border-ring bg-background text-foreground";
+  const labelClassName = "block text-sm font-medium text-foreground";
+  const buttonPrimaryClassName = "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:opacity-50";
+  const buttonSecondaryClassName = "px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-secondary hover:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:opacity-50";
+
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pt-4">
-
-        {/* Group 1: Core Info */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Company Name*</FormLabel><FormControl><Input placeholder="Enter company name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="domain" render={({ field }) => (<FormItem><FormLabel>Domain</FormLabel><FormControl><Input placeholder="example.com" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+    <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-background shadow rounded-lg max-h-[80vh] overflow-y-auto pr-3">
+      {error && <div className="mb-3 p-3 text-sm text-destructive-foreground bg-destructive/10 border border-destructive/30 rounded-md">{error}</div>}
+      
+      <div>
+        <label htmlFor="name" className={labelClassName}>Name *</label>
+        <input id="name" type="text" name="name" value={formData.name || ''} onChange={handleChange} className={inputClassName} required />
+      </div>
+      <div>
+        <label htmlFor="website" className={labelClassName}>Website</label>
+        <input id="website" type="url" name="website" value={formData.website || ''} onChange={handleChange} className={inputClassName} placeholder="https://example.com"/>
+      </div>
+      <div>
+        <label htmlFor="linkedin" className={labelClassName}>LinkedIn</label>
+        <input id="linkedin" type="url" name="linkedin" value={formData.linkedin || ''} onChange={handleChange} className={inputClassName} placeholder="https://linkedin.com/company/..."/>
+      </div>
+      <div>
+        <label htmlFor="logo_url" className={labelClassName}>Logo URL</label>
+        <input id="logo_url" type="url" name="logo_url" value={formData.logo_url || ''} onChange={handleChange} className={inputClassName} placeholder="https://example.com/logo.png"/>
+      </div>
+      <div>
+        <label htmlFor="status" className={labelClassName}>Company Status</label>
+        <input id="status" type="text" name="status" value={formData.status || ''} onChange={handleChange} placeholder="e.g., Public, Private" className={inputClassName}/>
+      </div>
+      <div>
+        <label htmlFor="domain" className={labelClassName}>Domain</label>
+        <input id="domain" type="text" name="domain" value={formData.domain || ''} onChange={handleChange} placeholder="example.com" className={inputClassName}/>
+      </div>
+      <div>
+        <label htmlFor="about" className={labelClassName}>About</label>
+        <textarea id="about" name="about" value={formData.about || ''} onChange={handleChange} rows={3} className={inputClassName}/>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="start_date" className={labelClassName}>Start Date</label>
+          <input id="start_date" type="text" name="start_date" value={formData.start_date || ''} onChange={handleChange} placeholder="YYYY-MM-DD or YYYY" className={inputClassName}/>
         </div>
-
-        {/* Group 2: Online Presence */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="website" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn</FormLabel><FormControl><Input type="url" placeholder="https://linkedin.com/company/..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="twitter" render={({ field }) => (<FormItem><FormLabel>Twitter / X</FormLabel><FormControl><Input type="url" placeholder="https://twitter.com/..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="facebook" render={({ field }) => (<FormItem><FormLabel>Facebook</FormLabel><FormControl><Input type="url" placeholder="https://facebook.com/..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+        <div>
+          <label htmlFor="founded_as" className={labelClassName}>Founded As</label>
+          <input id="founded_as" type="text" name="founded_as" value={formData.founded_as || ''} onChange={handleChange} className={inputClassName}/>
         </div>
-
-        {/* Group 3: Leadership & Founding */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="ceo" render={({ field }) => (<FormItem><FormLabel>CEO</FormLabel><FormControl><Input placeholder="CEO name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="start_date" render={({ field }) => (<FormItem><FormLabel>Founded Date</FormLabel><FormControl><Input placeholder="YYYY or YYYY-MM-DD" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+        <div>
+          <label htmlFor="employee_count" className={labelClassName}>Employee Count</label>
+          <input id="employee_count" type="number" name="employee_count" value={formData.employee_count ?? ''} onChange={(e) => handleNumericChange('employee_count', e.target.value)} className={inputClassName}/>
         </div>
-
-        {/* Group 4: Size & Industry */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <FormField control={form.control} name="employee_count" render={({ field }) => (<FormItem><FormLabel>Employees</FormLabel><FormControl><Input type="number" placeholder="Approximate count" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-             <FormField control={form.control} name="industry" render={({ field }) => (<FormItem><FormLabel>Industry</FormLabel><FormControl><Input placeholder="e.g., Software, Finance" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+        <div>
+          <label htmlFor="employee_count_date" className={labelClassName}>Employee Count Date</label>
+          <input id="employee_count_date" type="text" name="employee_count_date" value={formData.employee_count_date || ''} onChange={handleChange} placeholder="YYYY-MM-DD" className={inputClassName}/>
         </div>
-
-         {/* Group 5: Location */}
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <FormField control={form.control} name="location" render={({ field }) => (<FormItem><FormLabel>Location</FormLabel><FormControl><Input placeholder="City, Country" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-             <FormField control={form.control} name="address" render={({ field }) => (<FormItem><FormLabel>Full Address</FormLabel><FormControl><Input placeholder="Company address" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-         </div>
-
-         {/* Group 6: Internal/Sales Info */}
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <FormField control={form.control} name="account_owner" render={({ field }) => (<FormItem><FormLabel>Account Owner</FormLabel><FormControl><Input placeholder="Internal owner name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="stage" render={({ field }) => (<FormItem><FormLabel>Company Stage</FormLabel>
-                <Select onValueChange={(value) => field.onChange(value === CLEAR_SELECTION_VALUE ? null : value)} value={field.value ?? ""} >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select stage" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={CLEAR_SELECTION_VALUE}>(Clear Stage)</SelectItem>
-                    {STAGES.map(stage => (<SelectItem key={stage} value={stage}>{stage}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              <FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel>
-                  <Select onValueChange={(value) => field.onChange(value === CLEAR_SELECTION_VALUE ? null : value)} value={field.value ?? ""} >
-                      <FormControl>
-                          <SelectTrigger>
-                              <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                           <SelectItem value={CLEAR_SELECTION_VALUE}>(Clear Status)</SelectItem>
-                           {STATUSES.map(status => (<SelectItem key={status} value={status}>{status}</SelectItem>))}
-                      </SelectContent>
-                  </Select>
-              <FormMessage /></FormItem>)} />
-         </div>
-
-          {/* Group 7: Financials */}
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField control={form.control} name="revenue" render={({ field }) => (<FormItem><FormLabel>Est. Revenue</FormLabel><FormControl><Input type="text" placeholder="e.g., 50M or 50000000" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="cashflow" render={({ field }) => (<FormItem><FormLabel>Est. Cash Flow</FormLabel><FormControl><Input type="text" placeholder="e.g., 10M or 10000000" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-         </div>
-
-         {/* Group 8: About */}
-        <FormField control={form.control} name="about" render={({ field }) => (<FormItem><FormLabel>About</FormLabel><FormControl><Textarea placeholder="Brief description..." className="min-h-[80px]" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-
-        {/* Footer with buttons */}
-        <div className="flex justify-end gap-2 pt-6">
-          <Button type="button" variant="outline" onClick={onClose}> Cancel </Button>
-          <Button type="submit" disabled={updateCompanyMutation.isPending}> {updateCompanyMutation.isPending ? "Saving..." : "Save Changes"} </Button>
+        <div>
+            <label htmlFor="revenue" className={labelClassName}>Revenue</label>
+            <input id="revenue" type="text" name="revenue" value={formData.revenue || ''} onChange={handleChange} placeholder="e.g., 1.5M or 1500000" className={inputClassName}/>
         </div>
-      </form>
-    </Form>
+        <div>
+          <label htmlFor="cashflow" className={labelClassName}>Cashflow</label>
+          <input id="cashflow" type="number" name="cashflow" value={formData.cashflow ?? ''} onChange={(e) => handleNumericChange('cashflow', e.target.value)} className={inputClassName}/>
+        </div>
+      </div>
+      
+      <div>
+        <label htmlFor="address" className={labelClassName}>Address</label>
+        <input id="address" type="text" name="address" value={formData.address || ''} onChange={handleChange} className={inputClassName}/>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="industry" className={labelClassName}>Industry</label>
+          <input id="industry" type="text" name="industry" value={formData.industry || ''} onChange={handleChange} className={inputClassName}/>
+        </div>
+        <div>
+          <label htmlFor="stage" className={labelClassName}>CRM Stage</label>
+          <input id="stage" type="text" name="stage" value={formData.stage || ''} onChange={handleChange} placeholder="e.g., Prospect, Customer" className={inputClassName}/>
+        </div>
+        <div>
+          <label htmlFor="location" className={labelClassName}>Location</label>
+          <input id="location" type="text" name="location" value={formData.location || ''} onChange={handleChange} placeholder="City, Country" className={inputClassName}/>
+        </div>
+        <div>
+          <label htmlFor="account_owner" className={labelClassName}>Account Owner</label>
+          <input id="account_owner" type="text" name="account_owner" value={formData.account_owner || ''} onChange={handleChange} className={inputClassName}/>
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="competitors" className={labelClassName}>Competitors (comma-separated)</label>
+        <input id="competitors" type="text" name="competitors" value={Array.isArray(formData.competitors) ? formData.competitors.join(', ') : ''} onChange={(e) => handleArrayChange('competitors', e.target.value)} className={inputClassName}/>
+      </div>
+      <div>
+        <label htmlFor="products" className={labelClassName}>Products (comma-separated)</label>
+        <input id="products" type="text" name="products" value={Array.isArray(formData.products) ? formData.products.join(', ') : ''} onChange={(e) => handleArrayChange('products', e.target.value)} className={inputClassName}/>
+      </div>
+      <div>
+        <label htmlFor="services" className={labelClassName}>Services (comma-separated)</label>
+        <input id="services" type="text" name="services" value={Array.isArray(formData.services) ? formData.services.join(', ') : ''} onChange={(e) => handleArrayChange('services', e.target.value)} className={inputClassName}/>
+      </div>
+      <div>
+        <label htmlFor="key_people" className={labelClassName}>Key People (JSON format)</label>
+        <textarea id="key_people" name="key_people" value={formData.key_people ? JSON.stringify(formData.key_people, null, 2) : ''} onChange={(e) => handleKeyPeopleChange(e.target.value)} rows={4} className={inputClassName} placeholder='[{"name": "John Doe", "title": "CEO"}, {"name": "Jane Smith", "title": "CTO"}]'/>
+      </div>
+      
+      <div className="flex justify-end space-x-3 pt-4 border-t border-border mt-6">
+        <button type="button" onClick={handleCancel} disabled={isSaving} className={buttonSecondaryClassName}>
+          Cancel
+        </button>
+        <button type="submit" disabled={isSaving} className={buttonPrimaryClassName}>
+          {isSaving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </form>
   );
 };
 
