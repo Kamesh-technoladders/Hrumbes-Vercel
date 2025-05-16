@@ -2,6 +2,7 @@ import React from 'react';
 import { Expense } from '@/lib/accounts-data';
 import { Button } from '@/components/ui/button';
 import { formatINR } from '@/utils/currency';
+import TechnoladdersLogo from '../../../public/hrumbles_logo2.png';
 
 interface ExpenseDetailsProps {
   expense: Expense;
@@ -26,18 +27,16 @@ const ExpenseDetails: React.FC<ExpenseDetailsProps> = ({ expense, onClose }) => 
       <div className="bg-white border rounded-lg shadow-sm p-8 print:shadow-none print:border-none">
         {/* Company Header with Logo and Details */}
         <div className="flex items-start justify-between gap-3 border-b pb-3 mb-3">
-          <div className="flex gap-4">
-            <div className="w-12 h-12 flex-shrink-0">
-              <img src="/lovable-uploads/3c90e66e-ce59-437f-a47e-119a5c2b16db.png" alt="Company Logo" className="w-full" />
+        <div className="flex gap-4">
+            <div className="w-20 h-14 flex-shrink-0 pt-7">
+              <img src={TechnoladdersLogo} alt="Company Logo" className="w-full" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold">Technoladders Solutions Private Limited</h1>
-              <p className="text-sm text-gray-600">
-                Tidel Park, 1st Floor D Block, Module 115, D North Block, 1st Floor, No.4
-                <br />
-                Rajiv Gandhi Salai, Taramani Chennai Tamil Nadu 600113 India
-              </p>
-            </div>
+            <div className="max-w-md">
+  <h1 className="text-xl font-bold">Technoladders Solutions Private Limited</h1>
+  <p className="text-sm text-gray-600 whitespace-normal break-words">
+    Tidel Park, 1st Floor D Block, Module 115, D North Block, 1st Floor, No.4 Rajiv Gandhi Salai, Taramani Chennai Tamil Nadu 600113 India.
+  </p>
+</div>
           </div>
           <div className="text-right">
             <p className="text-sm text-gray-600">Expense</p>

@@ -2,7 +2,6 @@ export interface KeyPerson {
   name: string;
   title: string;
 }
- 
 export interface Company {
   about?: string;
   domain?: string;
@@ -31,7 +30,6 @@ export interface Company {
   services?: string[];
   key_people?: { name: string; title: string }[] | string;
 }
- 
 export interface EmployeeAssociation {
   id: number;
   candidate_id: string;
@@ -48,7 +46,6 @@ export interface EmployeeAssociation {
   created_by?: string | null;
   updated_by?: string | null;
 }
- 
 export interface CompanyDetail extends Company {
   start_date?: string;
   address?: string;

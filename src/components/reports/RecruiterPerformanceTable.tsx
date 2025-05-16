@@ -328,7 +328,7 @@ const RecruiterPerformanceTable: React.FC<RecruiterPerformanceTableProps> = ({ d
             <TableHeader>
               <TableRow className="bg-indigo-50 border-b border-indigo-100">
                 <TableHead
-                  className="cursor-pointer whitespace-nowrap text-indigo-900 font-semibold hover:bg-indigo-100 transition-colors duration-200 py-4"
+                  className="cursor-pointer whitespace-nowrap text-indigo-900 font-semibold hover:bg-indigo-100 transition-colors duration-200 py-4 sticky left-0 bg-white whitespace-nowrap"
                   onClick={() => handleSort("recruiter")}
                 >
                   <div className="flex items-center gap-2">
@@ -555,7 +555,7 @@ const RecruiterPerformanceTable: React.FC<RecruiterPerformanceTableProps> = ({ d
                     key={index}
                     className={`border-b border-gray-100 hover:bg-indigo-50/50 transition-colors duration-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}
                   >
-                    <TableCell className="font-medium text-gray-900">{recruiter.recruiter}</TableCell>
+                    <TableCell className="font-medium text-gray-900 sticky left-0 bg-white whitespace-nowrap">{recruiter.recruiter}</TableCell>
                     <TableCell className="text-gray-700">{recruiter.jobs_assigned}</TableCell>
                     <TableCell className="text-gray-700">{recruiter.profiles_submitted}</TableCell>
                     <TableCell className="text-gray-700">{recruiter.internal_reject}</TableCell>

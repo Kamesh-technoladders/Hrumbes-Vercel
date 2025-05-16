@@ -20,7 +20,6 @@ export interface Contact {
   companies?: { name: string; [key: string]: any } | null; // From Supabase join
   company_name?: string | null; // Derived field for display
 }
- 
 // --- UnifiedContactListItem Type (for the combined list in useContacts) ---
 export interface UnifiedContactListItem {
   id: string; // uuid for 'contacts', composite ID for 'candidate_companies'
@@ -35,18 +34,15 @@ export interface UnifiedContactListItem {
   company_id?: number | null;
   company_name?: string | null;
   source_table: 'contacts' | 'candidate_companies';
- 
   // Fields specific to candidate_companies
   candidate_job_id?: string | null;
   candidate_years?: string | null;
   original_candidate_id?: string | null; // Original ID from candidate_companies
- 
   // Fields specific to contacts
   updated_at?: string | null; // Present in contacts table
   created_by?: string | null; // Present in contacts table
   updated_by?: string | null; // Present in contacts table
 }
- 
 // --- Contact Insert Type (for creating new contacts in 'contacts' table) ---
 export interface ContactInsert {
   name: string;
@@ -59,7 +55,6 @@ export interface ContactInsert {
   created_by?: string | null;
   company_id?: number | null; // To associate with a company
 }
- 
 // --- Contact Update Type (for updating existing contacts in 'contacts' table) ---
 export interface ContactUpdate {
   name?: string;
@@ -72,7 +67,6 @@ export interface ContactUpdate {
   updated_by?: string | null; // If you set this from client
   company_id?: number | null; // To update company association
 }
- 
+
 // You can add other related types for the Contacts module here if needed.
 // export type ContactStage = 'Cold' | 'Approaching' | 'Replied' | 'Interested' | 'Not Interested' | 'Un Responsive' | 'Do Not Contact' | 'Bad Data' | 'Changed Job' | 'Prospect';
- 

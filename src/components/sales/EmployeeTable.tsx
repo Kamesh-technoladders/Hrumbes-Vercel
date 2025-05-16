@@ -451,7 +451,7 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees, onEdit }) => {
   const getDisplayValue = (value: string | null | undefined): string => {
     return value?.trim() && value.trim().toUpperCase() !== 'N/A' ? value : 'N/A';
   };
-console.log("employee", employees)
+
     // --- UPDATED Contact Stage Update Mutation ---
     const updateContactStageMutation = useMutation({
       mutationFn: async ({ employee, newStage }: { employee: CandidateDetail; newStage: string }) => {
@@ -596,7 +596,7 @@ console.log("employee", employees)
                           )}
                       </Tooltip>
                        {/* General Copy Icon */}
-                       {/* <Tooltip>
+                       <Tooltip>
                          <TooltipTrigger asChild>
                               <Button
                                   variant="ghost" size="icon"
@@ -616,7 +616,7 @@ console.log("employee", employees)
                            <TooltipContent className="text-xs" side="top">
                                 <p>Copy Email & Phone</p>
                            </TooltipContent>
-                       </Tooltip> */}
+                       </Tooltip>
                     </div>
                   </TableCell>
                   {/* --- End Contact Column --- */}

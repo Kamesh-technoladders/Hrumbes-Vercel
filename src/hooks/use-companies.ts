@@ -1,717 +1,536 @@
-
-
-// // src/hooks/use-companies.ts
-// import { useQuery } from '@tanstack/react-query';
-// import { supabase } from "@/integrations/supabase/client";
-// // Import the UPDATED types reflecting the new schema
-// import { Company, CompanyDetail, EmployeeAssociation, CandidateDetail } from '@/types/company';
-// import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
-// import { Database } from '@/types/database.types'; // Assuming generated types are here
-
-// // --- Gemini Config ---
-// const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-// const MODEL_NAME = "gemini-1.5-pro"; // Or your preferred model
-
-// // --- Helper Function to Extract JSON (Keep as is) ---
-// function extractJson(text: string): any | null {
-//   if (!text) return null;
-//   const jsonMarkdownMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-//   if (jsonMarkdownMatch && jsonMarkdownMatch[1]) { try { return JSON.parse(jsonMarkdownMatch[1]); } catch (e) { console.warn("Failed to parse JSON within markdown markers:", e); } }
-//   const firstBrace = text.indexOf('{');
-//   const lastBrace = text.lastIndexOf('}');
-//   if (firstBrace !== -1 && lastBrace > firstBrace) { const potentialJson = text.substring(firstBrace, lastBrace + 1); try { return JSON.parse(potentialJson); } catch (e) { console.warn("Failed to parse JSON object match:", e); } }
-//   try { return JSON.parse(text); } catch (e) { console.error("Could not parse JSON from text:", text); return null; }
-// }
-
-// // --- Hook to fetch the list of companies ---
-// export const useCompanies = () => {
-//   return useQuery({
-//     queryKey: ['companies'],
-//     queryFn: async (): Promise<Company[]> => {
-//       console.log("Fetching companies list with stable ordering (created_at DESC, id ASC)...");
-//       const { data, error } = await supabase
-//         .from('companies')
-//         // Select only columns needed for the list view for efficiency
-//         .select('id, name, logo_url, employee_count, industry, stage, location, account_owner, website, linkedin, twitter, facebook, created_at')
-//         .order('created_at', { ascending: false }) // Primary: Newest first
-//         .order('id', { ascending: true });         // Secondary: Tie-breaker
-
-//       if (error) {
-//         console.error('Error fetching ordered companies:', error);
-//         throw error;
-//       }
-//       console.log('Ordered companies data fetched successfully:', data?.length);
-//       return (data as Company[]) || []; // Cast to Company[]
-//     },
-//     // Add caching options if desired
-//     // staleTime: 5 * 60 * 1000,
-//     // gcTime: 10 * 60 * 1000,
-//   });
-// };
-
-// // --- Hook to fetch details for a single company ---
-// export const useCompanyDetails = (id: number) => {
-//   return useQuery({
-//     queryKey: ['company', id],
-//     queryFn: async (): Promise<CompanyDetail | null> => { // Return type can be null if not found
-//       if (!id) return null; // Prevent fetch if ID is invalid
-//       console.log(`Fetching company details for ID: ${id}`);
-//       const { data, error } = await supabase
-//         .from('companies')
-//         .select('*') // Select all details for the detail view
-//         .eq('id', id)
-//         .maybeSingle(); // Use maybeSingle to return null instead of erroring if not found
-
-//       if (error) {
-//         console.error(`Error fetching company details for ID ${id}:`, error);
-//         throw error; // Throw other errors
-//       }
-
-//       console.log('Company details fetched successfully:', data);
-//       return data as CompanyDetail | null; // Cast result
-//     },
-//     enabled: !!id // Only run if id is truthy
-//   });
-// };
-
-// // --- Hook to fetch associated employees (using the new structure) ---
-// export const useCompanyEmployees = (companyId: number) => {
-//   return useQuery({
-//     queryKey: ['company-employees', companyId], // Use companyId in the key
-//     queryFn: async (): Promise<CandidateDetail[]> => { // Return type based on CandidateDetail interface
-//       console.log(`Fetching employee associations for company ID: ${companyId}`);
-
-//       if (!companyId) return []; // Prevent fetch if companyId is invalid
-
-//       try {
-//         // Fetch from the NEW employee_associations table, joining with hr_candidates
-//         const { data: associations, error } = await supabase
-//           .from('employee_associations')
-//           .select(`
-//             id,  
-//             candidate_id,
-//             company_id,
-//             job_id,
-//             designation,
-//             contact_owner,
-//             contact_stage,
-//             start_date,
-//             end_date,
-//             is_current,
-//             created_by, 
-//             updated_by, 
-//             hr_candidates ( 
-//               id,
-//               name,
-//               email,
-//               phone_number,
-//               linkedin_url 
-//             )
-//           `)
-//           .eq('company_id', companyId)
-//           .order('is_current', { ascending: false }) // Example order: current employees first
-//           .order('created_at', { ascending: false }); // Then by association creation date
-
-//         if (error) {
-//           console.error(`Error fetching employee associations for company ${companyId}:`, error);
-//           throw error;
-//         }
-
-//         console.log('Fetched associations:', associations);
-
-//         if (!associations || associations.length === 0) {
-//           console.log('No employee associations found for this company ID');
-//           return [];
-//         }
-
-//         // Map the joined data to the CandidateDetail structure
-//         const employeeDetails: CandidateDetail[] = associations.map(assoc => {
-//           // Supabase returns the joined table as an object or array. Handle potential null.
-//           // Using 'as any' for simplicity, define proper types if needed.
-//           const candidate = assoc.hr_candidates as any;
-
-//           // If the join failed or candidate was deleted, provide fallback data
-//           if (!candidate) {
-//               console.warn(`Candidate details missing for association id ${assoc.id}, candidate_id ${assoc.candidate_id}`);
-//               return {
-//                    id: assoc.candidate_id, // Candidate UUID
-//                    name: `Unknown Candidate (ID: ${assoc.candidate_id?.substring(0, 5)}...)`,
-//                    email: 'N/A',
-//                    phone_number: 'N/A',
-//                    linkedin: 'N/A',
-//                    association_id: assoc.id,
-//                    company_id: assoc.company_id,
-//                    job_id: assoc.job_id,
-//                    designation: assoc.designation || 'N/A',
-//                    contact_owner: assoc.contact_owner || 'N/A',
-//                    contact_stage: assoc.contact_stage || 'N/A',
-//                    association_start_date: assoc.start_date,
-//                    association_end_date: assoc.end_date,
-//                    association_is_current: assoc.is_current,
-//                    // created_by: assoc.created_by, // Add if needed
-//                    // updated_by: assoc.updated_by, // Add if needed
-//               };
-//           }
-
-//           // Map to the CandidateDetail interface
-//           return {
-//             id: candidate.id, // Candidate's UUID
-//             name: candidate.name,
-//             email: candidate.email || 'N/A',
-//             phone_number: candidate.phone_number || 'N/A',
-//             linkedin: candidate.linkedin_url || 'N/A', // Map linkedin_url to linkedin field
-//             // avatar_url: candidate.avatar_url, // Add if you have this field
-
-//             // Association specific details
-//             association_id: assoc.id,
-//             company_id: assoc.company_id,
-//             job_id: assoc.job_id,
-//             designation: assoc.designation || 'N/A',
-//             contact_owner: assoc.contact_owner || 'N/A',
-//             contact_stage: assoc.contact_stage || 'N/A',
-//             association_start_date: assoc.start_date,
-//             association_end_date: assoc.end_date,
-//             association_is_current: assoc.is_current,
-//             // created_by: assoc.created_by, // Add if needed
-//             // updated_by: assoc.updated_by, // Add if needed
-//           };
-//         }).filter(Boolean); // Filter out any potential nulls if skipping missing candidates
-
-//         console.log('Mapped employee details for table:', employeeDetails);
-//         return employeeDetails;
-
-//       } catch (error) {
-//         console.error('Error in useCompanyEmployees hook:', error);
-//         throw error; // Re-throw for React Query error handling
-//       }
-//     },
-//     enabled: !!companyId, // Only run query if companyId is valid
-//     // Add caching options if desired
-//   });
-// };
-
-
-// // --- Hook to get company and employee counts ---
-// export const useCompanyCounts = () => {
-//   return useQuery({
-//     queryKey: ['company-counts'],
-//     queryFn: async () => {
-//       try {
-//           // Get count of companies
-//           const { count: companyCount, error: companyError } = await supabase
-//             .from('companies')
-//             .select('*', { count: 'exact', head: true }); // Use head: true for efficiency
-
-//           if (companyError) throw companyError;
-//           console.log('Company count:', companyCount);
-
-//           const { data: uniqueCandidates, error: employeeError } = await supabase
-//                 .rpc('get_unique_associated_candidate_count'); // Assumes you create this function
-
-//            // Fallback if RPC doesn't exist yet: Less efficient count
-//            let uniqueEmployeeCount = 0;
-//            if (employeeError || !uniqueCandidates) {
-//                 console.warn("RPC get_unique_associated_candidate_count failed or doesn't exist. Falling back to less efficient count.", employeeError);
-//                 const { data: employeeData, error: fallbackError } = await supabase
-//                     .from('employee_associations') // Count from the NEW table
-//                     .select('candidate_id');
-
-//                 if (fallbackError) {
-//                     console.error('Error fetching employee associations for counting:', fallbackError);
-//                     // Decide how to handle - return 0 or throw?
-//                 } else {
-//                      const uniqueSet = new Set(employeeData?.map(e => e.candidate_id));
-//                      uniqueEmployeeCount = uniqueSet.size;
-//                 }
-//            } else {
-//                 // Assuming the RPC returns an object like { count: number }
-//                 uniqueEmployeeCount = (uniqueCandidates as any)?.count ?? 0;
-//            }
-
-
-//           console.log('Unique associated employee count:', uniqueEmployeeCount);
-
-//           return {
-//             companies: companyCount ?? 0,
-//             employees: uniqueEmployeeCount // Use the count from RPC or fallback
-//           };
-//       } catch(error) {
-//            console.error('Error fetching counts:', error);
-//            // Return default counts or throw error based on desired behavior
-//             return { companies: 0, employees: 0 };
-//       }
-//     }
-//   });
-// };
-
-// // --- Hook to fetch details from Gemini AI ---
-// export const useFetchCompanyDetails = () => {
-//   // Check if API key is available (basic check)
-//   if (!GEMINI_API_KEY) {
-//     console.error("Gemini API key (VITE_GEMINI_API_KEY) is missing.");
-//     return async (_companyName: string): Promise<Partial<CompanyDetail>> => {
-//       throw new Error("AI Service Key not configured.");
-//     };
-//   }
-
-//   return async (companyName: string): Promise<Partial<CompanyDetail>> => {
-//     console.log('Fetching company details via Gemini for:', companyName);
-//     if (!GEMINI_API_KEY) throw new Error("AI Service Key not configured.");
-
-//     try {
-//       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-//       const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-
-//       const generationConfig = { temperature: 0.4, topK: 1, topP: 1, maxOutputTokens: 1024 };
-//       const safetySettings = [
-//         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-//         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-//         { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-//         { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-//       ];
-
-//       // The prompt requesting various details including logo_url
-//       const prompt = `
-//         Provide the following details for the company named "${companyName}":
-//         1. Founding date/year (key: "founded")
-//         2. CEO name (key: "ceo")
-//         3. Approx employee count (integer, key: "employees")
-//         4. HQ address (key: "address")
-//         5. Website URL (key: "website")
-//         6. LinkedIn URL (key: "linkedin")
-//         7. Industry (key: "industry")
-//         8. HQ Location (City, Country) (key: "location")
-//         9. Twitter URL (key: "twitter")
-//         10. Facebook URL (key: "facebook")
-//         11. Publicly accessible logo URL (key: "logo_url")
-
-//         Return ONLY a single, valid JSON object with these keys. Use null if info not found. No extra text or markdown.
-//         Example: {"founded":"2006","ceo":"Some Name","employees":1000,"address":"123 Street","website":"https://...","linkedin":"https://...","industry":"Tech","location":"City, Country","twitter":null,"facebook":null,"logo_url":"https://.../logo.png"}
-//       `;
-
-//       const parts = [{ text: prompt }];
-//       console.log("Sending prompt to Gemini...");
-
-//       const result = await model.generateContent({ contents: [{ role: "user", parts }], generationConfig, safetySettings });
-
-//       // Response checking (keep as is)
-//       if (!result.response?.candidates?.length) { /* ... handle blocked/missing response ... */ }
-//       const response = result.response;
-//       const responseText = response.text();
-//       console.log("Raw response text from Gemini:", responseText);
-
-//       const data = extractJson(responseText);
-//       if (!data || typeof data !== 'object') throw new Error("AI failed to return valid JSON.");
-//       console.log("Parsed company details from Gemini:", data);
-
-//       // Map Gemini response to CompanyDetail fields
-//       const mappedDetails: Partial<CompanyDetail> = {
-//           start_date: typeof data.founded === 'string' ? data.founded : null,
-//           ceo: typeof data.ceo === 'string' ? data.ceo : null,
-//           employee_count: typeof data.employees === 'number' ? Math.floor(data.employees) : null,
-//           address: typeof data.address === 'string' ? data.address : null,
-//           website: typeof data.website === 'string' ? data.website : null,
-//           linkedin: typeof data.linkedin === 'string' ? data.linkedin : null,
-//           industry: typeof data.industry === 'string' ? data.industry : null,
-//           location: typeof data.location === 'string' ? data.location : null,
-//           twitter: typeof data.twitter === 'string' ? data.twitter : null,
-//           facebook: typeof data.facebook === 'string' ? data.facebook : null,
-//           logo_url: typeof data.logo_url === 'string' ? data.logo_url : null,
-//       };
-
-//       console.log("Mapped details for update:", mappedDetails);
-//       return mappedDetails;
-
-//     } catch (error: any) {
-//       console.error('Error fetching company details from Gemini:', error);
-//       throw new Error(`Failed to fetch details from AI: ${error.message}`);
-//     }
-//   };
-// };
-
 // src/hooks/use-companies.ts
-
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
-// Import the types reflecting the desired schema (including EmployeeAssociation if needed elsewhere, CandidateDetail for display)
-import { Company, CompanyDetail, CandidateDetail } from '@/types/company';
-// Removed EmployeeAssociation if not directly used after mapping
+import {
+  Company,
+  CompanyDetail as CompanyDetailTypeFromTypes,
+  CandidateDetail, 
+  KeyPerson
+} from '@/types/company';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
-import { Database } from '@/types/database.types'; // Assuming generated types are here
+import { Database } from '@/types/database.types'; 
 
-// --- Gemini Config ---
+// --- Gemini Config & Helper Functions ---
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const MODEL_NAME = "gemini-1.5-pro"; // Or your preferred model
+const GEMINI_MODEL_NAME = "gemini-1.5-pro";
 
-// --- UPDATED Helper to parse currency/number strings ---
-function parseFinancialValue(value: any): number | null {
+function parseFinancialValue(value: any): number | null { /* ... (your existing function) ... */ 
   if (value === null || value === undefined) return null;
-
-  if (typeof value === 'number') {
-    return !isNaN(value) ? value : null;
-  }
-
+  if (typeof value === 'number') return !isNaN(value) ? value : null;
   if (typeof value === 'string') {
     try {
-      let numStr = value.replace(/[$,€£¥₹,\s]/g, ''); // Remove common symbols/commas/spaces (added INR ₹)
+      let numStr = value.replace(/[$,€£¥₹,\s]/g, '');
       let multiplier = 1;
-
-      // Check for Million (M) or Billion (B) suffixes (case-insensitive)
-      if (numStr.toUpperCase().endsWith('B')) {
+      const upperStr = numStr.toUpperCase();
+      if (upperStr.includes('BILLION') || upperStr.endsWith('B')) {
         multiplier = 1_000_000_000;
-        numStr = numStr.slice(0, -1); // Remove the 'B'
-      } else if (numStr.toUpperCase().endsWith('M')) {
+        numStr = numStr.replace(/BILLION|B/gi, '');
+      } else if (upperStr.includes('CRORE')) {
+        multiplier = 10_000_000;
+        numStr = numStr.replace(/CRORE/gi, '');
+      } else if (upperStr.endsWith('M')) {
         multiplier = 1_000_000;
-        numStr = numStr.slice(0, -1); // Remove the 'M'
-      } else if (numStr.toUpperCase().endsWith('K')) { // Less common for revenue, but possible
-         multiplier = 1_000;
-         numStr = numStr.slice(0, -1); // Remove the 'K'
+        numStr = numStr.slice(0, -1);
+      } else if (upperStr.endsWith('K')) {
+        multiplier = 1_000;
+        numStr = numStr.slice(0, -1);
       }
-
-
       if (numStr === '' || numStr.toUpperCase() === 'N/A') return null;
-
       const number = parseFloat(numStr);
-      if (isNaN(number)) return null; // Failed to parse number part
-
-      return number * multiplier; // Apply multiplier
-
+      return !isNaN(number) ? number * multiplier : null;
     } catch (e) {
-      console.warn("Could not parse financial value string:", value, e);
+      // console.warn("Could not parse financial value string:", value, e); // Reduced logging
       return null;
     }
   }
-  return null; // Handle other types
+  return null;
 }
-// --- END UPDATED Helper ---
-
-// --- Helper Function to Extract JSON ---
-function extractJson(text: string): any | null {
-  if (!text) return null;
-  const jsonMarkdownMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-  if (jsonMarkdownMatch && jsonMarkdownMatch[1]) { try { return JSON.parse(jsonMarkdownMatch[1]); } catch (e) { console.warn("Failed to parse JSON within markdown markers:", e); } }
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) { const potentialJson = text.substring(firstBrace, lastBrace + 1); try { return JSON.parse(potentialJson); } catch (e) { console.warn("Failed to parse JSON object match:", e); } }
-  try { return JSON.parse(text); } catch (e) { console.error("Could not parse JSON from text:", text); return null; }
+function fixMalformedJson(text: string): string { /* ... (your existing function) ... */ 
+  let fixedText = text;
+  fixedText = fixedText.replace(/^\uFEFF/, '');
+  fixedText = fixedText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  fixedText = fixedText.trim();
+  const firstBrace = fixedText.indexOf('{');
+  const lastBrace = fixedText.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return '{}';
+  }
+  fixedText = fixedText.substring(firstBrace, lastBrace + 1);
+  try { fixedText = fixedText.replace(/,\s*([\}\]])/g, '$1'); }
+  catch(e) { /* console.warn("Regex for trailing comma removal failed:", e); */ } // Reduced logging
+  fixedText = fixedText.replace(/,\s*$/, '');
+  if (fixedText.includes('"key_people"')) {
+      fixedText = fixedText.replace(/"key_people"\s*:\s*\[\s*,/g, '"key_people": [');
+      fixedText = fixedText.replace(/"key_people"\s*:\s*\[([^\]]*)\]/g, (match, p1) => {
+          const items = p1.split('},{').map((item: string, index: number, arr: string[]) => {
+              let MfixedItem = item.trim();
+              if (!MfixedItem.startsWith('{') && index > 0) MfixedItem = '{' + MfixedItem;
+              if (!MfixedItem.endsWith('}') && index < arr.length -1) MfixedItem = MfixedItem + '}';
+              return MfixedItem;
+          }).join('},{');
+          return `"key_people": [${items}]`;
+      });
+      fixedText = fixedText.replace(/"name":\s*"([^"]*)",\s*"([^"]*)"\s*(?=\})/g, '"name": "$1", "title": "$2"');
+  }
+  return fixedText;
+}
+function fallbackParseJson(text: string, companyName: string): any { /* ... (your existing function) ... */ 
+  const result: any = { name: companyName };
+  const fieldsToParse = [
+    { key: 'website', regex: /"website"\s*:\s*"([^"]*)"/i }, { key: 'domain', regex: /"domain"\s*:\s*"([^"]*)"/i },
+    { key: 'about', regex: /"about"\s*:\s*"([^"]*)"/i }, { key: 'start_date', regex: /"(?:start_date|founded_date)"\s*:\s*"([^"]*)"/i },
+    { key: 'founded_as', regex: /"founded_as"\s*:\s*"([^"]*)"/i },
+    { key: 'employee_count', regex: /"employee_count"\s*:\s*(\d+|"[^"]*")/i, isNumeric: true },
+    { key: 'employee_count_date', regex: /"employee_count_date"\s*:\s*"([^"]*)"/i },
+    { key: 'address', regex: /"address"\s*:\s*"([^"]*)"/i }, { key: 'location', regex: /"location"\s*:\s*"([^"]*)"/i },
+    { key: 'industry', regex: /"industry"\s*:\s*"([^"]*)"/i }, { key: 'stage', regex: /"stage"\s*:\s*"([^"]*)"/i },
+    { key: 'linkedin', regex: /"linkedin"\s*:\s*"([^"]*)"/i },
+    { key: 'revenue', regex: /"revenue"\s*:\s*("[^"]*"|\d+\.?\d*)/i, isNumeric: true },
+    { key: 'cashflow', regex: /"cashflow"\s*:\s*("[^"]*"|\d+\.?\d*)/i, isNumeric: true },
+    { key: 'logo_url', regex: /"logo_url"\s*:\s*"([^"]*)"/i },
+    { key: 'competitors', regex: /"competitors"\s*:\s*(\[.*?\]|"[^"]*")/i, isArray: true },
+    { key: 'products', regex: /"products"\s*:\s*(\[.*?\]|"[^"]*")/i, isArray: true },
+    { key: 'services', regex: /"services"\s*:\s*(\[.*?\]|"[^"]*")/i, isArray: true },
+  ];
+  fieldsToParse.forEach(fieldInfo => {
+    const match = text.match(fieldInfo.regex); let value = null;
+    if (match && match[1]) { value = match[1].trim(); if (value.toLowerCase() === 'null' || value.toLowerCase() === 'n/a' || value === "-") value = null; else if (fieldInfo.isNumeric) value = parseFinancialValue(value); else if (fieldInfo.isArray) { try { const arr = JSON.parse(value.startsWith('[') ? value : `[${value.split(',').map(s => `"${s.trim().replace(/"/g, '\\"')}"`).join(',')}]`); value = Array.isArray(arr) ? arr.map((item: any) => String(item).trim()).filter(Boolean) : null; } catch { value = value.split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean); } } else if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1); }
+    result[fieldInfo.key] = value;
+  });
+  const kpMatch = text.match(/"key_people"\s*:\s*(\[[\s\S]*?\]|"-")/i);
+  if (kpMatch && kpMatch[1]) { if (kpMatch[1] === '"-"' || kpMatch[1].toLowerCase() === '"n/a"') result.key_people = null; else { try { const kpArray = JSON.parse(kpMatch[1]); if (Array.isArray(kpArray) && kpArray.every(p => typeof p === 'object' && p !== null && 'name' in p && 'title' in p)) result.key_people = kpArray.map(p => ({ name: String(p.name).trim(), title: String(p.title).trim() })); else result.key_people = null; } catch (e) { result.key_people = null; } } } else result.key_people = null;
+  return result;
+}
+function extractJsonWithFallback(text: string, companyName: string): any | null { /* ... (your existing function) ... */ 
+    if (!text || typeof text !== 'string') { return null; }
+    let cleanedText = fixMalformedJson(text);
+    try {
+        const parsed = JSON.parse(cleanedText);
+        if (typeof parsed === 'object' && parsed !== null) {
+            if (!parsed.name || typeof parsed.name !== 'string') { return fallbackParseJson(text, companyName); }
+            if (parsed.key_people !== "-" && parsed.key_people !== null && (!Array.isArray(parsed.key_people) || !parsed.key_people.every((kp: any) => typeof kp === 'object' && kp !== null && 'name' in kp && typeof kp.name === 'string' && 'title' in kp && typeof kp.title === 'string'))) {
+                const fallbackResult = fallbackParseJson(text, companyName);
+                parsed.key_people = fallbackResult.key_people || null;
+            }
+            return parsed;
+        }
+        return fallbackParseJson(text, companyName);
+    } catch (e) {
+        return fallbackParseJson(text, companyName);
+    }
+}
+async function validateUrl(url: string | null): Promise<string | null> { /* ... (your existing function) ... */ 
+  if (!url || typeof url !== 'string' || url.trim() === '' || url.trim().toLowerCase() === 'n/a') return null;
+  let cleanedUrl = url.trim();
+  if (!cleanedUrl.startsWith('http://') && !cleanedUrl.startsWith('https://')) { cleanedUrl = `https://${cleanedUrl}`; }
+  cleanedUrl = cleanedUrl.replace(/[,/]+$/, '');
+  try { new URL(cleanedUrl); return cleanedUrl;
+  } catch (error) { console.warn(`URL syntax invalid for ${cleanedUrl}:`, error); return null; }
 }
 
 // --- Hook to fetch the list of companies ---
-export const useCompanies = () => {
-  return useQuery({
+export const useCompanies = () => { /* ... (your existing hook) ... */ 
+  return useQuery<Company[], Error>({
     queryKey: ['companies'],
     queryFn: async (): Promise<Company[]> => {
-      console.log("Fetching companies list with stable ordering (created_at DESC, id ASC)...");
       const { data, error } = await supabase
         .from('companies')
-        .select('id, name, logo_url, employee_count, industry, stage, location, account_owner, website, linkedin, twitter, facebook, created_at') // Select specific columns
+        .select('id, name, logo_url, employee_count, industry, stage, location, account_owner, website, linkedin, created_at, revenue, cashflow, founded_as, employee_count_date, competitors, products, services, key_people, about, domain, status')
         .order('created_at', { ascending: false })
         .order('id', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching ordered companies:', error);
-        throw error;
-      }
-      console.log('Ordered companies data fetched successfully:', data?.length);
-      return (data as Company[]) || [];
+      if (error) { console.error('Error fetching ordered companies:', error); throw error; }
+      return data || [];
     },
-    // staleTime: 5 * 60 * 1000,
-    // gcTime: 10 * 60 * 1000,
   });
-};
+}
 
-// --- Hook to fetch details for a single company ---
-export const useCompanyDetails = (id: number) => {
-  return useQuery({
-    queryKey: ['company', id],
-    queryFn: async (): Promise<CompanyDetail | null> => {
-      if (!id || isNaN(id) || id <= 0) {
-          console.warn(`Invalid company ID requested: ${id}`);
+// --- Hook to fetch details for a single company by ID (ONLY from Supabase) ---
+export const useCompanyDetails = (id: number | string | undefined) => { /* ... (your existing hook) ... */ 
+  const companyIdNum = typeof id === 'string' ? parseInt(id, 10) : id;
+  return useQuery<CompanyDetailTypeFromTypes | null, Error>({
+    queryKey: ['company', companyIdNum],
+    queryFn: async (): Promise<CompanyDetailTypeFromTypes | null> => {
+      if (!companyIdNum || isNaN(companyIdNum) || companyIdNum <= 0) {
           return null;
       }
-      console.log(`Fetching company details for ID: ${id}`);
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (error) {
-        console.error(`Error fetching company details for ID ${id}:`, error);
-        throw error;
-      }
-      console.log(`Company details fetched for ID ${id}:`, data ? 'Data found' : 'Not found');
-      return data as CompanyDetail | null;
+      const { data, error } = await supabase.from('companies').select('*').eq('id', companyIdNum).maybeSingle();
+      if (error) { console.error(`useCompanyDetails: Error fetching company ID ${companyIdNum} from DB:`, error); throw error; }
+      return (data as CompanyDetailTypeFromTypes) || null;
     },
-    enabled: !!id && !isNaN(id) && id > 0
+    enabled: !!companyIdNum && !isNaN(companyIdNum) && companyIdNum > 0,
   });
-};
+}
 
-// --- Hook to fetch associated employees (HYBRID APPROACH) ---
-// Fetches from both candidate_companies (legacy) and employee_associations (new)
+// Define a type for the data we expect from resume_analysis
+type ResumeAnalysisData = Pick<Database['public']['Tables']['resume_analysis']['Row'], 
+  'candidate_id' | 'job_id' | 'candidate_name' | 'email' | 'phone_number' | 'linkedin'
+>;
+// Define a type for the data we expect from candidate_resume_analysis
+type CandidateResumeAnalysisData = Pick<Database['public']['Tables']['candidate_resume_analysis']['Row'], 
+  'candidate_id' | 'job_id' | 'candidate_name' | 'email' | 'phone_number' | 'linkedin'
+>;
 
-export const useCompanyEmployees = (companyId: number) => {
-  return useQuery({
-    queryKey: ["company-employees", companyId],
+
+// --- Hook to fetch associated employees for a specific company ---
+export const useCompanyEmployees = (companyId: number | string | undefined) => {
+  const companyIdNum = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
+
+  return useQuery<CandidateDetail[], Error>({
+    queryKey: ['company-employees-v2', companyIdNum], 
     queryFn: async (): Promise<CandidateDetail[]> => {
-      console.log(`Fetching ALL employee associations for company ID: ${companyId}`);
-      if (!companyId || isNaN(companyId) || companyId <= 0) {
-        console.warn(`Invalid company ID for fetching employees: ${companyId}`);
-        return [];
+      if (!companyIdNum || isNaN(companyIdNum) || companyIdNum <= 0) {
+          console.warn(`useCompanyEmployees: Invalid company ID: ${companyIdNum}`);
+          return [];
       }
+      console.log(`useCompanyEmployees: Fetching employees for company ID: ${companyIdNum}`);
 
       try {
-        // --- Fetch from candidate_companies (Legacy Data) ---
-        type CandidateCompanyRow = Database["public"]["Tables"]["candidate_companies"]["Row"];
+        // 1. Fetch from 'contacts' associated with this company
+        const { data: contactsData, error: contactsError } = await supabase
+          .from('contacts')
+          .select('id, name, email, job_title, company_id, linkedin_url, mobile, contact_owner, contact_stage')
+          .eq('company_id', companyIdNum);
+
+        if (contactsError) {
+          console.error(`useCompanyEmployees: Error fetching contacts for company ${companyIdNum}:`, contactsError);
+          throw contactsError;
+        }
+
+        const employeesFromContacts: CandidateDetail[] = (contactsData || []).map(contact => ({
+          id: contact.id, 
+          candidate_id: contact.id,
+          name: contact.name || 'N/A',
+          email: contact.email || 'N/A',
+          phone_number: contact.mobile || null,
+          linkedin: contact.linkedin_url || null,
+          designation: contact.job_title || 'N/A',
+          contact_owner: contact.contact_owner || null,
+          contact_stage: contact.contact_stage || null,
+          source_table: 'contacts',
+          company_id: contact.company_id,
+          job_id: null, 
+          association_id: null,
+        }));
+
+        // 2. Fetch base data from 'candidate_companies'
         const { data: legacyLinks, error: legacyError } = await supabase
-          .from("candidate_companies")
-          .select("candidate_id, job_id, company_id, designation, contact_owner, contact_stage")
-          .eq("company_id", companyId);
+          .from('candidate_companies')
+          .select('candidate_id, job_id, company_id, designation, contact_owner, contact_stage, years')
+          .eq('company_id', companyIdNum);
 
-        if (legacyError) {
-          console.error(`Error fetching legacy candidate_companies for company ${companyId}:`, legacyError);
-          throw legacyError;
+        if (legacyError) { 
+          console.error(`useCompanyEmployees: Error fetching legacy candidate_companies for company ${companyIdNum}:`, legacyError); 
+          throw legacyError; 
         }
-        console.log(`Fetched ${legacyLinks?.length ?? 0} legacy candidate_companies links.`);
 
-        // --- Fetch from employee_associations (New Data) ---
-        type EmployeeAssociationRow = Database["public"]["Tables"]["employee_associations"]["Row"];
+        // 3. Fetch base data from 'employee_associations'
         const { data: newAssociations, error: newAssocError } = await supabase
-          .from("employee_associations")
-          .select(
-            "id, candidate_id, company_id, job_id, designation, contact_owner, contact_stage, start_date, end_date, is_current, created_by"
-          )
-          .eq("company_id", companyId);
+          .from('employee_associations')
+          .select('id, candidate_id, company_id, job_id, designation, contact_owner, contact_stage, start_date, end_date, is_current, created_by')
+          .eq('company_id', companyIdNum);
 
-        if (newAssocError) {
-          console.error(`Error fetching new employee_associations for company ${companyId}:`, newAssocError);
-          throw newAssocError;
-        }
-        console.log(`Fetched ${newAssociations?.length ?? 0} new employee_associations.`);
-
-        // --- Combine Candidate IDs ---
-        const legacyCandidateIds = (legacyLinks || [])
-          .map((l) => l.candidate_id)
-          .filter(Boolean) as string[];
-        const newCandidateIds = (newAssociations || [])
-          .map((a) => a.candidate_id)
-          .filter(Boolean) as string[];
-        const allUniqueCandidateIds = [...new Set([...legacyCandidateIds, ...newCandidateIds])];
-
-        // --- Fetch hr_job_candidates Details ---
-        let hrCandidateDetails: Database["public"]["Tables"]["hr_job_candidates"]["Row"][] | null = null;
-        if (allUniqueCandidateIds.length > 0) {
-          console.log(`Fetching hr_job_candidates details for ${allUniqueCandidateIds.length} unique IDs.`);
-          const { data, error: cdError } = await supabase
-            .from("hr_job_candidates") // Changed to hr_job_candidates
-            .select("id, name, email, phone")
-            .in("id", allUniqueCandidateIds);
-
-          if (cdError) {
-            console.error("Error fetching hr_job_candidates details:", cdError);
-            // Proceed with missing details, as some candidate_ids may not exist
-          } else {
-            hrCandidateDetails = data;
-            console.log(`Fetched ${hrCandidateDetails?.length ?? 0} hr_job_candidates details.`);
-          }
-        } else {
-          console.log("No candidate IDs found from either association table.");
-          return [];
+        if (newAssocError) { 
+          console.error(`useCompanyEmployees: Error fetching new employee_associations for company ${companyIdNum}:`, newAssocError); 
+          throw newAssocError; 
         }
 
-        // Create a map for quick lookup of hr_job_candidates details by their ID
-        const candidateDetailsMap = new Map<string, Database["public"]["Tables"]["hr_job_candidates"]["Row"]>();
-        hrCandidateDetails?.forEach((cd) => candidateDetailsMap.set(cd.id, cd));
+        // --- Consolidate (candidate_id, job_id) pairs for lookups ---
+        const lookups: { candidate_id: string; job_id: string | null }[] = [];
+        (legacyLinks || []).forEach(link => {
+            if (link.candidate_id) { // job_id can be null here if we want to try matching only by candidate_id later
+                lookups.push({ candidate_id: String(link.candidate_id), job_id: link.job_id ? String(link.job_id) : null });
+            }
+        });
+        (newAssociations || []).forEach(assoc => {
+            if (assoc.candidate_id) {
+                 lookups.push({ candidate_id: String(assoc.candidate_id), job_id: assoc.job_id ? String(assoc.job_id) : null });
+            }
+        });
+        
+        const uniqueLookups = Array.from(new Set(lookups.map(l => JSON.stringify(l)))).map(s => JSON.parse(s));
 
-        // --- Map Legacy Data to CandidateDetail ---
+        // --- Fetch from candidate_resume_analysis ---
+        let candidateResumeAnalysisMap = new Map<string, CandidateResumeAnalysisData>();
+        if (uniqueLookups.length > 0) {
+            const craLookups = uniqueLookups.filter(l => l.job_id && /^[0-9a-fA-F-]{36}$/.test(l.job_id)); // Only if job_id is a valid UUID for this table
+            if (craLookups.length > 0) {
+                const craFilterConditions = craLookups
+                    .map(lookup => `and(candidate_id.eq.${lookup.candidate_id},job_id.eq.${lookup.job_id})`)
+                    .join(',');
+                console.log(`useCompanyEmployees: Fetching candidate_resume_analysis details for pairs:`, craLookups);
+                const { data: craData, error: craError } = await supabase
+                    .from('candidate_resume_analysis')
+                    .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
+                    .or(craFilterConditions);
+                if (craError) {
+                    console.error('useCompanyEmployees: Error fetching candidate_resume_analysis details:', craError);
+                } else {
+                    (craData || []).forEach(cra => {
+                        if (cra.candidate_id && cra.job_id) {
+                            candidateResumeAnalysisMap.set(`${String(cra.candidate_id)}|${String(cra.job_id)}`, cra as CandidateResumeAnalysisData);
+                        }
+                    });
+                    console.log(`useCompanyEmployees: Successfully fetched ${candidateResumeAnalysisMap.size} candidate_resume_analysis details.`);
+                }
+            }
+        }
+
+        // --- Fetch from resume_analysis ---
+        let resumeAnalysisDetailsMap = new Map<string, ResumeAnalysisData>();
+        if (uniqueLookups.length > 0) {
+            // For resume_analysis, job_id is TEXT, so all job_id types from source are fine
+            const raLookups = uniqueLookups.filter(l => l.job_id); // Must have a job_id
+            if (raLookups.length > 0) {
+                const raFilterConditions = raLookups
+                    .map(lookup => `and(candidate_id.eq.${lookup.candidate_id},job_id.eq.${lookup.job_id})`)
+                    .join(',');
+                console.log(`useCompanyEmployees: Fetching resume_analysis details for pairs:`, raLookups);
+                const { data: raData, error: raError } = await supabase
+                    .from('resume_analysis') 
+                    .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
+                    .or(raFilterConditions);
+                if (raError) {
+                    console.error('useCompanyEmployees: Error fetching resume_analysis details:', raError);
+                } else {
+                    (raData || []).forEach(ra => {
+                        if (ra.candidate_id && ra.job_id) {
+                            resumeAnalysisDetailsMap.set(`${String(ra.candidate_id)}|${String(ra.job_id)}`, ra as ResumeAnalysisData);
+                        }
+                    });
+                    console.log(`useCompanyEmployees: Successfully fetched ${resumeAnalysisDetailsMap.size} resume_analysis details.`);
+                }
+            }
+        }
+        
         const mappedLegacyDetails: CandidateDetail[] = (legacyLinks || []).map((ccLink): CandidateDetail => {
-          const coreDetail = candidateDetailsMap.get(ccLink.candidate_id || "");
+          const jobKeyPart = ccLink.job_id ? String(ccLink.job_id) : "NULL_JOB"; // Handle null job_id for map key
+          const candResumeKey = (ccLink.candidate_id && ccLink.job_id && /^[0-9a-fA-F-]{36}$/.test(ccLink.job_id)) ? `${String(ccLink.candidate_id)}|${jobKeyPart}` : null;
+          const resumeKey = (ccLink.candidate_id && ccLink.job_id) ? `${String(ccLink.candidate_id)}|${jobKeyPart}` : null;
+          
+          const candAnalysisDetail = candResumeKey ? candidateResumeAnalysisMap.get(candResumeKey) : null;
+          const analysisDetail = resumeKey ? resumeAnalysisDetailsMap.get(resumeKey) : null;
+
+          const name = candAnalysisDetail?.candidate_name && candAnalysisDetail.candidate_name !== 'Unknown' 
+                       ? candAnalysisDetail.candidate_name 
+                       : (analysisDetail?.candidate_name && analysisDetail.candidate_name !== 'Unknown' 
+                          ? analysisDetail.candidate_name 
+                          : `Legacy: ${String(ccLink.candidate_id)?.substring(0,8) ?? 'N/A'}`);
+          const email = candAnalysisDetail?.email || analysisDetail?.email || null;
+          const phone = candAnalysisDetail?.phone_number || analysisDetail?.phone_number || null;
+          const linkedin = candAnalysisDetail?.linkedin || analysisDetail?.linkedin || null;
+
           return {
-            id: ccLink.candidate_id || "unknown",
-            name: coreDetail?.name || "N/A",
-            email: coreDetail?.email || "N/A",
-            phone_number: coreDetail?.phone_number || "N/A",
-            linkedin: coreDetail?.linkedin_url || "N/A",
-            designation: ccLink.designation || "N/A",
-            contact_owner: ccLink.contact_owner || "N/A",
-            contact_stage: ccLink.contact_stage || "N/A",
-            source_table: "candidate_companies",
+            id: `cc-${ccLink.candidate_id}-${ccLink.job_id}-${ccLink.company_id}`,
+            candidate_id: String(ccLink.candidate_id),
+            name: name,
+            email: email,
+            phone_number: phone,
+            linkedin: linkedin,
+            designation: ccLink.designation || null,
+            contact_owner: ccLink.contact_owner || null,
+            contact_stage: ccLink.contact_stage || null,
+            source_table: 'candidate_companies',
             company_id: ccLink.company_id,
-            job_id: ccLink.job_id,
+            job_id: ccLink.job_id ? String(ccLink.job_id) : null,
+            years: ccLink.years || null,
             association_id: null,
           };
         });
 
-        // --- Map New Data to CandidateDetail ---
         const mappedNewDetails: CandidateDetail[] = (newAssociations || []).map((assoc): CandidateDetail => {
-          const coreDetail = candidateDetailsMap.get(assoc.candidate_id);
-          return {
-            id: assoc.candidate_id,
-            name: coreDetail?.name || `Associated Candidate ${assoc.candidate_id.substring(0, 5)}...`,
-            email: coreDetail?.email || "N/A",
-            phone_number: coreDetail?.phone_number || "N/A",
-            linkedin: coreDetail?.linkedin_url || "N/A",
-            designation: assoc.designation || "N/A",
-            contact_owner: assoc.contact_owner || "N/A",
-            contact_stage: assoc.contact_stage || "N/A",
-            source_table: "employee_associations",
-            company_id: assoc.company_id,
-            job_id: assoc.job_id,
-            association_id: assoc.id,
-            association_start_date: assoc.start_date,
-            association_end_date: assoc.end_date,
-            association_is_current: assoc.is_current,
-            association_created_by: assoc.created_by,
-          };
+             const jobKeyPart = assoc.job_id ? String(assoc.job_id) : "NULL_JOB";
+             const candResumeKey = (assoc.candidate_id && assoc.job_id && /^[0-9a-fA-F-]{36}$/.test(assoc.job_id)) ? `${String(assoc.candidate_id)}|${jobKeyPart}` : null;
+             const resumeKey = (assoc.candidate_id && assoc.job_id) ? `${String(assoc.candidate_id)}|${jobKeyPart}` : null;
+
+             const candAnalysisDetail = candResumeKey ? candidateResumeAnalysisMap.get(candResumeKey) : null;
+             const analysisDetail = resumeKey ? resumeAnalysisDetailsMap.get(resumeKey) : null;
+
+             const name = candAnalysisDetail?.candidate_name && candAnalysisDetail.candidate_name !== 'Unknown' 
+                          ? candAnalysisDetail.candidate_name 
+                          : (analysisDetail?.candidate_name && analysisDetail.candidate_name !== 'Unknown' 
+                             ? analysisDetail.candidate_name 
+                             : `Assoc: ${String(assoc.candidate_id)?.substring(0,8) ?? 'N/A'}`);
+             const email = candAnalysisDetail?.email || analysisDetail?.email || null;
+             const phone = candAnalysisDetail?.phone_number || analysisDetail?.phone_number || null;
+             const linkedin = candAnalysisDetail?.linkedin || analysisDetail?.linkedin || null;
+
+             return {
+               id: String(assoc.id), 
+               candidate_id: String(assoc.candidate_id),
+               name: name,
+               email: email,
+               phone_number: phone,
+               linkedin: linkedin,
+               designation: assoc.designation || null,
+               contact_owner: assoc.contact_owner || null,
+               contact_stage: assoc.contact_stage || null,
+               source_table: 'employee_associations',
+               company_id: assoc.company_id,
+               job_id: assoc.job_id ? String(assoc.job_id) : null,
+               association_id: String(assoc.id),
+               association_start_date: assoc.start_date,
+               association_end_date: assoc.end_date,
+               association_is_current: assoc.is_current,
+               association_created_by: assoc.created_by,
+             };
         });
 
-        // --- Combine and Deduplicate ---
-        const combinedMap = new Map<string, CandidateDetail>();
-        mappedLegacyDetails.forEach((detail) => {
-          if (!combinedMap.has(detail.id)) {
-            combinedMap.set(detail.id, detail);
-          }
-        });
-        mappedNewDetails.forEach((detail) => {
-          combinedMap.set(detail.id, detail);
-        });
+        const allEmployeesRaw = [
+            ...employeesFromContacts,
+            ...mappedLegacyDetails,
+            ...mappedNewDetails
+        ];
 
-        const finalDetails = Array.from(combinedMap.values());
-        finalDetails.sort((a, b) => a.name.localeCompare(b.name));
-
-        console.log(`Final combined employee details for company ${companyId}:`, finalDetails.length);
+        const finalDetails = allEmployeesRaw.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        
+        console.log(`useCompanyEmployees: Final combined ${finalDetails.length} employee details for company ${companyIdNum}.`);
         return finalDetails;
+
       } catch (error) {
-        console.error(`Error processing employees for company ${companyId}:`, error);
+        console.error(`useCompanyEmployees: Error processing employees for company ${companyIdNum}:`, error);
         throw error;
       }
     },
-    enabled: !!companyId && !isNaN(companyId) && companyId > 0,
+    enabled: !!companyIdNum && !isNaN(companyIdNum) && companyIdNum > 0,
   });
 };
 
+
 // --- Hook to get company and employee counts ---
-export const useCompanyCounts = () => {
-  return useQuery({
+export const useCompanyCounts = () => { /* ... (your existing hook) ... */ 
+  return useQuery<{ companies: number; employees: number }, Error>({
     queryKey: ['company-counts'],
     queryFn: async () => {
-      console.log("Fetching company and employee counts...");
       try {
-          const { count: companyCount, error: companyError } = await supabase
+          const { count: companiesCount, error: companiesError } = await supabase
             .from('companies')
             .select('*', { count: 'exact', head: true });
-          if (companyError) throw companyError;
-          console.log('Company count:', companyCount);
 
-          let uniqueEmployeeCount = 0;
-          try {
-              const { data: uniqueCandidates, error: rpcError } = await supabase
-                    .rpc('get_unique_associated_candidate_count'); // Tries RPC first
-              if (rpcError) throw rpcError;
-              uniqueEmployeeCount = (uniqueCandidates as any)?.count ?? 0;
-              console.log('Unique associated employee count (via RPC):', uniqueEmployeeCount);
-          } catch (rpcOrFallbackError) {
-                console.warn("RPC count failed or missing. Falling back to client-side count.", rpcOrFallbackError);
-                // Fallback counts from BOTH tables and combines unique IDs
-                const [legacyRes, newRes] = await Promise.all([
-                     supabase.from('candidate_companies').select('candidate_id'),
-                     supabase.from('employee_associations').select('candidate_id')
-                 ]);
-                 if(legacyRes.error) console.error("Error counting legacy:", legacyRes.error);
-                 if(newRes.error) console.error("Error counting new assoc:", newRes.error);
+          if (companiesError) throw companiesError;
 
-                 const legacyIds = legacyRes.data?.map(e => e.candidate_id) || [];
-                 const newIds = newRes.data?.map(e => e.candidate_id) || [];
-                 const uniqueSet = new Set([...legacyIds, ...newIds]);
-                 uniqueEmployeeCount = uniqueSet.size;
-                 console.log('Unique associated employee count (via fallback):', uniqueEmployeeCount);
-           }
+          const { data: assocEmployeeData, error: assocEmployeeError } = await supabase
+            .from('employee_associations')
+            .select('candidate_id', { head: false });
+          if (assocEmployeeError) throw assocEmployeeError;
 
-          return { companies: companyCount ?? 0, employees: uniqueEmployeeCount };
+          const { data: legacyEmployeeData, error: legacyEmployeeError } = await supabase
+            .from('candidate_companies')
+            .select('candidate_id', { head: false });
+          if (legacyEmployeeError) throw legacyEmployeeError;
+            
+          const uniqueCandidateIds = new Set([
+            ...(assocEmployeeData || []).map(e => e.candidate_id),
+            ...(legacyEmployeeData || []).map(e => e.candidate_id)
+          ].filter(Boolean));
+
+          return {
+            companies: companiesCount ?? 0,
+            employees: uniqueCandidateIds.size
+          };
       } catch(error) {
            console.error('Error fetching counts:', error);
-            return { companies: 0, employees: 0 }; // Return default on error
+            return { companies: 0, employees: 0 };
       }
     }
   });
-};
+}
 
-// --- Hook to fetch details from Gemini AI ---
-export const useFetchCompanyDetails = () => {
-  if (!GEMINI_API_KEY) {
-    console.error("Gemini API key (VITE_GEMINI_API_KEY) is missing.");
-    return async (_companyName: string): Promise<Partial<CompanyDetail>> => { throw new Error("AI Service Key not configured."); };
+// --- Hook to fetch details ONLY from Gemini AI ---
+export const useFetchCompanyDetails = () => { /* ... (your existing hook) ... */ 
+  if (!GEMINI_API_KEY || GEMINI_API_KEY.trim() === "") {
+    console.error("Gemini API key (VITE_GEMINI_API_KEY) is missing or empty. AI Fetching will fail.");
+    return async (_companyName: string): Promise<Partial<CompanyDetailTypeFromTypes>> => {
+      throw new Error("Gemini API Key not configured.");
+    };
   }
 
-  return async (companyName: string): Promise<Partial<CompanyDetail>> => {
-    if (!GEMINI_API_KEY) throw new Error("AI Service Key not configured.");
-    console.log('Fetching company details via Gemini for:', companyName);
+  return async (companyName: string): Promise<Partial<CompanyDetailTypeFromTypes>> => {
+    if (!companyName || companyName.trim() === "") {
+      throw new Error("Company name is required for AI fetch.");
+    }
+
+    const prompt = `
+        Provide comprehensive details for the company named "${companyName}":
+        1.  Official Company Name (key: "name")
+        2.  Primary Website URL (key: "website")
+        3.  Primary Domain (if different, key: "domain")
+        4.  Short "About" description (paragraph, key: "about")
+        5.  Founding Date or Year (key: "start_date", format YYYY-MM-DD or YYYY)
+        6.  Original Name if founded as different (key: "founded_as")
+        7.  Approx Total Employees (integer, key: "employee_count")
+        8.  Date for Employee Count (key: "employee_count_date", format YYYY-MM-DD)
+        9.  Full HQ Address (key: "address")
+        10. HQ Location (City, Country format, key: "location")
+        11. Main Industry (key: "industry")
+        12. Current Company Stage/Status (e.g., "Public", "Private", "Customer", key: "stage")
+        13. Official LinkedIn company page URL (key: "linkedin")
+        14. Estimated Annual Revenue (string like "$61.6B", key: "revenue")
+        15. Estimated Cash Flow (string like "$8.2B", key: "cashflow")
+        16. Top 3-5 Competitors (array of strings, key: "competitors")
+        17. Key Products/Platforms (array of strings, key: "products")
+        18. Main Services Offered (array of strings, key: "services")
+        19. Key People (array of objects {name: string, title: string}, THIS SHOULD INCLUDE THE CEO IF KNOWN, key: "key_people"). If none known, use null or an empty array.
+        20. Publicly accessible Logo URL (key: "logo_url")
+
+        Return ONLY a single, valid JSON object with these keys. Use null if info not found. No extra text or markdown.
+        Example: {"name":"Accenture", "start_date":"1989", "key_people":[{"name":"Julie Sweet", "title":"Chair & CEO"}]}
+      `;
 
     try {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-      const generationConfig = { temperature: 0.4, topK: 1, topP: 1, maxOutputTokens: 1024 };
-      const safetySettings = [
-                 { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-                 { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-                 { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-                 { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-              ];
-      const prompt = ` Provide the following details for the company named "${companyName}":
-        1. Founding date/year (key: "founded")
-        2. CEO name (key: "ceo")
-        3. Approx employee count (integer, key: "employees")
-        4. HQ address (key: "address")
-        5. Website URL (key: "website")
-        6. LinkedIn URL (key: "linkedin")
-        7. Industry (key: "industry")
-        8. HQ Location (City, Country) (key: "location")
-        9. Twitter URL (key: "twitter")
-        10. Facebook URL (key: "facebook")
-        11. Publicly accessible logo URL (key: "logo_url")
-         12. Estimated Annual Revenue (key: "revenue"). If possible, include currency symbol and scale (e.g., "$61.6B", "€50M", "10000000 INR"). If only number is known, provide just the number.
-        13. Estimated Cash Flow (key: "cashflow"). Format similarly to revenue if possible.
-
-        Return ONLY a single, valid JSON object with these keys. Use null if info not found. No extra text or markdown.
-        Example: {"founded":"2006",...,"location":"City, Country","twitter":null,"facebook":null,"logo_url":null,"revenue":"$61.6B","cashflow":"$10B"}`; // Your full Gemini prompt
-
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL_NAME });
+      const generationConfig = { temperature: 0.2, topK: 1, topP: 1, maxOutputTokens: 3000 };
+      const safetySettings: { category: HarmCategory; threshold: HarmBlockThreshold }[] = [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      ];
       const parts = [{ text: prompt }];
-      console.log("Sending prompt to Gemini...");
       const result = await model.generateContent({ contents: [{ role: "user", parts }], generationConfig, safetySettings });
 
-      if (!result.response?.candidates?.length) { throw new Error("AI service did not provide a valid response."); }
+      if (!result.response?.candidates?.length) { throw new Error("Gemini: AI service did not provide a valid response."); }
       const responseText = result.response.text();
-      console.log("Raw response text from Gemini:", responseText);
+      const data = extractJsonWithFallback(responseText, companyName);
 
-      const data = extractJson(responseText);
-      if (!data || typeof data !== 'object') throw new Error("AI failed to return valid JSON.");
-      console.log("Parsed company details from Gemini:", data);
+      if (!data || typeof data !== 'object' || !data.name || typeof data.name !== 'string') { throw new Error("Gemini: AI failed to return valid or correctly structured JSON.");}
 
-       // --- UPDATE MAPPED DETAILS ---
-       const mappedDetails: Partial<CompanyDetail> = {
-        start_date: typeof data.founded === 'string' ? data.founded : null,
-        ceo: typeof data.ceo === 'string' ? data.ceo : null,
-        employee_count: typeof data.employees === 'number' ? Math.floor(data.employees) : null,
-        address: typeof data.address === 'string' ? data.address : null,
-        website: typeof data.website === 'string' ? data.website : null,
-        linkedin: typeof data.linkedin === 'string' ? data.linkedin : null,
-        industry: typeof data.industry === 'string' ? data.industry : null,
-        location: typeof data.location === 'string' ? data.location : null,
-        twitter: typeof data.twitter === 'string' ? data.twitter : null,
-        facebook: typeof data.facebook === 'string' ? data.facebook : null,
-        logo_url: typeof data.logo_url === 'string' ? data.logo_url : null,
-       // Add Revenue and Cashflow with parsing
-       revenue: parseFinancialValue(data.revenue),
-       cashflow: parseFinancialValue(data.cashflow),
-    };
-    // --- END UPDATE MAPPED DETAILS ---
-      console.log("Mapped details for update:", mappedDetails);
+      const validatedWebsite = await validateUrl(data.website);
+      const validatedLinkedIn = await validateUrl(data.linkedin);
+      const validatedLogoUrl = await validateUrl(data.logo_url);
+
+      const mappedDetails: Partial<CompanyDetailTypeFromTypes> = {
+          name: data.name.trim(),
+          website: validatedWebsite, domain: typeof data.domain === 'string' ? data.domain.trim() : null,
+          about: typeof data.about === 'string' ? data.about.trim() : null,
+          start_date: typeof data.start_date === 'string' ? data.start_date.trim() : null,
+          founded_as: typeof data.founded_as === 'string' ? data.founded_as.trim() : null,
+          employee_count: parseFinancialValue(data.employee_count),
+          employee_count_date: typeof data.employee_count_date === 'string' ? data.employee_count_date.trim() : null,
+          address: typeof data.address === 'string' ? data.address.trim() : null,
+          location: typeof data.location === 'string' ? (data.location.trim().toLowerCase() === "anytown, usa" ? null : data.location.trim()) : null,
+          industry: typeof data.industry === 'string' ? data.industry.trim() : null,
+          stage: typeof data.stage === 'string' ? data.stage.trim() : null, 
+          linkedin: validatedLinkedIn,
+          revenue: parseFinancialValue(data.revenue), cashflow: parseFinancialValue(data.cashflow),
+          competitors: Array.isArray(data.competitors) ? data.competitors.map((c: any) => String(c || '').trim()).filter(Boolean) : null,
+          products: Array.isArray(data.products) ? data.products.map((p: any) => String(p || '').trim()).filter(Boolean) : null,
+          services: Array.isArray(data.services) ? data.services.map((s: any) => String(s || '').trim()).filter(Boolean) : null,
+          key_people: data.key_people === "-" || data.key_people === null ? null : (Array.isArray(data.key_people) ? data.key_people.map((kp: any) => ({ name: String(kp.name || '').trim(), title: String(kp.title || '').trim() })).filter((kp: KeyPerson) => kp.name && kp.title) : null),
+          logo_url: validatedLogoUrl,
+      };
+
+      if (Array.isArray(mappedDetails.key_people)) {
+          const ceoPerson = mappedDetails.key_people.find(p => p.title && p.title.toLowerCase().includes('ceo'));
+          if (ceoPerson) { mappedDetails.ceo = ceoPerson.name; }
+      } else if (typeof data.ceo === 'string' && data.ceo.trim()) { 
+          mappedDetails.ceo = data.ceo.trim();
+      }
       return mappedDetails;
 
     } catch (error: any) {
-      console.error('Error fetching company details from Gemini:', error);
-      throw new Error(`Failed to fetch details from AI: ${error.message}`);
+      console.error(`Error fetching company details via Gemini for "${companyName}":`, error);
+      throw new Error(`Failed to fetch details from Gemini: ${error.message}`);
     }
   };
-};
+}
