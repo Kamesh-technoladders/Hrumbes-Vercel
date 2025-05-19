@@ -30,7 +30,7 @@ export const requiresSpecialInteraction = (
   }
   
   // Joining details required
-  if (newSubStatusName === 'Joined') {
+  if (newSubStatusName === 'Joined' || newSubStatusName === 'Offer Issued') {
     return true;
   }
   
@@ -75,7 +75,7 @@ export const getRequiredInteractionType = (
     return 'interview-feedback';
   }
   
-  if (newSubStatusName === 'Joined') {
+  if (newSubStatusName === 'Joined' || newSubStatusName === 'Offer Issued') {
     return 'joining';
   }
   

@@ -273,6 +273,8 @@ export const getCandidatesByJobId = async (jobId: string, statusFilter?: string)
         has_validated_resume,
         overall_score,
         created_at,
+        ctc,
+        accrual_ctc,
         main_status:job_statuses!main_status_id(*),
         sub_status:job_statuses!sub_status_id(*)
       `)

@@ -316,7 +316,7 @@ const ClientCandidatesView = () => {
   };
 
   const goBack = () => {
-    navigate("/client-dashboard");
+    navigate("/clients");
   };
 
   const getStatusBadgeColor = (statusId: string | undefined) => {

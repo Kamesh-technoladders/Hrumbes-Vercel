@@ -1689,6 +1689,8 @@ const CandidatesList = ({
     queryFn: () => getCandidatesByJobId(jobId),
   });
 
+  console.log("candidatesData", candidatesData)
+
   const { data: appliedCandidates = [] } = useQuery({
     queryKey: ["applied-candidates", jobId],
     queryFn: () => getCandidatesByJobId(jobId, "Applied"),
@@ -1756,6 +1758,9 @@ const CandidatesList = ({
   const [needsReschedule, setNeedsReschedule] = useState(false);
   const [candidateFilter, setCandidateFilter] = useState<"All" | "Yours">("All"); // New filter state
 
+  const [showOfferJoiningModal, setShowOfferJoiningModal] = useState(false);
+
+const [currentSubStatus, setCurrentSubStatus] = useState<{ id: string; name: string; parentId?: string | null } | null>(null);
   const currencies = [
     { value: "INR", symbol: "₹" },
     { value: "USD", symbol: "$" },
@@ -1802,6 +1807,59 @@ const CandidatesList = ({
         setSubmissionDate("");
       }
     }, [showActualCtcModal, job]);
+
+    // Add useEffect to fetch existing CTC data for "Joined" and reset dialog state (around line 330, after other useEffect)
+    useEffect(() => {
+      if (showJoiningModal && currentSubStatusId && currentCandidateId && jobId) {
+        // Reset state
+        setCtc("");
+        setJoiningDate("");
+        setCurrencyType("INR");
+        setBudgetType("LPA");
+    
+        // Fetch job's client budget as default
+        if (job?.clientDetails?.clientBudget) {
+          const clientBudget = job.clientDetails.clientBudget;
+          const currentCurrency = currencies.find((c) => clientBudget.startsWith(c.symbol)) || currencies[0];
+          const budgetParts = clientBudget.replace(currentCurrency.symbol, "").trim().split(" ");
+          const amount = budgetParts[0] || "";
+          const type = budgetParts[1] || "LPA";
+    
+          setCurrencyType(currentCurrency.value);
+          setBudgetType(type);
+          setCtc(amount);
+        }
+    
+        // Fetch existing joining details for "Offer Issued" or "Joined" status
+        if (currentSubStatus?.name === 'Offer Issued' || currentSubStatus?.name === 'Joined') {
+          const fetchJoiningData = async () => {
+            try {
+              const { data, error } = await supabase
+                .from('hr_candidate_joining_details')
+                .select('final_salary, currency_type, budget_type, client_budget, joining_date')
+                .eq('candidate_id', currentCandidateId)
+                
+                .maybeSingle();
+    
+              if (error && !error.message.includes('No rows found')) {
+                console.error('Error fetching joining details:', error);
+                return;
+              }
+    
+              if (data) {
+                setCtc(data.final_salary?.toString() || "");
+                setCurrencyType(data.currency_type || "INR");
+                setBudgetType(data.budget_type || "LPA");
+                setJoiningDate(data.joining_date ? data.joining_date.split('T')[0] : "");
+              }
+            } catch (error) {
+              console.error('Error fetching joining details:', error);
+            }
+          };
+          fetchJoiningData();
+        }
+      }
+    }, [showJoiningModal, currentCandidateId, currentSubStatusId, job, jobId, currentSubStatus]);
 
   const [validatingId, setValidatingId] = useState<string | null>(null);
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
@@ -1890,11 +1948,153 @@ const CandidatesList = ({
     }
   };
 
+  // Static USD to INR conversion rate
+const USD_TO_INR_RATE = 84;
+
+
+
+// Parse salary and return amount with budgetType
+const parseSalary = (salary: string | number | undefined): { amount: number; budgetType: string } => {
+  console.log(`parseSalary called with salary: ${salary}`);
+  if (!salary) {
+    console.log("No salary provided, returning 0");
+    return { amount: 0, budgetType: "LPA" };
+  }
+  let amount = 0;
+  let currency = currencies[0]; // Default to INR
+  let budgetType = "LPA";
+
+  if (typeof salary === "string") {
+    // Check if the string is a valid number (e.g., "2000000")
+    if (!isNaN(parseFloat(salary)) && !salary.includes(" ")) {
+      amount = parseFloat(salary);
+      console.log(`String is numeric: ${amount}, treating as INR LPA`);
+    } else {
+      // Handle formatted strings (e.g., "₹2000000 LPA")
+      currency = currencies.find((c) => salary.startsWith(c.symbol)) || currencies[0];
+      console.log(`Detected currency: ${currency.value}, symbol: ${currency.symbol}`);
+      const parts = salary.replace(currency.symbol, "").trim().split(" ");
+      amount = parseFloat(parts[0]) || 0;
+      budgetType = parts[1] || "LPA";
+      console.log(`Parsed amount: ${amount}, budgetType: ${budgetType}`);
+    }
+  } else {
+    amount = salary;
+    console.log(`Salary is number: ${amount}, assuming INR LPA`);
+  }
+
+  let convertedAmount = amount;
+  if (currency.value === "USD") {
+    console.log(`Converting USD to INR: ${amount} * ${USD_TO_INR_RATE}`);
+    convertedAmount *= USD_TO_INR_RATE;
+  }
+
+  console.log(`Final parsed salary: ${convertedAmount} INR, budgetType: ${budgetType}`);
+  return { amount: convertedAmount, budgetType };
+};
+
+// Calculate profit based on budgetType period for Internal jobs
+const calculateProfit = (
+  candidate: any,
+  job: any,
+  client: any
+): { profit: number | null; period: string } => {
+  console.log("=== calculateProfit called ===");
+  console.log("Candidate:", candidate);
+  console.log("Job:", job);
+  console.log("Client:", client);
+
+  let salary = candidate.ctc || candidate.expected_salary || 0;
+  let budget = candidate.accrual_ctc;
+  let commissionValue = client?.commission_value || 0;
+
+  console.log(`Initial salary: ${salary}, budget: ${budget}, commissionValue: ${commissionValue}`);
+
+  const salaryParsed = parseSalary(salary);
+  const budgetParsed = budget ? parseSalary(budget) : { amount: 0, budgetType: "LPA" };
+  let salaryAmount = salaryParsed.amount;
+  let budgetAmount = budgetParsed.amount;
+  let profitPeriod = budgetParsed.budgetType; // Use accrual_ctc's budgetType for period
+
+  console.log(`Parsed salaryAmount: ${salaryAmount} (LPA), budgetAmount: ${budgetAmount} (${budgetParsed.budgetType}), profitPeriod: ${profitPeriod}`);
+
+  if (job.jobType === "Internal") {
+    // Skip profit calculation if accrual_ctc is missing
+    if (budget == null || budget === "") {
+      console.log("Internal job, accrual_ctc is missing, returning null for N/A");
+      return { profit: null, period: profitPeriod };
+    }
+
+    // For Monthly or Hourly, convert to Monthly profit
+    if (profitPeriod === "Monthly" || profitPeriod === "Hourly") {
+      if (profitPeriod === "Hourly") {
+        console.log(`Converting budget from Hourly to Monthly: ${budgetAmount} * 160`);
+        budgetAmount *= 160;
+        profitPeriod = "Monthly";
+      }
+      console.log(`Converting salary from LPA to Monthly: ${salaryAmount} / 12`);
+      salaryAmount /= 12;
+    }
+    // For LPA, both budget and salary are already in LPA, no conversion needed
+
+    const profit = budgetAmount - salaryAmount;
+    console.log(`Internal job, profit = budgetAmount (${budgetAmount}) - salaryAmount (${salaryAmount}) = ${profit} (${profitPeriod})`);
+    return { profit, period: profitPeriod };
+  } else {
+    // For External jobs, calculate profit using commission (yearly, as original)
+    console.log("External job, ignoring accrual_ctc, using commission-based calculation");
+    const effectiveCommissionType = client?.commission_type || (commissionValue ? "percentage" : null);
+    console.log(`Effective commission type: ${effectiveCommissionType}`);
+
+    // Salary is already in LPA, no conversion needed
+    if (client?.currency === "USD" && client?.commission_type === "fixed") {
+      console.log(`Converting USD fixed commission: ${commissionValue} * ${USD_TO_INR_RATE}`);
+      commissionValue *= USD_TO_INR_RATE;
+    }
+
+    if (effectiveCommissionType === "percentage" && commissionValue) {
+      const profit = (salaryAmount * commissionValue) / 100;
+      console.log(`Non-Internal, percentage commission: (${salaryAmount} * ${commissionValue}) / 100 = ${profit} (LPA)`);
+      return { profit, period: "LPA" };
+    } else if (effectiveCommissionType === "fixed" && commissionValue) {
+      console.log(`Non-Internal, fixed commission: ${commissionValue} (LPA)`);
+      return { profit: commissionValue, period: "LPA" };
+    }
+    console.log("No valid commission data, returning 0");
+    return { profit: 0, period: "LPA" };
+  }
+};
+
+// Format currency
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
+
+// Fetch client data
+const { data: clientData } = useQuery({
+  queryKey: ["client", job?.clientOwner],
+  queryFn: async () => {
+    if (!job?.clientOwner) return null;
+    const { data, error } = await supabase
+      .from("hr_clients")
+      .select("id, client_name, commission_value, commission_type, currency")
+      .eq("client_name", job.clientOwner)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  enabled: !!job?.clientOwner,
+});
   
 
   useEffect(() => {
     if (candidatesData.length > 0) {
       const transformedCandidates: Candidate[] = candidatesData.map((candidate) => {
+        const profit = calculateProfit(candidate, job, clientData);
         return {
           id: candidate.id,
           name: candidate.name,
@@ -1919,12 +2119,15 @@ const CandidatesList = ({
           sub_status: candidate.sub_status,
           main_status_id: candidate.main_status_id,
           sub_status_id: candidate.sub_status_id,
+          accrual_ctc: candidate.accrual_ctc,
+          ctc: candidate.ctc,
+          profit,
         };
       });
 
       setCandidates(transformedCandidates);
     }
-  }, [candidatesData]);
+  }, [candidatesData, job, clientData]);
 
   const setDefaultStatusForCandidate = async (candidateId: string) => {
     try {
@@ -1984,7 +2187,7 @@ const CandidatesList = ({
         toast.error("Invalid status selected");
         return;
       }
-
+  
       const statuses = await fetchAllStatuses();
       const subStatuses = statuses.flatMap(s => s.subStatuses || []);
       const newSubStatus = subStatuses.find(s => s.id === value);
@@ -1999,7 +2202,12 @@ const CandidatesList = ({
       
       setCurrentCandidateId(candidate.id);
       setCurrentSubStatusId(value);
-
+      setCurrentSubStatus({
+        id: newSubStatus.id,
+        name: newSubStatus.name,
+        parentId: newSubStatus.parent_id,
+      });
+  
       const { getRequiredInteractionType, getInterviewRoundName } = await import('@/utils/statusTransitionHelper');
       const interactionType = getRequiredInteractionType(oldSubStatusName, newSubStatus.name);
       
@@ -2007,7 +2215,7 @@ const CandidatesList = ({
         const roundName = getInterviewRoundName(newSubStatus.name);
         setCurrentRound(roundName);
         setNeedsReschedule(interactionType === 'reschedule');
-
+  
         const { data: interviews, error } = await supabase
           .from('hr_candidate_interviews')
           .select('*')
@@ -2021,7 +2229,7 @@ const CandidatesList = ({
           toast.error("Failed to load interview details");
           return;
         }
-
+  
         if (interviews && interviews.length > 0) {
           const interview = interviews[0];
           setInterviewDate(interview.interview_date || '');
@@ -2036,7 +2244,7 @@ const CandidatesList = ({
           setInterviewType('Technical');
           setInterviewerName('');
         }
-
+  
         setShowInterviewModal(true);
         return;
       }
@@ -2055,7 +2263,7 @@ const CandidatesList = ({
         setShowJoiningModal(true);
         return;
       }
-
+  
       if (interactionType === 'actual-ctc') {
         setShowActualCtcModal(true);
         return;
@@ -2414,84 +2622,90 @@ const CandidatesList = ({
   };
 
   const handleJoiningSubmit = async () => {
-    if (!currentCandidateId || !currentSubStatusId) return;
-
-    // Convert to number (ctc is numeric-only)
+    if (!currentCandidateId || !currentSubStatusId || !jobId) return;
+  
+    // Validate CTC
     const cleanedCtc = parseFloat(ctc);
     if (isNaN(cleanedCtc) || cleanedCtc <= 0) {
       toast.error("Please enter a valid CTC");
       return;
     }
-
+  
+    // Validate Joining Date
     if (!joiningDate) {
       toast.error("Please select a joining date");
       return;
     }
-
+  
     try {
       // Get current currency symbol
       const currentCurrency = currencies.find((c) => c.value === currencyType) || currencies[0];
-
+  
       // Format client_budget
       const clientBudget = `${currentCurrency.symbol}${cleanedCtc} ${budgetType}`;
-
+  
       // Update or insert into hr_candidate_joining_details
       const { data: existingDetails, error: fetchError } = await supabase
         .from("hr_candidate_joining_details")
         .select("*")
         .eq("candidate_id", currentCandidateId)
         .maybeSingle();
-
+  
       if (fetchError && !fetchError.message.includes("No rows found")) {
         throw fetchError;
       }
-
+  
+      const joiningDetails = {
+        candidate_id: currentCandidateId,
+       
+        final_salary: cleanedCtc,
+        currency_type: currencyType,
+        budget_type: budgetType,
+        client_budget: clientBudget,
+        joining_date: joiningDate,
+        created_by: user.id || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        onboarding_status: "pending",
+      };
+  
       if (existingDetails) {
         const { error } = await supabase
           .from("hr_candidate_joining_details")
           .update({
-            joining_date: joiningDate,
             final_salary: cleanedCtc,
             currency_type: currencyType,
             budget_type: budgetType,
             client_budget: clientBudget,
+            joining_date: joiningDate,
             updated_at: new Date().toISOString(),
           })
           .eq("id", existingDetails.id);
-
+  
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("hr_candidate_joining_details")
-          .insert({
-            candidate_id: currentCandidateId,
-            joining_date: joiningDate,
-            final_salary: cleanedCtc,
-            currency_type: currencyType,
-            budget_type: budgetType,
-            client_budget: clientBudget,
-            created_by: user.id,
-            onboarding_status: "pending",
-          });
-
+          .insert(joiningDetails);
+  
         if (error) throw error;
       }
-
+  
       // Prepare data for updateCandidateStatus
       const joiningData = {
         ctc: clientBudget,
         joining_date: joiningDate,
       };
-
+  
       await updateCandidateStatus(currentCandidateId, currentSubStatusId, user.id, joiningData);
-
+  
       setShowJoiningModal(false);
       setCtc("");
       setJoiningDate("");
       setCurrencyType("INR");
       setBudgetType("LPA");
       await onRefresh();
-      toast.success("Joining details saved");
+      toast.success(`${currentSubStatus?.name === 'Offer Issued' ? 'Offered' : 'Joined'} details saved`);
     } catch (error) {
       console.error("Error saving joining details:", error);
       toast.error("Failed to save joining details");
@@ -2655,6 +2869,8 @@ const CandidatesList = ({
     startIndex,
     startIndex + itemsPerPage
   );
+
+console.log("paginated candidate", paginatedCandidates)
 
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(Number(value));
@@ -3036,7 +3252,21 @@ const CandidatesList = ({
                     phone={candidate.phone}
                     candidateId={candidate.id}
                   />
-                  {!isEmployee && <TableCell>{candidate.profit || "N/A"}</TableCell>}
+                 {!isEmployee && (
+  <TableCell>
+    <span
+      className={
+        candidate.profit?.profit != null && candidate.profit.profit > 0
+          ? "text-green-600"
+          : "text-red-600"
+      }
+    >
+      {candidate.profit?.profit != null
+        ? `${formatCurrency(candidate.profit.profit)} `
+        : "N/A"}
+    </span>
+  </TableCell>
+)}
                   <TableCell>
                     <div className="truncate">
                       <ProgressColumn
@@ -3274,82 +3504,82 @@ const CandidatesList = ({
       </Dialog>
 
       <Dialog open={showJoiningModal} onOpenChange={setShowJoiningModal}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Joining Details</DialogTitle>
-          <DialogDescription>
-            Enter the CTC and date of joining for the candidate.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right" htmlFor="ctc">
-              CTC
-            </Label>
-            <div className="col-span-3 flex">
-              <Select1 value={currencyType} onValueChange={setCurrencyType}>
-                <SelectTrigger4 className="w-[80px] rounded-r-none border-r-0">
-                  <SelectValue3 />
-                </SelectTrigger4>
-                <SelectContent7>
-                  <SelectGroup2>
-                    <SelectLabel8>Currency</SelectLabel8>
-                    {currencies.map((currency) => (
-                      <SelectItem9 key={currency.value} value={currency.value}>
-                        {currency.symbol} {currency.value}
-                      </SelectItem9>
-                    ))}
-                  </SelectGroup2>
-                </SelectContent7>
-              </Select1>
-              <input
-                id="ctc"
-                type="text"
-                value={formatINR(ctc)}
-                onChange={(e) => {
-                  const rawValue = e.target.value.replace(/[^0-9]/g, "");
-                  setCtc(rawValue);
-                }}
-                className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2"
-                placeholder="e.g., 10,00,000"
-                required
-              />
-              <Select1 value={budgetType} onValueChange={setBudgetType}>
-                <SelectTrigger4 className="w-[110px] rounded-l-none border-l-0">
-                  <SelectValue3 />
-                </SelectTrigger4>
-                <SelectContent7>
-                  {budgetTypes.map((type) => (
-                    <SelectItem9 key={type} value={type}>
-                      {type}
-                    </SelectItem9>
-                  ))}
-                </SelectContent7>
-              </Select1>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right" htmlFor="joining-date">
-              Joining Date
-            </Label>
-            <input
-              id="joining-date"
-              type="date"
-              value={joiningDate}
-              onChange={(e) => setJoiningDate(e.target.value)}
-              className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
-              required
-            />
-          </div>
+  <DialogContent className="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>{currentSubStatus?.name === 'Offer Issued' ? 'Offer Details' : 'Joining Details'}</DialogTitle>
+      <DialogDescription>
+        Enter the {currentSubStatus?.name === 'Offer Issued' ? 'Offered CTC and Joining Date' : 'Joined CTC and Joined Date'}
+      </DialogDescription>
+    </DialogHeader>
+    <div className="grid gap-4 py-4">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right" htmlFor="ctc">
+          {currentSubStatus?.name === 'Offer Issued' ? 'Offered CTC' : 'Joined CTC'}
+        </Label>
+        <div className="col-span-3 flex">
+          <Select1 value={currencyType} onValueChange={setCurrencyType} disabled={true}>
+            <SelectTrigger4 className="w-[80px] rounded-r-none border-r-0">
+              <SelectValue3 />
+            </SelectTrigger4>
+            <SelectContent7>
+              <SelectGroup2>
+                <SelectLabel8>Currency</SelectLabel8>
+                {currencies.map((currency) => (
+                  <SelectItem9 key={currency.value} value={currency.value}>
+                    {currency.symbol} {currency.value}
+                  </SelectItem9>
+                ))}
+              </SelectGroup2>
+            </SelectContent7>
+          </Select1>
+          <input
+            id="ctc"
+            type="text"
+            value={formatINR(ctc)}
+            onChange={(e) => {
+              const rawValue = e.target.value.replace(/[^0-9]/g, "");
+              setCtc(rawValue);
+            }}
+            className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2"
+            placeholder="e.g., 10,00,000"
+            required
+          />
+          <Select1 value={budgetType} onValueChange={setBudgetType} disabled={true}>
+            <SelectTrigger4 className="w-[110px] rounded-l-none border-l-0">
+              <SelectValue3 />
+            </SelectTrigger4>
+            <SelectContent7>
+              {budgetTypes.map((type) => (
+                <SelectItem9 key={type} value={type}>
+                  {type}
+                </SelectItem9>
+              ))}
+            </SelectContent7>
+          </Select1>
         </div>
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => setShowJoiningModal(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleJoiningSubmit}>Save</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right" htmlFor="joining-date">
+          {currentSubStatus?.name === 'Offer Issued' ? 'Joining Date' : 'Joined Date'}
+        </Label>
+        <input
+          id="joining-date"
+          type="date"
+          value={joiningDate}
+          onChange={(e) => setJoiningDate(e.target.value)}
+          className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
+          required
+        />
+      </div>
+    </div>
+    <div className="flex justify-end gap-3">
+      <Button variant="outline" onClick={() => setShowJoiningModal(false)}>
+        Cancel
+      </Button>
+      <Button onClick={handleJoiningSubmit}>Save</Button>
+    </div>
+  </DialogContent>
+</Dialog>
 
       <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
         <DialogContent className="sm:max-w-md">

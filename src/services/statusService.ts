@@ -742,6 +742,8 @@ export const deleteStatus = async (id: string): Promise<boolean> => {
 };
 
 
+
+
 export const updateClientSubmissionStatus = async (
   candidateId: string,
   jobId: string,
@@ -772,6 +774,23 @@ export const updateClientSubmissionStatus = async (
       ? new Date(additionalData.submission_date).toISOString()
       : new Date().toISOString();
 
+    // Fetch previous state from hr_job_candidates
+    const { data: prevCandidateData, error: prevError } = await supabase
+      .from('hr_job_candidates')
+      .select(`
+        main_status_id,
+        sub_status_id,
+        main_status:job_statuses!main_status_id (name),
+        sub_status:job_statuses!sub_status_id (name)
+      `)
+      .eq('id', candidateId)
+      .maybeSingle();
+
+    if (prevError && !prevError.message.includes('No rows found')) {
+      console.error('Error fetching previous status:', prevError);
+      throw prevError;
+    }
+
     // Update hr_job_candidates with the new status and additional data
     const updateData = {
       main_status_id: mainStatusId,
@@ -799,7 +818,7 @@ export const updateClientSubmissionStatus = async (
       .eq('job_id', jobId)
       .eq('main_status_id', mainStatusId)
       .eq('sub_status_id', subStatusId)
-      .maybeSingle(); // Changed from .single() to .maybeSingle()
+      .maybeSingle();
 
     if (countError) {
       console.error('Error checking status count:', countError);
@@ -817,8 +836,8 @@ export const updateClientSubmissionStatus = async (
         .eq('id', existingCount.id);
 
       if (updateCountError) {
-        console.error('Error updating status count:', updateCountError);
-        throw updateCountError;
+          console.error('Error updating status count:', updateCountError);
+          throw updateCountError;
       }
     } else {
       // Create new count entry
@@ -836,12 +855,12 @@ export const updateClientSubmissionStatus = async (
         });
 
       if (insertCountError) {
-        console.error('Error inserting status count:', insertCountError);
-        throw insertCountError;
+          console.error('Error inserting status count:', insertCountError);
+          throw insertCountError;
       }
     }
 
-    // Create timeline entry for status change
+    // Fetch the main status name for the timeline entry
     const { data: mainStatus, error: mainStatusError } = await supabase
       .from('job_statuses')
       .select('name')
@@ -852,22 +871,41 @@ export const updateClientSubmissionStatus = async (
       console.error('Error fetching main status:', mainStatusError);
     }
 
-    await supabase
+    // Create timeline entry for status change
+    const currentTime = new Date().toISOString();
+    const eventData = {
+      action: 'Status updated',
+      timestamp: currentTime,
+      client_budget: additionalData.accrual_ctc || null,
+    };
+
+    const { error: timelineError } = await supabase
       .from('hr_candidate_timeline')
       .insert({
         candidate_id: candidateId,
-        event_type: 'status_change', // Changed from action_type to event_type
-        event_data: additionalData, // Store additionalData (e.g., accrual_ctc, submission_date)
-        previous_state: null, // Simplified; could fetch previous state if needed
+        created_by: userId || 'System',
+        event_type: 'status_change',
+        previous_state: prevCandidateData ? {
+          mainStatusId: prevCandidateData.main_status_id,
+          subStatusId: prevCandidateData.sub_status_id,
+          mainStatusName: prevCandidateData.main_status?.name,
+          subStatusName: prevCandidateData.sub_status?.name,
+        } : null,
         new_state: {
           mainStatusId,
           subStatusId,
           mainStatusName: mainStatus?.name,
           subStatusName: subStatus.name,
         },
-        created_by: userId || null,
-        created_at: submissionDate,
+        event_data: eventData,
+        created_at: currentTime,
       });
+
+    if (timelineError) {
+      console.error('Error creating timeline entry:', timelineError);
+      throw timelineError;
+    }
+
     return true;
   } catch (error) {
     console.error('Error in updateClientSubmissionStatus:', error);
