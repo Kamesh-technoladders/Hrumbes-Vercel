@@ -260,7 +260,7 @@ const AssociateToClientModal = ({
   
   const getBudgetTypeOptions = () => {
     if (job.hiringMode === "Full Time") {
-      return ["LPA"];
+      return ["LPA", "Monthly", "Hourly"];
     } else if (job.hiringMode === "Contract" || job.hiringMode === "Part Time") {
       return ["Monthly", "Hourly"];
     } else if (job.hiringMode === "Intern") {

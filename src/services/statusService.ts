@@ -740,3 +740,137 @@ export const deleteStatus = async (id: string): Promise<boolean> => {
     return false;
   }
 };
+
+
+export const updateClientSubmissionStatus = async (
+  candidateId: string,
+  jobId: string,
+  subStatusId: string,
+  userId?: string,
+  additionalData: Record<string, any> = {}
+): Promise<boolean> => {
+  try {
+    // Fetch the sub-status to verify it's "Processed (Client)"
+    const { data: subStatus, error: subStatusError } = await supabase
+      .from('job_statuses')
+      .select('name, parent_id')
+      .eq('id', subStatusId)
+      .single();
+
+    if (subStatusError || !subStatus) {
+      console.error('Error fetching sub-status:', subStatusError);
+      throw new Error('Invalid sub-status');
+    }
+
+    if (subStatus.name !== 'Processed (Client)') {
+      console.error('Invalid sub-status for client submission:', subStatus.name);
+      throw new Error('This function is only for Processed (Client) status');
+    }
+
+    const mainStatusId = subStatus.parent_id;
+    const submissionDate = additionalData.submission_date
+      ? new Date(additionalData.submission_date).toISOString()
+      : new Date().toISOString();
+
+    // Update hr_job_candidates with the new status and additional data
+    const updateData = {
+      main_status_id: mainStatusId,
+      sub_status_id: subStatusId,
+      updated_by: userId || null,
+      updated_at: submissionDate,
+      ...additionalData
+    };
+
+    const { error: updateError } = await supabase
+      .from('hr_job_candidates')
+      .update(updateData)
+      .eq('id', candidateId);
+
+    if (updateError) {
+      console.error('Error updating candidate status:', updateError);
+      throw updateError;
+    }
+
+    // Check if a count entry exists in hr_status_change_counts
+    const { data: existingCount, error: countError } = await supabase
+      .from('hr_status_change_counts')
+      .select('*')
+      .eq('candidate_id', candidateId)
+      .eq('job_id', jobId)
+      .eq('main_status_id', mainStatusId)
+      .eq('sub_status_id', subStatusId)
+      .maybeSingle(); // Changed from .single() to .maybeSingle()
+
+    if (countError) {
+      console.error('Error checking status count:', countError);
+      throw countError;
+    }
+
+    if (existingCount) {
+      // Update existing count
+      const { error: updateCountError } = await supabase
+        .from('hr_status_change_counts')
+        .update({
+          count: existingCount.count + 1,
+          updated_at: submissionDate,
+        })
+        .eq('id', existingCount.id);
+
+      if (updateCountError) {
+        console.error('Error updating status count:', updateCountError);
+        throw updateCountError;
+      }
+    } else {
+      // Create new count entry
+      const { error: insertCountError } = await supabase
+        .from('hr_status_change_counts')
+        .insert({
+          candidate_id: candidateId,
+          job_id: jobId,
+          main_status_id: mainStatusId,
+          sub_status_id: subStatusId,
+          employee_id: userId,
+          count: 1,
+          created_at: submissionDate,
+          updated_at: submissionDate,
+        });
+
+      if (insertCountError) {
+        console.error('Error inserting status count:', insertCountError);
+        throw insertCountError;
+      }
+    }
+
+    // Create timeline entry for status change
+    const { data: mainStatus, error: mainStatusError } = await supabase
+      .from('job_statuses')
+      .select('name')
+      .eq('id', mainStatusId)
+      .single();
+
+    if (mainStatusError) {
+      console.error('Error fetching main status:', mainStatusError);
+    }
+
+    await supabase
+      .from('hr_candidate_timeline')
+      .insert({
+        candidate_id: candidateId,
+        event_type: 'status_change', // Changed from action_type to event_type
+        event_data: additionalData, // Store additionalData (e.g., accrual_ctc, submission_date)
+        previous_state: null, // Simplified; could fetch previous state if needed
+        new_state: {
+          mainStatusId,
+          subStatusId,
+          mainStatusName: mainStatus?.name,
+          subStatusName: subStatus.name,
+        },
+        created_by: userId || null,
+        created_at: submissionDate,
+      });
+    return true;
+  } catch (error) {
+    console.error('Error in updateClientSubmissionStatus:', error);
+    return false;
+  }
+};

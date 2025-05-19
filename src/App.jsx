@@ -46,9 +46,6 @@ import InvoicesPage from "./pages/finance/accounts/InvoicesPage";
 import ExpensesPage from "./pages/finance/accounts/ExpensesPage";
 import Payroll from "./pages/payroll/index";
 import AccountsOverview from "./pages/finance/accounts/AccountsOverview";
-import PayrollRun from '././pages/payroll/index';
-import PayrollDetails from './pages/payroll/PayrollDetails';
-
 // Sales Companies and Contacts
 import CompaniesPage from "./pages/sales/CompaniesPage";
 import CompanyDetail from "./pages/sales/CompanyDetail";
@@ -57,6 +54,9 @@ import ContactsPage from "./pages/sales/ContactsPage";
 
 // Clients
 import ClientPage from "./pages/clients/ClientDashboard";
+import ClientManagementDashboard from "./pages/client-dashboard/ClientManagementDashboard";
+import ClientCandidatesView from "./pages/client-dashboard/ClientCandidatesView";
+import ClientMetricsDashboard from "./pages/client-dashboard/ClientMetricsDashboard";
 
 function App() {
   return (
@@ -111,13 +111,17 @@ function App() {
             <Route path="employee/new" element={<EmployeeForm />} />
             <Route path="employee/:id" element={<EmployeeForm />} />
             <Route path="employee/profile/:id" element={<EmployeeProfile />} />
-            <Route path="/employee/:candidateId/:jobId" element={<EmployeeProfilePage />} />
 
             {/* Employee Dashboard Routes */}
             <Route path="/profile" element={<ProfilePageEmployee />} />
 
             {/* Clients */}
-            <Route path="/clients" element={<ClientPage />} />
+            {/* <Route path="/clients" element={<ClientPage />} /> */}
+
+                        {/* Client Dashboard (New) */}
+                        <Route path="/clients" element={<ClientManagementDashboard />} />
+            <Route path="/client-dashboard/:clientName/candidates" element={<ClientCandidatesView />} />
+            <Route path="/client-metrics" element={<ClientMetricsDashboard />} />
 
             {/* Goals */}
             <Route path="/goals" element={<GoalPage />} />
@@ -133,6 +137,8 @@ function App() {
             <Route path="/jobs/:id/description" element={<JobDescription />} />
             <Route path="/jobs/edit/:id" element={<JobDescription />} />
             <Route path="/jobstatuses" element={<StatusSettings />} />
+            <Route path="/employee/:candidateId/:jobId" element={<EmployeeProfilePage />} />
+
 
 
                         {/* Reports */}
@@ -145,8 +151,6 @@ function App() {
           <Route path="/accounts/expenses" element={<ExpensesPage />} />
           <Route path="/payroll" element={<Payroll />} />
           <Route path="/accounts/overall" element={<AccountsOverview />} />
-          <Route path="/payrollrun" element={<PayrollRun />} />
-          <Route path="/payroll/:year/:month" element={<PayrollDetails />} />
 
 
           {/* Sales Companies and Contacts */}

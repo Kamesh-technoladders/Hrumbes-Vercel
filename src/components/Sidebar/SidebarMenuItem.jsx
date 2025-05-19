@@ -20,7 +20,8 @@ const menuItemsByRole = {
   organization_superadmin: [
     { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
     { icon: FiUsers, label: "Employees", path: "/employee" },
-    { icon: MdOutlineEmojiPeople, label: "Projects", path: "/projects" },
+    { icon: MdOutlineEmojiPeople, label: "Clients", path: "/clients" },
+    { icon: FaArrowsDownToPeople, label: "Projects", path: "/projects" },
     { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
     { icon: GoGoal, label: "Goals", path: "/goals" },
     { icon: ImProfile, label: "My Profile", path: "/profile" },

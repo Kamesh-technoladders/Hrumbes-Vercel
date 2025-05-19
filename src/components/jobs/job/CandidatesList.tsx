@@ -1620,7 +1620,7 @@ import { getJobById } from "@/services/jobService";
 import { ProgressColumn } from "./ProgressColumn";
 import { Candidates } from "./types/candidate.types";
 import { getCandidatesForJob, createDummyCandidate } from "@/services/candidatesService";
-import { updateCandidateStatus, fetchAllStatuses } from "@/services/statusService";
+import { updateCandidateStatus, fetchAllStatuses, updateClientSubmissionStatus } from "@/services/statusService";
 import SummaryModal from "./SummaryModal";
 import { supabase } from "@/integrations/supabase/client";
 import { updateCandidateValidationStatus } from "@/services/candidateService";
@@ -1734,6 +1734,7 @@ const CandidatesList = ({
   const [showInterviewFeedbackModal, setShowInterviewFeedbackModal] = useState(false);
   const [showJoiningModal, setShowJoiningModal] = useState(false);
   const [showActualCtcModal, setShowActualCtcModal] = useState(false); 
+  const [submissionDate, setSubmissionDate] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [interviewDate, setInterviewDate] = useState("");
   const [interviewTime, setInterviewTime] = useState("");
@@ -1783,6 +1784,24 @@ const CandidatesList = ({
     queryFn: () => getJobById(jobId || ""),
     enabled: !!jobId,
   });
+
+  console.log("jobsss", job);
+
+    // Initialize dialog fields when opening
+    useEffect(() => {
+      if (showActualCtcModal && job?.clientDetails?.clientBudget) {
+        const clientBudget = job.clientDetails.clientBudget;
+        const currentCurrency = currencies.find((c) => clientBudget.startsWith(c.symbol)) || currencies[0];
+        const budgetParts = clientBudget.replace(currentCurrency.symbol, "").trim().split(" ");
+        const amount = budgetParts[0] || "";
+        const type = budgetParts[1] || "LPA";
+  
+        setCurrencyType(currentCurrency.value);
+        setBudgetType(type);
+        setActualCtc(amount);
+        setSubmissionDate("");
+      }
+    }, [showActualCtcModal, job]);
 
   const [validatingId, setValidatingId] = useState<string | null>(null);
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
@@ -2482,21 +2501,27 @@ const CandidatesList = ({
 
   const handleActualCtcSubmit = async () => {
     if (!currentCandidateId || !currentSubStatusId) return;
-
-    // Convert to number (actualCtc is already numeric-only)
+  
+    // Validate CTC
     const cleanedCtc = parseFloat(actualCtc);
     if (isNaN(cleanedCtc) || cleanedCtc <= 0) {
       toast.error("Please enter a valid CTC");
       return;
     }
-
+  
+    // Validate Submission Date
+    if (!submissionDate) {
+      toast.error("Please select a submission date");
+      return;
+    }
+  
     try {
       // Get current currency symbol
       const currentCurrency = currencies.find((c) => c.value === currencyType) || currencies[0];
-
+  
       // Format clientBudget
       const clientBudget = `${currentCurrency.symbol}${cleanedCtc} ${budgetType}`;
-
+  
       // Update or insert into hr_candidate_accrual_ctc
       const { data: existingDetails, error: fetchError } = await supabase
         .from("hr_candidate_accrual_ctc")
@@ -2504,11 +2529,11 @@ const CandidatesList = ({
         .eq("candidate_id", currentCandidateId)
         .eq("job_id", jobId)
         .maybeSingle();
-
+  
       if (fetchError && !fetchError.message.includes("No rows found")) {
         throw fetchError;
       }
-
+  
       if (existingDetails) {
         const { error } = await supabase
           .from("hr_candidate_accrual_ctc")
@@ -2517,14 +2542,13 @@ const CandidatesList = ({
             currency_type: currencyType,
             budget_type: budgetType,
             client_budget: clientBudget,
-            updated_at: new Date().toISOString(),
+            updated_at: submissionDate ? new Date(submissionDate).toISOString() : new Date().toISOString(),
           })
           .eq("id", existingDetails.id);
-
+  
         if (error) throw error;
       } else {
         const { error } = await supabase
-    
           .from("hr_candidate_accrual_ctc")
           .insert({
             candidate_id: currentCandidateId,
@@ -2534,25 +2558,39 @@ const CandidatesList = ({
             budget_type: budgetType,
             client_budget: clientBudget,
             created_by: user.id,
+            created_at: submissionDate ? new Date(submissionDate).toISOString() : new Date().toISOString(),
+            updated_at: submissionDate ? new Date(submissionDate).toISOString() : new Date().toISOString(),
           });
-
+  
         if (error) throw error;
       }
-
-      // Prepare data for hr_job_candidates (uses accrual_ctc)
+  
+      // Prepare data for status update
       const additionalData = {
         accrual_ctc: clientBudget,
+        submission_date: submissionDate,
       };
-
-      // Update candidate status with accrual_ctc for hr_job_candidates
-      await updateCandidateStatus(currentCandidateId, currentSubStatusId, user.id, additionalData);
-
+  
+      // Use the new client submission status update function
+      const success = await updateClientSubmissionStatus(
+        currentCandidateId,
+        jobId,
+        currentSubStatusId,
+        user.id,
+        additionalData
+      );
+  
+      if (!success) {
+        throw new Error('Failed to update client submission status');
+      }
+  
       setShowActualCtcModal(false);
       setActualCtc("");
       setCurrencyType("INR");
       setBudgetType("LPA");
+      setSubmissionDate("");
       await onRefresh();
-      toast.success("Accrual CTC saved");
+      toast.success("Client billing rate saved");
     } catch (error) {
       console.error("Error saving actual CTC:", error);
       toast.error("Failed to save actual CTC");
@@ -3341,69 +3379,82 @@ const CandidatesList = ({
       </Dialog>
 
       <Dialog open={showActualCtcModal} onOpenChange={setShowActualCtcModal}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Client Submission</DialogTitle>
-          <DialogDescription>
-            Enter the CTC for the candidate in Client Submission for accrual profit.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right" htmlFor="actual-ctc">
-              Accrual CTC
-            </Label>
-            <div className="col-span-3 flex">
-              <Select1 value={currencyType} onValueChange={setCurrencyType}>
-                <SelectTrigger4 className="w-[80px] rounded-r-none border-r-0">
-                  <SelectValue3 />
-                </SelectTrigger4>
-                <SelectContent7>
-                  <SelectGroup2>
-                    <SelectLabel8>Currency</SelectLabel8>
-                    {currencies.map((currency) => (
-                      <SelectItem9 key={currency.value} value={currency.value}>
-                        {currency.symbol} {currency.value}
-                      </SelectItem9>
-                    ))}
-                  </SelectGroup2>
-                </SelectContent7>
-              </Select1>
-              <input
-                id="actual-ctc"
-                type="text"
-                value={formatINR(actualCtc)}
-                onChange={(e) => {
-                  const rawValue = e.target.value.replace(/[^0-9]/g, "");
-                  setActualCtc(rawValue);
-                }}
-                className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2"
-                placeholder="e.g., 10,00,000"
-                required
-              />
-              <Select1 value={budgetType} onValueChange={setBudgetType}>
-                <SelectTrigger4 className="w-[110px] rounded-l-none border-l-0">
-                  <SelectValue3 />
-                </SelectTrigger4>
-                <SelectContent7>
-                  {budgetTypes.map((type) => (
-                    <SelectItem9 key={type} value={type}>
-                      {type}
-                    </SelectItem9>
-                  ))}
-                </SelectContent7>
-              </Select1>
-            </div>
-          </div>
+  <DialogContent className="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>Client Submission</DialogTitle>
+      <DialogDescription>
+        Enter the Client Billable Rate and Submission Date
+      </DialogDescription>
+    </DialogHeader>
+    <div className="grid gap-4 py-4">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right" htmlFor="actual-ctc">
+          Client Billing
+        </Label>
+        <div className="col-span-3 flex">
+          <Select1 value={currencyType} onValueChange={setCurrencyType} disabled={true}>
+            <SelectTrigger4 className="w-[80px] rounded-r-none border-r-0">
+              <SelectValue3 />
+            </SelectTrigger4>
+            <SelectContent7>
+              <SelectGroup2>
+                <SelectLabel8>Currency</SelectLabel8>
+                {currencies.map((currency) => (
+                  <SelectItem9 key={currency.value} value={currency.value}>
+                    {currency.symbol} {currency.value}
+                  </SelectItem9>
+                ))}
+              </SelectGroup2>
+            </SelectContent7>
+          </Select1>
+          <input
+            id="actual-ctc"
+            type="text"
+            value={formatINR(actualCtc)}
+            onChange={(e) => {
+              const rawValue = e.target.value.replace(/[^0-9]/g, "");
+              setActualCtc(rawValue);
+            }}
+            className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2"
+            placeholder="e.g., 10,00,000"
+            required
+          />
+          <Select1 value={budgetType} onValueChange={setBudgetType} disabled={true}>
+            <SelectTrigger4 className="w-[110px] rounded-l-none border-l-0">
+              <SelectValue3 />
+            </SelectTrigger4>
+            <SelectContent7>
+              {budgetTypes.map((type) => (
+                <SelectItem9 key={type} value={type}>
+                  {type}
+                </SelectItem9>
+              ))}
+            </SelectContent7>
+          </Select1>
         </div>
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => setShowActualCtcModal(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleActualCtcSubmit}>Save</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right" htmlFor="submission-date">
+          Submission Date
+        </Label>
+        <input
+          id="submission-date"
+          type="date"
+          value={submissionDate}
+          onChange={(e) => setSubmissionDate(e.target.value)}
+          className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
+          required
+        />
+      </div>
+    </div>
+    <div className="flex justify-end gap-3">
+      <Button variant="outline" onClick={() => setShowActualCtcModal(false)}>
+        Cancel
+      </Button>
+      <Button onClick={handleActualCtcSubmit}>Save</Button>
+    </div>
+  </DialogContent>
+</Dialog>
     </>
   );
 };
