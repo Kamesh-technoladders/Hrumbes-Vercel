@@ -150,13 +150,13 @@ interface TruthScreenResponse {
   tsTransId?: string;
 }
 
-const API_BASE_URL = "http://62.72.51.159:4001";
+const API_BASE_URL = 'https://hrumblesdevelop.vercel.app/api/dual-encrypt-proxy';
 
 const dualEncryptData = async (transID: string, uan: string, employer_name: string): Promise<string> => {
   try {
     console.log('Encrypting data with:', { transID, docType: '464', uan, employer_name });
     const response = await axios.post<TruthScreenResponse>(
-      `${API_BASE_URL}/api/dual/dual-encrypt`,
+      `${API_BASE_URL}?endpoint=dual-encrypt`,
       {
         transID,
         docType: '464',
@@ -212,7 +212,7 @@ const dualVerifyData = async (requestData: string): Promise<string> => {
   try {
     console.log('Verifying data with:', { requestData });
     const response = await axios.post<TruthScreenResponse>(
-      `${API_BASE_URL}/api/dual/dual-verify`,
+      `${API_BASE_URL}?endpoint=dual-verify`,
       {
         requestData,
       },
@@ -265,7 +265,7 @@ const dualDecryptData = async (responseData: string): Promise<TruthScreenRespons
   try {
     console.log('Decrypting data with:', { responseData });
     const response = await axios.post<TruthScreenResponse>(
-      `${API_BASE_URL}/api/dual/dual-decrypt`,
+      `${API_BASE_URL}?endpoint=dual-decrypt`,
       {
         responseData,
       },
@@ -329,6 +329,7 @@ const dualDecryptData = async (responseData: string): Promise<TruthScreenRespons
   }
 };
 
+export { dualEncryptData, dualVerifyData, dualDecryptData };
 const verifyDualUAN = async (transID: string, uan: string, employer_name: string, candidateId: string): Promise<TruthScreenResponse> => {
   try {
     if (!/^\d{12}$/.test(uan)) {
