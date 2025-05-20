@@ -186,32 +186,32 @@ export const OnboardingTasksCard: React.FC<{ employeeId: string }> = ({ employee
   };
 
   return (
-    <Card className="p-6 bg-gradient-to-br from-purple-600 to-pink-500 border-none rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col">
-      <h2 className="text-xl font-semibold text-white mb-6">Performance Goals</h2>
+    <Card className="p-6 bg-gradient-to-br from-gray-100 to-gray-100 border-none rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col">
+      <h2 className="text-xl font-semibold text-gray-800 mb-6">Performance Goals</h2>
       <div className="flex flex-col gap-6 flex-1 overflow-y-auto">
         {/* Submission Section */}
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-white">Submission Goals</h3>
-            <span className="text-sm text-gray-200">Overall: {totalSubmissionCount}</span>
+            <h3 className="text-lg font-medium text-gray-700">Submission Goals</h3>
+            <span className="text-sm text-gray-600">Overall: {totalSubmissionCount}</span>
           </div>
           <div className="space-y-4">
             {submissionInstances
               .filter((instance) => formatPeriod(instance.period_start, instance.period_end) !== "N/A")
               .map((instance) => (
                 <div key={`${instance.goal_type}-${instance.period_type}`} className="flex items-center gap-3">
-                  <div className="w-20 text-sm font-medium text-gray-200">{instance.period_type}</div>
+                  <div className="w-20 text-sm font-medium text-gray-600">{instance.period_type}</div>
                   <div className="flex-1">
-                    <div className="text-xs text-gray-300 mb-1">
+                    <div className="text-xs text-gray-500 mb-1">
                       {formatPeriod(instance.period_start, instance.period_end)}
                     </div>
                     <Progress
                       value={instance.progress}
-                      className="h-2 bg-gray-100"
+                      className="h-2 bg-gray-200"
                       indicatorClassName="bg-indigo-600"
                     />
                   </div>
-                  <span className="text-sm font-medium text-gray-200 w-12 text-right">
+                  <span className="text-sm font-medium text-gray-600 w-12 text-right">
                     {Math.round(instance.progress)}%
                   </span>
                 </div>
@@ -221,26 +221,26 @@ export const OnboardingTasksCard: React.FC<{ employeeId: string }> = ({ employee
         {/* Onboarding Section */}
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-white">Onboarding Goals</h3>
-            <span className="text-sm text-gray-200">Overall: {totalOnboardingCount}</span>
+            <h3 className="text-lg font-medium text-gray-700">Onboarding Goals</h3>
+            <span className="text-sm text-gray-600">Overall: {totalOnboardingCount}</span>
           </div>
           <div className="space-y-4">
             {onboardingInstances
               .filter((instance) => formatPeriod(instance.period_start, instance.period_end) !== "N/A")
               .map((instance) => (
                 <div key={`${instance.goal_type}-${instance.period_type}`} className="flex items-center gap-3">
-                  <div className="w-20 text-sm font-medium text-gray-200">{instance.period_type}</div>
+                  <div className="w-20 text-sm font-medium text-gray-600">{instance.period_type}</div>
                   <div className="flex-1">
-                    <div className="text-xs text-gray-300 mb-1">
+                    <div className="text-xs text-gray-500 mb-1">
                       {formatPeriod(instance.period_start, instance.period_end)}
                     </div>
                     <Progress
                       value={instance.progress}
-                      className="h-2 bg-gray-100"
+                      className="h-2 bg-gray-200"
                       indicatorClassName="bg-teal-600"
                     />
                   </div>
-                  <span className="text-sm font-medium text-gray-200 w-12 text-right">
+                  <span className="text-sm font-medium text-gray-600 w-12 text-right">
                     {Math.round(instance.progress)}%
                   </span>
                 </div>

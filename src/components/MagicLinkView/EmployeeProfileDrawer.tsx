@@ -150,7 +150,7 @@ interface TruthScreenResponse {
   tsTransId?: string;
 }
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = process.env.TRUTH_ACCESS_BACKEND_API_URL;
 
 const dualEncryptData = async (transID: string, uan: string, employer_name: string): Promise<string> => {
   try {
@@ -1622,7 +1622,7 @@ console.log("verificationError",verificationData)
                 <span className="font-bold">Main Status:</span> {event.new_state.mainStatusName}
               </p>
               <p className="text-xs font-medium text-gray-900 mt-1">
-                {event.event_data.action}: {event.previous_state.subStatusName} → {event.new_state.subStatusName}
+                {event.event_data.action}: {event.previous_state?.subStatusName} → {event.new_state?.subStatusName}
               </p>
               <p className="text-xs text-gray-600">
                 Created by: {event.created_by_name}

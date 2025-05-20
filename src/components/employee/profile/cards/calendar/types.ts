@@ -13,7 +13,6 @@ export interface CalendarDay {
   date: Date;
   isCurrentMonth: boolean;
   isToday: boolean;
-  isHoliday: boolean;
   isSunday: boolean;
-  holidayInfo?: Holiday;
+  hasInterview: boolean;
 }

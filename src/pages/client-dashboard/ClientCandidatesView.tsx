@@ -1,14 +1,7 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import supabase from "../../config/supabaseClient";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Card,
   CardContent,
@@ -26,9 +19,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, Search, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Search, TrendingUp, ChevronLeft, ChevronRight, ArrowUpDown, Eye, Edit, Trash2, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Add tooltip imports
 import HiddenContactCell from "@/components/ui/HiddenContactCell";
 import { format } from "date-fns";
+import moment from "moment"; // Add moment for date formatting
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/jobs/ui/dropdown-menu";
 
 // Status IDs for Offered and Joined candidates
 const OFFERED_STATUS_ID = "9d48d0f9-8312-4f60-aaa4-bafdce067417";
@@ -55,6 +56,11 @@ interface Candidate {
   profit?: number;
   job_type_category?: string;
   joining_date?: string;
+  hr_jobs?: {
+    client_details?: {
+      pointOfContact?: string;
+    };
+  };
 }
 
 interface Job {
@@ -97,7 +103,11 @@ const ClientCandidatesView = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [statusUpdateLoading, setStatusUpdateLoading] = useState<string | null>(null); // Add state for status update loading
   const { toast } = useToast();
+
+  // Assume isEmployee is derived from context or auth (placeholder)
+  const isEmployee = false; // Adjust based on your auth logic
 
   // Currency options for parsing
   const currencies = [
@@ -258,7 +268,9 @@ const ClientCandidatesView = () => {
       let profit = 0;
 
       const enhancedCandidates = candidatesData.map(candidate => {
-        const job = jobsData.find(job => job.id === candidate.job_id);
+        const job =
+
+jobsData.find(job => job.id === candidate.job_id);
         const candidateRevenue = candidate.accrual_ctc ? parseSalary(candidate.accrual_ctc) : 0;
         const candidateProfit = job ? calculateProfit(candidate, job, clientData) : 0;
 
@@ -356,7 +368,7 @@ const ClientCandidatesView = () => {
     if (!dateString) return "-";
     try {
       const date = new Date(dateString);
-      return format(date, "dd/MM/yyyy");
+      return moment(date).format("DD MMM YYYY"); // Use moment for consistency with job table
     } catch {
       return "-";
     }
@@ -369,11 +381,11 @@ const ClientCandidatesView = () => {
   const getStatusBadgeColor = (statusId: string | undefined) => {
     switch (statusId) {
       case OFFERED_STATUS_ID:
-        return "bg-yellow-500";
+        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200";
       case JOINED_STATUS_ID:
-        return "bg-green-500";
+        return "bg-green-100 text-green-800 hover:bg-green-200";
       default:
-        return "bg-gray-500";
+        return "bg-gray-100 text-gray-800 hover:bg-gray-200";
     }
   };
 
@@ -385,6 +397,69 @@ const ClientCandidatesView = () => {
         return "Joined";
       default:
         return "Unknown";
+    }
+  };
+
+  // Placeholder handlers for actions
+  const handleStatusChange = async (candidateId: string, statusId: string) => {
+    setStatusUpdateLoading(candidateId);
+    try {
+      // Placeholder: Update candidate status in Supabase
+      const { error } = await supabase
+        .from("hr_job_candidates")
+        .update({ main_status_id: statusId })
+        .eq("id", candidateId);
+
+      if (error) throw error;
+
+      // Refresh candidates
+      await fetchCandidatesForClient(decodeURIComponent(clientName || ""));
+      toast({
+        title: "Status Updated",
+        description: "Candidate status updated successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update candidate status.",
+        variant: "destructive",
+      });
+      console.error("Error updating status:", error);
+    } finally {
+      setStatusUpdateLoading(null);
+    }
+  };
+
+  const handleEditCandidate = (candidate: Candidate) => {
+    toast({
+      title: "Edit Candidate",
+      description: "Edit candidate functionality is not yet implemented.",
+    });
+    // Implement navigation to edit page or open modal
+  };
+
+  const handleDeleteCandidate = async (candidate: Candidate) => {
+    try {
+      const { error } = await supabase
+        .from("hr_job_candidates")
+        .delete()
+        .eq("id", candidate.id);
+
+      if (error) throw error;
+
+      // Refresh candidates
+      await fetchCandidatesForClient(decodeURIComponent(clientName || ""));
+      toast({
+        title: "Candidate Deleted",
+        description: "Candidate deleted successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete candidate.",
+        variant: "destructive",
+      });
+      console.error("Error deleting candidate:", error);
     }
   };
 
@@ -435,7 +510,6 @@ const ClientCandidatesView = () => {
     setCurrentPage(1);
   };
 
-  console.log("candidates", candidates)
   const renderPagination = (totalPages: number, isContractual: boolean) => {
     return (
       <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4 px-2">
@@ -587,79 +661,139 @@ const ClientCandidatesView = () => {
       </div>
       {/* Tablet and Desktop: Table Layout */}
       <div className="hidden md:block rounded-md border max-h-[400px] overflow-y-auto overflow-x-auto">
-        <Table className="report-table w-full">
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="sticky left-0 bg-white min-w-[100px] lg:min-w-[150px]">Name</TableHead>
-              <TableHead className="min-w-[80px] lg:min-w-[120px]">Contact</TableHead>
-              <TableHead className="min-w-[100px] lg:min-w-[150px]">Position</TableHead>
-              <TableHead className="min-w-[80px] hidden lg:table-cell">Experience</TableHead>
-              <TableHead className="min-w-[80px] lg:min-w-[100px]">Date of Join</TableHead>
-              <TableHead className="min-w-[80px] lg:min-w-[100px]">Status</TableHead>
-              <TableHead className="min-w-[80px] lg:min-w-[100px]">Salary (LPA)</TableHead>
-              <TableHead className="min-w-[80px] hidden lg:table-cell">Profit (INR)</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <div className="flex items-center gap-1">
+                  Name
+                  <button aria-label="Sort by Name">
+                    <ArrowUpDown size={14} />
+                  </button>
+                </div>
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <div className="flex items-center gap-1">
+                  Position
+                  <button aria-label="Sort by Position">
+                    <ArrowUpDown size={14} />
+                  </button>
+                </div>
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Experience</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date of Join</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary (LPA)</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Profit (INR)</th>
+              {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th> */}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
             {candidates.length > 0 ? (
               candidates.map((candidate) => (
-                <TableRow key={candidate.id}>
-                  <TableCell className="sticky left-0 bg-white font-medium text-xs md:text-sm">
-                    {candidate.name}
-                  </TableCell>
-                  <TableCell className="text-xs md:text-sm">
+                <tr key={candidate.id} className="hover:bg-gray-50 transition">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div className="flex flex-col">
+                      <Link to={`/employee/${candidate.id}/${candidate.job_id}`} className="font-medium text-black-600 hover:underline">
+                        {candidate.name}
+                      </Link>
+                      
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <HiddenContactCell
-                      email={candidate.email}
-                      phone={candidate.phone}
+                      email={candidate.email ?? 'N/A'}
+                      phone={candidate.phone ?? 'N/A'}
                       candidateId={candidate.id}
                       className="text-xs md:text-sm"
                     />
-                  </TableCell>
-                  <TableCell className="text-xs md:text-sm">
-  <Link to={`/jobs/${candidate.job_id}`} className="font-medium hover:underline">
-    {candidate.job_title}
-    {candidate?.hr_jobs?.client_details?.pointOfContact?.trim() ? (
-      <> ({candidate.hr_jobs.client_details.pointOfContact})</>
-    ) : null}
-  </Link>
-</TableCell>
-
-                  <TableCell className="text-xs md:text-sm hidden lg:table-cell">
-                    {candidate.experience || "-"}
-                  </TableCell>
-                  <TableCell className="text-xs md:text-sm">
-                    {formatDate(candidate.joining_date)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={`${getStatusBadgeColor(candidate.main_status_id)} text-xs`}>
-                      {getStatusText(candidate.main_status_id)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs md:text-sm">
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div className="flex flex-col">
+                      <Link to={`/jobs/${candidate.job_id}`} className="font-medium text-black-600 hover:underline">
+                        {candidate.job_title || 'Unknown'}
+                      </Link>
+                      <span className="text-xs text-gray-500">
+                        <Badge
+                          variant="outline"
+                          className="bg-purple-100 text-purple-800 hover:bg-purple-200 rounded-full text-[10px]"
+                        >
+                          {candidate?.hr_jobs?.client_details?.pointOfContact?.trim() ?? 'N/A'}
+                        </Badge>
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden lg:table-cell">
+                    {candidate.experience || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {candidate.joining_date ? `${formatDate(candidate.joining_date)} (${moment(candidate.joining_date).fromNow()})` : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {isEmployee ? (
+                      <Badge variant="outline" className={getStatusBadgeColor(candidate.main_status_id)}>
+                        {getStatusText(candidate.main_status_id)}
+                      </Badge>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="transparent" className="h-8 px-2 py-0">
+                            {statusUpdateLoading === candidate.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className={getStatusBadgeColor(candidate.main_status_id)}
+                              >
+                                {getStatusText(candidate.main_status_id)}
+                              </Badge>
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="center">
+                          <DropdownMenuItem
+                            className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50"
+                            onClick={() => handleStatusChange(candidate.id, OFFERED_STATUS_ID)}
+                          >
+                            Offered
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                            onClick={() => handleStatusChange(candidate.id, JOINED_STATUS_ID)}
+                          >
+                            Joined
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {candidate.ctc
                       ? formatCurrency(parseSalary(candidate.ctc))
                       : candidate.expected_salary
                       ? formatCurrency(candidate.expected_salary)
-                      : "-"}
-                  </TableCell>
-                  <TableCell className="font-medium text-xs md:text-sm hidden lg:table-cell">
-                    <span className={candidate.profit && candidate.profit > 0 ? "text-green-600" : "text-red-600"}>
-                      {candidate.profit ? formatCurrency(candidate.profit) : "-"}
+                      : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium hidden lg:table-cell">
+                    <span className={candidate.profit && candidate.profit > 0 ? 'text-green-600' : 'text-red-600'}>
+                      {candidate.profit ? formatCurrency(candidate.profit) : '-'}
                     </span>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                 
+                </tr>
               ))
             ) : (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-sm">
+              <tr>
+                <td colSpan={9} className="px-6 py-8 text-center text-sm text-gray-500">
                   {searchTerm
-                    ? "No candidates found matching your search."
+                    ? 'No candidates found matching your search.'
                     : `No ${title.toLowerCase()} candidates found for this client.`}
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
       {candidates.length > 0 && renderPagination(totalPages, isContractual)}
     </div>

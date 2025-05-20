@@ -1,14 +1,7 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import supabase from "../../config/supabaseClient";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Card,
   CardContent,
@@ -27,7 +20,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { TrendingUp, ChevronLeft, ChevronRight, ArrowUpDown, Eye, Edit, Trash2, Loader2, Plus } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -35,12 +40,13 @@ import {
   LinearScale,
   BarElement,
   Title,
-  Tooltip,
+  Tooltip as ChartTooltip,
   Legend,
 } from "chart.js";
+import AddClientDialog from "@/components/Client/AddClientDialog";
 
 // Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend);
 
 // Status IDs for Offered and Joined candidates
 const OFFERED_STATUS_ID = "9d48d0f9-8312-4f60-aaa4-bafdce067417";
@@ -58,6 +64,11 @@ interface Client {
   commission_value?: number;
   commission_type?: string;
   currency: string;
+  internal_contact?: string;
+  hr_employees?: {
+    first_name?: string;
+    last_name?: string;
+  };
 }
 
 interface Candidate {
@@ -105,8 +116,17 @@ const ClientManagementDashboard = () => {
   const [activeFilter, setActiveFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [statusUpdateLoading, setStatusUpdateLoading] = useState<string | null>(null);
+  const [addClientOpen, setAddClientOpen] = useState(false);
+  const [editClient, setEditClient] = useState<Client | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Assume isEmployee is derived from context or auth (placeholder)
+  const isEmployee = false; // Adjust based on your auth logic
 
   // Currency options for parsing
   const currencies = [
@@ -449,13 +469,13 @@ const ClientManagementDashboard = () => {
   const getStatusBadgeColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case "active":
-        return "bg-green-500 hover:bg-green-600";
+        return "bg-green-100 text-green-800 hover:bg-green-200";
       case "inactive":
-        return "bg-red-500 hover:bg-red-600";
+        return "bg-red-100 text-red-800 hover:bg-red-200";
       case "pending":
-        return "bg-yellow-500 hover:bg-yellow-600";
+        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200";
       default:
-        return "bg-gray-500 hover:bg-gray-600";
+        return "bg-gray-100 text-gray-800 hover:bg-gray-200";
     }
   };
 
@@ -467,6 +487,74 @@ const ClientManagementDashboard = () => {
     }).format(amount);
   };
 
+  // Handlers for actions
+  const handleStatusChange = async (clientId: string, status: string) => {
+    setStatusUpdateLoading(clientId);
+    try {
+      const { error } = await supabase
+        .from("hr_clients")
+        .update({ status })
+        .eq("id", clientId);
+
+      if (error) throw error;
+
+      await fetchClients();
+      toast({
+        title: "Status Updated",
+        description: "Client status updated successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update client status.",
+        variant: "destructive",
+      });
+      console.error("Error updating status:", error);
+    } finally {
+      setStatusUpdateLoading(null);
+    }
+  };
+
+  const handleEditClient = (client: Client) => {
+    setEditClient(client);
+    setAddClientOpen(true);
+  };
+
+  const handleDeleteClient = (client: Client) => {
+    setClientToDelete(client);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteClient = async () => {
+    if (!clientToDelete) return;
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from("hr_clients")
+        .delete()
+        .eq("id", clientToDelete.id);
+
+      if (error) throw error;
+
+      await fetchClients();
+      toast({
+        title: "Client Deleted",
+        description: "Client deleted successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete client.",
+        variant: "destructive",
+      });
+      console.error("Error deleting client:", error);
+    } finally {
+      setActionLoading(false);
+      setDeleteDialogOpen(false);
+      setClientToDelete(null);
+    }
+  };
+
   // Pagination logic
   const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -475,8 +563,6 @@ const ClientManagementDashboard = () => {
     startIndex + itemsPerPage
   );
 
-  console.log("client", paginatedClients)
-
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(Number(value));
     setCurrentPage(1);
@@ -484,14 +570,14 @@ const ClientManagementDashboard = () => {
 
   const renderPagination = () => {
     return (
-      <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
+      <div className="flex flex-col items-center gap-4 mt-4 sm:flex-row sm:justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Show</span>
+          <span className="text-xs sm:text-sm text-gray-600">Show</span>
           <Select
             value={itemsPerPage.toString()}
             onValueChange={handleItemsPerPageChange}
           >
-            <SelectTrigger className="w-[70px]">
+            <SelectTrigger className="w-[60px] sm:w-[70px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -501,7 +587,7 @@ const ClientManagementDashboard = () => {
               <SelectItem value="50">50</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-sm text-gray-600">per page</span>
+          <span className="text-xs sm:text-sm text-gray-600">per page</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -510,6 +596,7 @@ const ClientManagementDashboard = () => {
             size="sm"
             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
+            className="h-8 w-8 p-0"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -526,6 +613,7 @@ const ClientManagementDashboard = () => {
                   variant={currentPage === page ? "default" : "outline"}
                   size="sm"
                   onClick={() => setCurrentPage(page)}
+                  className="h-8 w-8 p-0"
                 >
                   {page}
                 </Button>
@@ -539,12 +627,13 @@ const ClientManagementDashboard = () => {
               setCurrentPage((prev) => Math.min(prev + 1, totalPages))
             }
             disabled={currentPage === totalPages}
+            className="h-8 w-8 p-0"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
 
-        <span className="text-sm text-gray-600">
+        <span className="text-xs sm:text-sm text-gray-600">
           Showing {startIndex + 1} to{" "}
           {Math.min(startIndex + itemsPerPage, filteredClients.length)} of{" "}
           {filteredClients.length} clients
@@ -558,114 +647,81 @@ const ClientManagementDashboard = () => {
   }, []);
 
   return (
-    <div className="max-w-8xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-full mx-auto py-2 sm:py-4 px-2 sm:px-4 lg:px-8">
       <Card className="w-full">
         <CardHeader>
-          <CardTitle className="text-xl sm:text-2xl">Client Dashboard</CardTitle>
-          <CardDescription className="text-sm sm:text-base">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <CardTitle className="text-lg sm:text-xl lg:text-2xl">Client Dashboard</CardTitle>
+            <Button 
+              onClick={() => setAddClientOpen(true)}
+              className="flex items-center gap-2 text-xs sm:text-sm"
+              size="sm"
+            >
+              <Plus size={14} />
+              <span>Create New Client</span>
+            </Button>
+          </div>
+          <CardDescription className="text-xs sm:text-sm mt-2">
             View and manage your clients. Click on a client to see associated candidates.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple"></div>
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-purple"></div>
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <Card className="bg-green-50 border-green-200">
-                  <CardHeader>
-                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-green-600" />
+                  <CardHeader className="py-2 sm:py-3">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                       Total Revenue
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-xl sm:text-2xl font-bold text-green-800">
+                  <CardContent className="py-2 sm:py-3">
+                    <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                       {formatCurrency(metrics.totalRevenue)}
                     </p>
                   </CardContent>
                 </Card>
                 <Card className="bg-green-50 border-green-200">
-                  <CardHeader>
-                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-green-600" />
+                  <CardHeader className="py-2 sm:py-3">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                       Total Profit
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-xl sm:text-2xl font-bold text-green-800">
+                  <CardContent className="py-2 sm:py-3">
+                    <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                       {formatCurrency(metrics.totalProfit)}
                     </p>
                   </CardContent>
                 </Card>
                 <Card className="bg-blue-50 border-blue-200">
-                  <CardHeader>
-                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                  <CardHeader className="py-2 sm:py-3">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                       Total Candidates
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-xl sm:text-2xl font-bold text-blue-800">
+                  <CardContent className="py-2 sm:py-3">
+                    <p className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-800">
                       {metrics.totalCandidates}
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-600 mt-2">
+                    <p className="text-[10px] sm:text-xs text-gray-600 mt-1 sm:mt-2">
                       Permanent: {metrics.permanentCandidates} | Contractual: {metrics.contractualCandidates} | Both: {metrics.bothCandidates}
                     </p>
                   </CardContent>
                 </Card>
               </div>
-              {/* <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle className="text-base sm:text-lg">Revenue and Profit by Service Type</CardTitle>
+              <Card className="mb-4 sm:mb-6">
+                <CardHeader className="py-2 sm:py-3">
+                  <CardTitle className="text-sm sm:text-base lg:text-lg">Revenue and Profit by Client</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="h-[250px] sm:h-[350px] lg:h-[400px]">
-                    <Bar
-                      data={chartData}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { position: "top" },
-                          title: {
-                            display: true,
-                            text: "Revenue and Profit (INR LPA)",
-                            font: { size: 14 },
-                          },
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            title: {
-                              display: true,
-                              text: "Amount (INR LPA)",
-                              font: { size: 12 },
-                            },
-                            ticks: { font: { size: 10 } },
-                          },
-                          x: {
-                            title: {
-                              display: true,
-                              text: "Service Type",
-                              font: { size: 12 },
-                            },
-                            ticks: { font: { size: 10 } },
-                          },
-                        },
-                      }}
-                    />
-                  </div>
-                </CardContent>
-              </Card> */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle className="text-base sm:text-lg">Revenue and Profit by Client</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[250px] sm:h-[350px] lg:h-[400px]">
+                <CardContent className="py-2 sm:py-3">
+                  <div className="h-[200px] sm:h-[300px] lg:h-[400px]">
                     <Bar
                       data={clientChartData}
                       options={{
@@ -676,7 +732,7 @@ const ClientManagementDashboard = () => {
                           title: {
                             display: true,
                             text: "Revenue and Profit (INR LPA)",
-                            font: { size: 14 },
+                            font: { size: 12 },
                           },
                         },
                         scales: {
@@ -685,21 +741,21 @@ const ClientManagementDashboard = () => {
                             title: {
                               display: true,
                               text: "Amount (INR LPA)",
-                              font: { size: 12 },
+                              font: { size: 10 },
                             },
-                            ticks: { font: { size: 10 } },
+                            ticks: { font: { size: 8 } },
                           },
                           x: {
                             title: {
                               display: true,
                               text: "Client",
-                              font: { size: 12 },
+                              font: { size: 10 },
                             },
                             ticks: {
                               autoSkip: false,
                               maxRotation: 0,
                               minRotation: 0,
-                              font: { size: 10 },
+                              font: { size: 8 },
                             },
                           },
                         },
@@ -709,49 +765,207 @@ const ClientManagementDashboard = () => {
                 </CardContent>
               </Card>
               <Tabs defaultValue="all" value={activeFilter} onValueChange={filterClients} className="mb-4">
-                <TabsList className="flex flex-wrap justify-start">
-                  <TabsTrigger value="all" className="flex-1 sm:flex-none">All</TabsTrigger>
-                  <TabsTrigger value="permanent" className="flex-1 sm:flex-none">Permanent</TabsTrigger>
-                  <TabsTrigger value="contractual" className="flex-1 sm:flex-none">Contractual</TabsTrigger>
-                  <TabsTrigger value="both" className="flex-1 sm:flex-none">Both</TabsTrigger>
+                <TabsList className="flex flex-col sm:flex-row justify-start w-full">
+                  <TabsTrigger value="all" className="flex-1 sm:flex-none text-xs sm:text-sm">All</TabsTrigger>
+                  <TabsTrigger value="permanent" className="flex-1 sm:flex-none text-xs sm:text-sm">Permanent</TabsTrigger>
+                  <TabsTrigger value="contractual" className="flex-1 sm:flex-none text-xs sm:text-sm">Contractual</TabsTrigger>
+                  <TabsTrigger value="both" className="flex-1 sm:flex-none text-xs sm:text-sm">Both</TabsTrigger>
                 </TabsList>
                 <TabsContent value={activeFilter}>
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50">
-                          
-                          {/* <TableHead className="w-[120px] sm:w-[200px]">Display Name</TableHead> */}
-                          <TableHead className="w-[120px] sm:w-[200px]">Client Name</TableHead>
-                          <TableHead className="w-[120px] sm:w-[200px]">Internal Contact</TableHead>
-
-                          <TableHead className="w-[120px] sm:w-[150px]">Service Type</TableHead>
-                          <TableHead className="w-[120px] sm:w-[150px]">Currency</TableHead>
-                          <TableHead className="w-[80px] sm:w-[100px]">Status</TableHead>
-                          <TableHead className="w-[120px] sm:w-[150px]">Created By</TableHead>
-
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                  {/* Mobile Card View */}
+                  <div className="sm:hidden flex flex-col gap-3">
+                    {paginatedClients.length > 0 ? (
+                      paginatedClients.map((client) => (
+                        <Card key={client.id} className="p-3">
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              <span
+                                className="font-medium text-black text-sm hover:underline cursor-pointer"
+                                onClick={() => handleClientClick(client.client_name)}
+                              >
+                                {client.client_name}
+                              </span>
+                              <Badge variant="outline" className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-200 rounded-full text-[10px]">
+                                {client.display_name || 'N/A'}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-600">Status:</span>
+                              {isEmployee ? (
+                                <Badge variant="outline" className={getStatusBadgeColor(client.status)}>
+                                  {client.status || 'Unknown'}
+                                </Badge>
+                              ) : (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="transparent" className="h-7 px-2 py-0">
+                                      {statusUpdateLoading === client.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                      ) : (
+                                        <Badge
+                                          variant="outline"
+                                          className={getStatusBadgeColor(client.status)}
+                                        >
+                                          {client.status || 'Unknown'}
+                                        </Badge>
+                                      )}
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start">
+                                    <DropdownMenuItem
+                                      className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                                      onClick={() => handleStatusChange(client.id, 'Active')}
+                                    >
+                                      Active
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                      onClick={() => handleStatusChange(client.id, 'Inactive')}
+                                    >
+                                      Inactive
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50"
+                                      onClick={() => handleStatusChange(client.id, 'Pending')}
+                                    >
+                                      Pending
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
+                            <div className="flex space-x-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClientClick(client.client_name);
+                                      }}
+                                      aria-label="View Client"
+                                    >
+                                      <Eye className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>View Client</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              {!isEmployee && (
+                                <>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEditClient(client);
+                                          }}
+                                          aria-label="Edit Client"
+                                        >
+                                          <Edit className="h-3 w-3" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Edit Client</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteClient(client);
+                                          }}
+                                          aria-label="Delete Client"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Delete Client</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </Card>
+                      ))
+                    ) : (
+                      <Card className="p-4 text-center">
+                        <p className="text-sm text-gray-500">No clients found matching the selected filter.</p>
+                      </Card>
+                    )}
+                  </div>
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block rounded-md border overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-4 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <div className="flex items-center gap-1">
+                              Client Name
+                              <button aria-label="Sort by Client Name">
+                                <ArrowUpDown size={12} />
+                              </button>
+                            </div>
+                          </th>
+                          <th scope="col" className="px-4 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <div className="flex items-center gap-1">
+                              Internal Contact
+                              <button aria-label="Sort by Internal Contact">
+                                <ArrowUpDown size={12} />
+                              </button>
+                            </div>
+                          </th>
+                          <th scope="col" className="px-4 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Service Type</th>
+                          <th scope="col" className="px-4 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th>
+                          <th scope="col" className="px-4 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th scope="col" className="px-4 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
+                          <th scope="col" className="px-4 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
                         {paginatedClients.length > 0 ? (
                           paginatedClients.map((client) => (
-                            <TableRow
+                            <tr
                               key={client.id}
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => handleClientClick(client.client_name)}
+                              className="hover:bg-gray-50 transition"
                             >
-                            
-                              <TableCell className="font-medium text-purple text-xs sm:text-sm">
-                                {client.display_name}
-                              </TableCell>
-                              <TableCell className="text-xs sm:text-sm">
-                                {client.internal_contact}
-                              </TableCell>
-                              <TableCell>
+                              <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
+                                <div className="flex flex-col">
+                                  <span
+                                    className="font-medium text-black-600 hover:underline cursor-pointer"
+                                    onClick={() => handleClientClick(client.client_name)}
+                                  >
+                                    {client.client_name}
+                                  </span>
+                                  
+                                </div>
+                              </td>
+                              <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
+                                {client.internal_contact || '-'}
+                              </td>
+                              <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
                                 <div className="flex flex-wrap gap-1">
-                                  {client.service_type ? (
+                                  {client.service_type?.length ? (
                                     client.service_type.map((type, index) => (
-                                      <Badge key={index} variant="outline" className="capitalize text-xs">
+                                      <Badge key={index} variant="outline" className="capitalize text-[8px] sm:text-xs bg-blue-100 text-blue-800 hover:bg-blue-200">
                                         {type}
                                       </Badge>
                                     ))
@@ -759,29 +973,141 @@ const ClientManagementDashboard = () => {
                                     <span className="text-gray-500">-</span>
                                   )}
                                 </div>
-                              </TableCell>
-                              <TableCell className="text-xs sm:text-sm">
-                                {client.currency}
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={`${getStatusBadgeColor(client.status)} text-xs`}>
-                                  {client.status || "Unknown"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-xs sm:text-sm">
-                                {client?.hr_employees?.first_name}  {client?.hr_employees?.last_name}
-                              </TableCell>
-                            </TableRow>
+                              </td>
+                              <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
+                                {client.currency || '-'}
+                              </td>
+                              <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
+                                {isEmployee ? (
+                                  <Badge variant="outline" className={getStatusBadgeColor(client.status)}>
+                                    {client.status || 'Unknown'}
+                                  </Badge>
+                                ) : (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="transparent" className="h-7 sm:h-8 px-2 py-0">
+                                        {statusUpdateLoading === client.id ? (
+                                          <Loader2 className="h-3 sm:h-4 w-3 sm:w-4 animate-spin mr-1" />
+                                        ) : (
+                                          <Badge
+                                            variant="outline"
+                                            className={getStatusBadgeColor(client.status)}
+                                          >
+                                            {client.status || 'Unknown'}
+                                          </Badge>
+                                        )}
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="center">
+                                      <DropdownMenuItem
+                                        className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                                        onClick={() => handleStatusChange(client.id, 'Active')}
+                                      >
+                                        Active
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                        onClick={() => handleStatusChange(client.id, 'Inactive')}
+                                      >
+                                        Inactive
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50"
+                                        onClick={() => handleStatusChange(client.id, 'Pending')}
+                                      >
+                                        Pending
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
+                              </td>
+                              <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
+                                {client.hr_employees?.first_name && client.hr_employees?.last_name
+                                  ? `${client.hr_employees.first_name} ${client.hr_employees.last_name}`
+                                  : '-'}
+                              </td>
+                              <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
+                                <div className="flex space-x-2">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 sm:h-8 w-7 sm:w-8"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleClientClick(client.client_name);
+                                          }}
+                                          aria-label="View Client"
+                                        >
+                                          <Eye className="h-3 sm:h-4 w-3 sm:w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>View Client</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  {!isEmployee && (
+                                    <>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 sm:h-8 w-7 sm:w-8"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleEditClient(client);
+                                              }}
+                                              aria-label="Edit Client"
+                                            >
+                                              <Edit className="h-3 sm:h-4 w-3 sm:w-4" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Edit Client</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 sm:h-8 w-7 sm:w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteClient(client);
+                                              }}
+                                              aria-label="Delete Client"
+                                            >
+                                              <Trash2 className="h-3 sm:h-4 w-3 sm:w-4" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Delete Client</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
                           ))
                         ) : (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8 text-sm">
+                          <tr>
+                            <td colSpan={7} className="px-4 sm:px-6 py-6 sm:py-8 text-center text-[10px] sm:text-sm text-gray-500">
                               No clients found matching the selected filter.
-                            </TableCell>
-                          </TableRow>
+                            </td>
+                          </tr>
                         )}
-                      </TableBody>
-                    </Table>
+                      </tbody>
+                    </table>
                   </div>
                   {filteredClients.length > 0 && renderPagination()}
                 </TabsContent>
@@ -790,6 +1116,45 @@ const ClientManagementDashboard = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Add/Edit Client Dialog */}
+      <AddClientDialog
+        open={addClientOpen}
+        onOpenChange={(open) => {
+          setAddClientOpen(open);
+          if (!open) setEditClient(null);
+        }}
+        clientToEdit={editClient}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the client "{clientToDelete?.client_name}". This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteClient}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

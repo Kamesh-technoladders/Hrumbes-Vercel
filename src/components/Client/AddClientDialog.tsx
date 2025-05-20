@@ -85,7 +85,7 @@ const AddClientDialog = ({ open, onOpenChange, clientToEdit }: AddClientDialogPr
   }, [clientToEdit, form]);
  
   const onSubmit = async (values: ClientFormValues) => {
-    console.log("onSubmit called with values:", values); // Debug log
+    console.log("onSubmit called with values:", values); 
     if (!isSubmittingIntentionally) {
       console.log("Submission blocked: Not intentional");
       return; // Prevent submission unless explicitly triggered by Save button
@@ -227,10 +227,10 @@ const AddClientDialog = ({ open, onOpenChange, clientToEdit }: AddClientDialogPr
  
   const { isSubmitting, isValid, errors } = form.formState;
  
-  if (process.env.NODE_ENV === "development") {
-    console.log("Form Errors:", errors);
-    console.log("Form Values:", form.getValues());
-  }
+  // if (process.env.NODE_ENV === "development") {
+  //   console.log("Form Errors:", errors);
+  //   console.log("Form Values:", form.getValues());
+  // }
  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
