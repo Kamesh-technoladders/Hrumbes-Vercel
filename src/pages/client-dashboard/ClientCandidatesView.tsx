@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import supabase from "../../config/supabaseClient";
 import {
   Table,
@@ -12,10 +12,8 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +28,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Search, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
 import HiddenContactCell from "@/components/ui/HiddenContactCell";
+import { format } from "date-fns";
 
 // Status IDs for Offered and Joined candidates
 const OFFERED_STATUS_ID = "9d48d0f9-8312-4f60-aaa4-bafdce067417";
@@ -54,6 +53,8 @@ interface Candidate {
   accrual_ctc?: string;
   expected_salary?: number;
   profit?: number;
+  job_type_category?: string;
+  joining_date?: string;
 }
 
 interface Job {
@@ -71,6 +72,7 @@ interface Client {
   commission_value?: number;
   commission_type?: string;
   currency: string;
+  service_type: string[];
 }
 
 interface ClientMetrics {
@@ -83,12 +85,14 @@ const ClientCandidatesView = () => {
   const { clientName } = useParams();
   const navigate = useNavigate();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>([]);
+  const [filteredContractualCandidates, setFilteredContractualCandidates] = useState<Candidate[]>([]);
+  const [filteredPermanentCandidates, setFilteredPermanentCandidates] = useState<Candidate[]>([]);
   const [metrics, setMetrics] = useState<ClientMetrics>({
     revenue: 0,
     profit: 0,
     candidateCount: 0,
   });
+  const [serviceType, setServiceType] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -203,11 +207,13 @@ const ClientCandidatesView = () => {
 
       const { data: clientData, error: clientError } = await supabase
         .from("hr_clients")
-        .select("id, client_name, commission_value, commission_type, currency")
+        .select("id, client_name, commission_value, commission_type, currency, service_type")
         .eq("client_name", client)
         .single();
 
       if (clientError) throw clientError;
+
+      setServiceType(clientData.service_type || []);
 
       const { data: jobsData, error: jobsError } = await supabase
         .from("hr_jobs")
@@ -219,7 +225,8 @@ const ClientCandidatesView = () => {
       if (!jobsData || jobsData.length === 0) {
         setMetrics({ revenue: 0, profit: 0, candidateCount: 0 });
         setCandidates([]);
-        setFilteredCandidates([]);
+        setFilteredContractualCandidates([]);
+        setFilteredPermanentCandidates([]);
         setLoading(false);
         return;
       }
@@ -230,7 +237,8 @@ const ClientCandidatesView = () => {
         .from("hr_job_candidates")
         .select(`
           id, name, email, phone, experience, skills, status, job_id,
-          main_status_id, sub_status_id, ctc, accrual_ctc, expected_salary
+          main_status_id, sub_status_id, ctc, accrual_ctc, expected_salary, joining_date,
+          hr_jobs!hr_job_candidates_job_id_fkey(id, title, job_type_category, client_details)
         `)
         .in("job_id", jobIds)
         .in("main_status_id", [OFFERED_STATUS_ID, JOINED_STATUS_ID]);
@@ -240,7 +248,8 @@ const ClientCandidatesView = () => {
       if (!candidatesData || candidatesData.length === 0) {
         setMetrics({ revenue: 0, profit: 0, candidateCount: 0 });
         setCandidates([]);
-        setFilteredCandidates([]);
+        setFilteredContractualCandidates([]);
+        setFilteredPermanentCandidates([]);
         setLoading(false);
         return;
       }
@@ -259,6 +268,7 @@ const ClientCandidatesView = () => {
         return {
           ...candidate,
           job_title: job ? job.title : "Unknown",
+          job_type_category: job ? job.job_type_category : "Unknown",
           profit: candidateProfit,
         };
       });
@@ -270,7 +280,17 @@ const ClientCandidatesView = () => {
       });
 
       setCandidates(enhancedCandidates);
-      setFilteredCandidates(enhancedCandidates);
+
+      // Split candidates based on job_type_category
+      const contractualCandidates = enhancedCandidates.filter(
+        candidate => candidate.job_type_category === "Internal"
+      );
+      const permanentCandidates = enhancedCandidates.filter(
+        candidate => candidate.job_type_category === "External"
+      );
+
+      setFilteredContractualCandidates(contractualCandidates);
+      setFilteredPermanentCandidates(permanentCandidates);
     } catch (error) {
       toast({
         title: "Error fetching candidates",
@@ -289,22 +309,39 @@ const ClientCandidatesView = () => {
     setCurrentPage(1); // Reset to first page on search
 
     if (!value.trim()) {
-      setFilteredCandidates(candidates);
+      setFilteredContractualCandidates(
+        candidates.filter(c => c.job_type_category === "Internal")
+      );
+      setFilteredPermanentCandidates(
+        candidates.filter(c => c.job_type_category === "External")
+      );
       return;
     }
 
     const searchTermLower = value.toLowerCase();
-    const filtered = candidates.filter(
+    const filteredContractual = candidates.filter(
       candidate =>
-        candidate.name.toLowerCase().includes(searchTermLower) ||
+        candidate.job_type_category === "Internal" &&
+        (candidate.name.toLowerCase().includes(searchTermLower) ||
         candidate.email.toLowerCase().includes(searchTermLower) ||
         candidate.phone?.toLowerCase().includes(searchTermLower) ||
         candidate.skills?.some(skill =>
           skill.toLowerCase().includes(searchTermLower)
-        )
+        ))
+    );
+    const filteredPermanent = candidates.filter(
+      candidate =>
+        candidate.job_type_category === "External" &&
+        (candidate.name.toLowerCase().includes(searchTermLower) ||
+        candidate.email.toLowerCase().includes(searchTermLower) ||
+        candidate.phone?.toLowerCase().includes(searchTermLower) ||
+        candidate.skills?.some(skill =>
+          skill.toLowerCase().includes(searchTermLower)
+        ))
     );
 
-    setFilteredCandidates(filtered);
+    setFilteredContractualCandidates(filteredContractual);
+    setFilteredPermanentCandidates(filteredPermanent);
   };
 
   const formatCurrency = (amount: number) => {
@@ -313,6 +350,16 @@ const ClientCandidatesView = () => {
       currency: 'INR',
       maximumFractionDigits: 2,
     }).format(amount);
+  };
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      return format(date, "dd/MM/yyyy");
+    } catch {
+      return "-";
+    }
   };
 
   const goBack = () => {
@@ -341,12 +388,46 @@ const ClientCandidatesView = () => {
     }
   };
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredCandidates.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedCandidates = filteredCandidates.slice(
-    startIndex,
-    startIndex + itemsPerPage
+  // Placeholder for CSV data
+  const csvData = candidates.map(candidate => ({
+    Name: candidate.name,
+    Email: candidate.email,
+    Phone: candidate.phone,
+    Position: candidate.job_title,
+    Experience: candidate.experience || "-",
+    "Date of Join": formatDate(candidate.joining_date),
+    Status: getStatusText(candidate.main_status_id),
+    "Salary (LPA)": candidate.ctc
+      ? formatCurrency(parseSalary(candidate.ctc))
+      : candidate.expected_salary
+      ? formatCurrency(candidate.expected_salary)
+      : "-",
+    "Profit (INR)": candidate.profit ? formatCurrency(candidate.profit) : "-",
+  }));
+
+  // Placeholder for PDF download
+  const downloadPDF = () => {
+    toast({
+      title: "PDF Download",
+      description: "PDF download functionality is not yet implemented.",
+      variant: "default",
+    });
+  };
+
+  // Pagination logic for contractual candidates
+  const totalContractualPages = Math.ceil(filteredContractualCandidates.length / itemsPerPage);
+  const contractualStartIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedContractualCandidates = filteredContractualCandidates.slice(
+    contractualStartIndex,
+    contractualStartIndex + itemsPerPage
+  );
+
+  // Pagination logic for permanent candidates
+  const totalPermanentPages = Math.ceil(filteredPermanentCandidates.length / itemsPerPage);
+  const permanentStartIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedPermanentCandidates = filteredPermanentCandidates.slice(
+    permanentStartIndex,
+    permanentStartIndex + itemsPerPage
   );
 
   const handleItemsPerPageChange = (value: string) => {
@@ -354,16 +435,17 @@ const ClientCandidatesView = () => {
     setCurrentPage(1);
   };
 
-  const renderPagination = () => {
+  console.log("candidates", candidates)
+  const renderPagination = (totalPages: number, isContractual: boolean) => {
     return (
-      <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4 px-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Show</span>
+          <span className="text-xs sm:text-sm text-gray-600">Show</span>
           <Select
             value={itemsPerPage.toString()}
             onValueChange={handleItemsPerPageChange}
           >
-            <SelectTrigger className="w-[70px]">
+            <SelectTrigger className="w-[60px] sm:w-[70px] text-xs sm:text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -373,24 +455,25 @@ const ClientCandidatesView = () => {
               <SelectItem value="50">50</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-sm text-gray-600">per page</span>
+          <span className="text-xs sm:text-sm text-gray-600">per page</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
+            className="p-1 sm:p-2"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
 
           <div className="flex items-center gap-1">
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .slice(
-                Math.max(0, currentPage - 3),
-                Math.min(totalPages, currentPage + 2)
+                Math.max(0, currentPage - 2),
+                Math.min(totalPages, currentPage + 1)
               )
               .map((page) => (
                 <Button
@@ -398,6 +481,7 @@ const ClientCandidatesView = () => {
                   variant={currentPage === page ? "default" : "outline"}
                   size="sm"
                   onClick={() => setCurrentPage(page)}
+                  className="px-2 py-1 text-xs sm:text-sm"
                 >
                   {page}
                 </Button>
@@ -411,19 +495,175 @@ const ClientCandidatesView = () => {
               setCurrentPage((prev) => Math.min(prev + 1, totalPages))
             }
             disabled={currentPage === totalPages}
+            className="p-1 sm:p-2"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </div>
 
-        <span className="text-sm text-gray-600">
-          Showing {startIndex + 1} to{" "}
-          {Math.min(startIndex + itemsPerPage, filteredCandidates.length)} of{" "}
-          {filteredCandidates.length} candidates
+        <span className="text-xs sm:text-sm text-gray-600">
+          Showing {isContractual ? contractualStartIndex + 1 : permanentStartIndex + 1} to{" "}
+          {isContractual
+            ? Math.min(contractualStartIndex + itemsPerPage, filteredContractualCandidates.length)
+            : Math.min(permanentStartIndex + itemsPerPage, filteredPermanentCandidates.length)} of{" "}
+          {isContractual ? filteredContractualCandidates.length : filteredPermanentCandidates.length}
         </span>
       </div>
     );
   };
+
+  const renderCandidateCard = (candidate: Candidate) => (
+    <Card key={candidate.id} className="mb-4 p-4">
+      <div className="space-y-2">
+        <div>
+          <strong className="text-sm">Name:</strong>
+          <p className="text-sm">{candidate.name}</p>
+        </div>
+        <div>
+          <strong className="text-sm">Contact:</strong>
+          <HiddenContactCell
+            email={candidate.email}
+            phone={candidate.phone}
+            candidateId={candidate.id}
+            className="text-sm"
+          />
+        </div>
+        <div>
+          <strong className="text-sm">Position:</strong>
+          <Link to={`/jobs/${candidate.job_id}`} className="text-sm text-blue-600 hover:underline">
+            {candidate.job_title}
+          </Link>
+        </div>
+        <div>
+          <strong className="text-sm">Experience:</strong>
+          <p className="text-sm">{candidate.experience || "-"}</p>
+        </div>
+        <div>
+          <strong className="text-sm">Date of Join:</strong>
+          <p className="text-sm">{formatDate(candidate.joining_date)}</p>
+        </div>
+        <div>
+          <strong className="text-sm">Status:</strong>
+          <Badge className={`${getStatusBadgeColor(candidate.main_status_id)} text-xs mt-1`}>
+            {getStatusText(candidate.main_status_id)}
+          </Badge>
+        </div>
+        <div>
+          <strong className="text-sm">Salary (LPA):</strong>
+          <p className="text-sm">
+            {candidate.ctc
+              ? formatCurrency(parseSalary(candidate.ctc))
+              : candidate.expected_salary
+              ? formatCurrency(candidate.expected_salary)
+              : "-"}
+          </p>
+        </div>
+        <div>
+          <strong className="text-sm">Profit (INR):</strong>
+          <p className={`text-sm ${candidate.profit && candidate.profit > 0 ? "text-green-600" : "text-red-600"}`}>
+            {candidate.profit ? formatCurrency(candidate.profit) : "-"}
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+
+  const renderTable = (candidates: Candidate[], title: string, totalPages: number, isContractual: boolean) => (
+    <div className="w-full min-w-0">
+      <h3 className="text-lg font-semibold mb-2">{title}</h3>
+      {/* Mobile: Card Layout */}
+      <div className="md:hidden">
+        {candidates.length > 0 ? (
+          candidates.map(candidate => renderCandidateCard(candidate))
+        ) : (
+          <Card className="p-4 text-center">
+            <p className="text-sm">
+              {searchTerm
+                ? "No candidates found matching your search."
+                : `No ${title.toLowerCase()} candidates found for this client.`}
+            </p>
+          </Card>
+        )}
+      </div>
+      {/* Tablet and Desktop: Table Layout */}
+      <div className="hidden md:block rounded-md border max-h-[400px] overflow-y-auto overflow-x-auto">
+        <Table className="report-table w-full">
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="sticky left-0 bg-white min-w-[100px] lg:min-w-[150px]">Name</TableHead>
+              <TableHead className="min-w-[80px] lg:min-w-[120px]">Contact</TableHead>
+              <TableHead className="min-w-[100px] lg:min-w-[150px]">Position</TableHead>
+              <TableHead className="min-w-[80px] hidden lg:table-cell">Experience</TableHead>
+              <TableHead className="min-w-[80px] lg:min-w-[100px]">Date of Join</TableHead>
+              <TableHead className="min-w-[80px] lg:min-w-[100px]">Status</TableHead>
+              <TableHead className="min-w-[80px] lg:min-w-[100px]">Salary (LPA)</TableHead>
+              <TableHead className="min-w-[80px] hidden lg:table-cell">Profit (INR)</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {candidates.length > 0 ? (
+              candidates.map((candidate) => (
+                <TableRow key={candidate.id}>
+                  <TableCell className="sticky left-0 bg-white font-medium text-xs md:text-sm">
+                    {candidate.name}
+                  </TableCell>
+                  <TableCell className="text-xs md:text-sm">
+                    <HiddenContactCell
+                      email={candidate.email}
+                      phone={candidate.phone}
+                      candidateId={candidate.id}
+                      className="text-xs md:text-sm"
+                    />
+                  </TableCell>
+                  <TableCell className="text-xs md:text-sm">
+  <Link to={`/jobs/${candidate.job_id}`} className="font-medium hover:underline">
+    {candidate.job_title}
+    {candidate?.hr_jobs?.client_details?.pointOfContact?.trim() ? (
+      <> ({candidate.hr_jobs.client_details.pointOfContact})</>
+    ) : null}
+  </Link>
+</TableCell>
+
+                  <TableCell className="text-xs md:text-sm hidden lg:table-cell">
+                    {candidate.experience || "-"}
+                  </TableCell>
+                  <TableCell className="text-xs md:text-sm">
+                    {formatDate(candidate.joining_date)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={`${getStatusBadgeColor(candidate.main_status_id)} text-xs`}>
+                      {getStatusText(candidate.main_status_id)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs md:text-sm">
+                    {candidate.ctc
+                      ? formatCurrency(parseSalary(candidate.ctc))
+                      : candidate.expected_salary
+                      ? formatCurrency(candidate.expected_salary)
+                      : "-"}
+                  </TableCell>
+                  <TableCell className="font-medium text-xs md:text-sm hidden lg:table-cell">
+                    <span className={candidate.profit && candidate.profit > 0 ? "text-green-600" : "text-red-600"}>
+                      {candidate.profit ? formatCurrency(candidate.profit) : "-"}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-sm">
+                  {searchTerm
+                    ? "No candidates found matching your search."
+                    : `No ${title.toLowerCase()} candidates found for this client.`}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      {candidates.length > 0 && renderPagination(totalPages, isContractual)}
+    </div>
+  );
 
   useEffect(() => {
     if (clientName) {
@@ -432,176 +672,111 @@ const ClientCandidatesView = () => {
   }, [clientName]);
 
   return (
-    <div className="max-w-8xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+    <div className="w-full max-w-[95vw] py-2 sm:py-4 px-2 sm:px-4 lg:px-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goBack}
-              className="h-8 w-8"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <CardTitle className="text-xl sm:text-2xl">{clientName} - Candidates (Offered & Joined)</CardTitle>
-              <CardDescription className="text-sm sm:text-base">
-                View all offered and joined candidates for {clientName} with profit calculations
-              </CardDescription>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={goBack}
+                className="h-8 w-8"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <CardTitle className="text-lg sm:text-xl lg:text-2xl">
+                {clientName} - Candidates
+              </CardTitle>
             </div>
+            {/* <div className="flex flex-col sm:flex-row gap-2">
+              <Button size="sm" className="text-xs sm:text-sm">
+                Download CSV
+              </Button>
+              <Button size="sm" onClick={downloadPDF} className="text-xs sm:text-sm">
+                Download PDF
+              </Button>
+            </div> */}
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
             <Card className="bg-green-50 border-green-200">
-              <CardHeader>
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                   Revenue
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-xl sm:text-2xl font-bold text-green-800">
+              <CardContent className="p-3 sm:p-4">
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                   {formatCurrency(metrics.revenue)}
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-green-50 border-green-200">
-              <CardHeader>
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                   Profit
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-xl sm:text-2xl font-bold text-green-800">
+              <CardContent className="p-3 sm:p-4">
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                   {formatCurrency(metrics.profit)}
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-blue-50 border-blue-200">
-              <CardHeader>
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                   Candidates
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-xl sm:text-2xl font-bold text-blue-800">
+              <CardContent className="p-3 sm:p-4">
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-800">
                   {metrics.candidateCount}
                 </p>
               </CardContent>
             </Card>
           </div>
-          <div className="flex items-center mb-6 relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          <div className="flex items-center mb-4 sm:mb-6 relative">
+            <Search className="absolute left-2.5 top-2.5 h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
             <Input
               type="search"
               placeholder="Search candidates..."
-              className="pl-8"
+              className="pl-8 w-full text-xs sm:text-sm"
               value={searchTerm}
               onChange={handleSearch}
             />
           </div>
           {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple"></div>
+            <div className="flex justify-center py-6 sm:py-8">
+              <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-purple"></div>
             </div>
           ) : (
             <>
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-[120px] sm:w-[200px]">Name</TableHead>
-                      <TableHead className="w-[100px] sm:w-[150px]">Contact</TableHead>
-                      <TableHead className="w-[80px] sm:w-[100px]">Experience</TableHead>
-                      {/* <TableHead className="w-[120px] sm:w-[150px]">Skills</TableHead> */}
-                      <TableHead className="w-[120px] sm:w-[200px]">Job</TableHead>
-                      <TableHead className="w-[80px] sm:w-[100px]">Status</TableHead>
-                      <TableHead className="w-[100px] sm:w-[120px]">Salary (LPA)</TableHead>
-                      <TableHead className="w-[100px] sm:w-[120px]">Profit (INR)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedCandidates.length > 0 ? (
-                      paginatedCandidates.map((candidate) => (
-                        <TableRow key={candidate.id}>
-                          <TableCell className="font-medium text-xs sm:text-sm">
-                            {candidate.name}
-                          </TableCell>
-                          <TableCell>
-                            <HiddenContactCell
-                              email={candidate.email}
-                              phone={candidate.phone}
-                              candidateId={candidate.id}
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs sm:text-sm">
-                            {candidate.experience || "-"}
-                          </TableCell>
-                          {/* <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {candidate.skills && candidate.skills.length > 0 ? (
-                                candidate.skills.slice(0, 3).map((skill, index) => (
-                                  <Badge key={index} variant="outline" className="text-xs">
-                                    {skill}
-                                  </Badge>
-                                ))
-                              ) : (
-                                <span className="text-gray-500">-</span>
-                              )}
-                              {candidate.skills && candidate.skills.length > 3 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{candidate.skills.length - 3}
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell> */}
-                          <TableCell className="text-xs sm:text-sm">
-                            {candidate.job_title}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={`${getStatusBadgeColor(candidate.main_status_id)} text-xs`}>
-                              {getStatusText(candidate.main_status_id)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs sm:text-sm">
-                            {candidate.ctc
-                              ? formatCurrency(parseSalary(candidate.ctc))
-                              : candidate.expected_salary
-                              ? formatCurrency(candidate.expected_salary)
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="font-medium text-xs sm:text-sm">
-                            <span className={candidate.profit && candidate.profit > 0 ? "text-green-600" : "text-red-600"}>
-                              {candidate.profit ? formatCurrency(candidate.profit) : "-"}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-sm">
-                          {searchTerm
-                            ? "No candidates found matching your search."
-                            : "No offered or joined candidates found for this client."}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              {filteredCandidates.length > 0 && renderPagination()}
+              {serviceType.includes("contractual") && serviceType.includes("permanent") ? (
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 min-w-0">
+                    {renderTable(paginatedContractualCandidates, "Contractual Candidates", totalContractualPages, true)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {renderTable(paginatedPermanentCandidates, "Permanent Candidates", totalPermanentPages, false)}
+                  </div>
+                </div>
+              ) : (
+                renderTable(
+                  serviceType.includes("contractual") ? paginatedContractualCandidates : paginatedPermanentCandidates,
+                  serviceType.includes("contractual") ? "Contractual Candidates" : "Permanent Candidates",
+                  serviceType.includes("contractual") ? totalContractualPages : totalPermanentPages,
+                  serviceType.includes("contractual")
+                )
+              )}
             </>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between">
-          <div className="text-sm text-gray-500">
-            {filteredCandidates.length} {filteredCandidates.length === 1 ? 'candidate' : 'candidates'} found
-          </div>
-        </CardFooter>
       </Card>
     </div>
   );

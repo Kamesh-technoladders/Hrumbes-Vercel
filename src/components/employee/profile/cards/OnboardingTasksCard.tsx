@@ -6,59 +6,77 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 interface GoalInstance {
+  goal_type: string;
   period_type: string;
   progress: number;
   period_start: string;
   period_end: string;
 }
 
-export const OnboardingTasksCard = () => {
+export const OnboardingTasksCard: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   const user = useSelector((state: any) => state.auth.user);
-  const [instances, setInstances] = useState<GoalInstance[]>([]);
+  const [submissionInstances, setSubmissionInstances] = useState<GoalInstance[]>([]);
+  const [onboardingInstances, setOnboardingInstances] = useState<GoalInstance[]>([]);
   const [totalSubmissionCount, setTotalSubmissionCount] = useState(0);
+  const [totalOnboardingCount, setTotalOnboardingCount] = useState(0);
 
   useEffect(() => {
-    const fetchSubmissionGoalInstances = async () => {
+    const fetchGoalInstances = async () => {
       if (!user?.id) return;
 
       try {
-        // Step 1: Fetch total Submission count
-        const { data: submissionCounts, error: countError } = await supabase
+        // Fetch total Submission count
+        const { data: submissionCounts, error: submissionCountError } = await supabase
           .from("hr_status_change_counts")
           .select("count")
           .eq("candidate_owner", user.id)
           .eq("sub_status_id", "71706ff4-1bab-4065-9692-2a1237629dda");
 
-        if (countError) throw countError;
+        if (submissionCountError) throw submissionCountError;
+        const totalSubmissions = submissionCounts.reduce((sum, record) => sum + record.count, 0);
+        setTotalSubmissionCount(totalSubmissions);
 
-        const total = submissionCounts.reduce((sum, record) => sum + record.count, 0);
-        setTotalSubmissionCount(total);
+        // Fetch total Onboarding count
+        const { data: onboardingCounts, error: onboardingCountError } = await supabase
+          .from("hr_status_change_counts")
+          .select("count")
+          .eq("candidate_owner", user.id)
+          .eq("sub_status_id", "c9716374-3477-4606-877a-dfa5704e7680");
 
-        // Step 2: Fetch the "Submission" goal from hr_goals
-        const { data: submissionGoal, error: goalError } = await supabase
+        if (onboardingCountError) throw onboardingCountError;
+        const totalOnboardings = onboardingCounts.reduce((sum, record) => sum + record.count, 0);
+        setTotalOnboardingCount(totalOnboardings);
+
+        // Fetch Submission and Onboarding goals from hr_goals
+        const { data: goals, error: goalError } = await supabase
           .from("hr_goals")
-          .select("id")
-          .eq("name", "Submission")
-          .single();
+          .select("id, name")
+          .in("name", ["Submission", "Onboarding"]);
 
-        if (goalError || !submissionGoal) throw new Error("Submission goal not found");
+        if (goalError || !goals) throw new Error("Goals not found");
 
-        // Step 3: Fetch assigned goals for the user for the "Submission" goal
+        const submissionGoal = goals.find((g) => g.name === "Submission");
+        const onboardingGoal = goals.find((g) => g.name === "Onboarding");
+
+        if (!submissionGoal || !onboardingGoal) throw new Error("Required goals not found");
+
+        // Fetch assigned goals for the user
         const { data: assignedGoals, error: assignedError } = await supabase
           .from("hr_assigned_goals")
-          .select("id")
+          .select("id, goal_id")
           .eq("employee_id", user.id)
-          .eq("goal_id", submissionGoal.id);
+          .in("goal_id", [submissionGoal.id, onboardingGoal.id]);
 
         if (assignedError) throw assignedError;
         if (!assignedGoals || assignedGoals.length === 0) {
-          setInstances([]);
+          setSubmissionInstances([]);
+          setOnboardingInstances([]);
           return;
         }
 
         const assignedGoalIds = assignedGoals.map((ag) => ag.id);
 
-        // Step 4: Fetch goal instances for all period types
+        // Fetch goal instances
         const { data: instancesData, error: instancesError } = await supabase
           .from("hr_goal_instances")
           .select("assigned_goal_id, period_start, period_end, progress, status")
@@ -66,25 +84,27 @@ export const OnboardingTasksCard = () => {
 
         if (instancesError) throw instancesError;
 
-        // Step 5: Group instances by period type (Daily, Weekly, Monthly, Yearly)
-        const periodTypes = ["Daily", "Weekly", "Monthly", "Yearly"];
-        const currentDate = new Date("2025-05-12"); // Current date
+        // Group instances by goal type and period type
+        const currentDate = new Date("2025-05-12");
+        const submissionPeriodTypes = ["Daily", "Weekly", "Monthly", "Yearly"];
+        const onboardingPeriodTypes = ["Monthly", "Yearly"];
 
-        const groupedInstances: GoalInstance[] = periodTypes.map((periodType) => {
-          // Filter instances for this period type (assuming period_type is inferred from duration)
-          const filteredInstances = instancesData.filter((instance) => {
-            const start = new Date(instance.period_start);
-            const end = new Date(instance.period_end);
-            const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+        // Process Submission instances
+        const submissionGrouped: GoalInstance[] = submissionPeriodTypes.map((periodType) => {
+          const filteredInstances = instancesData
+            .filter((instance) => {
+              const goal = assignedGoals.find((ag) => ag.id === instance.assigned_goal_id);
+              if (goal?.goal_id !== submissionGoal.id) return false;
+              const start = new Date(instance.period_start);
+              const end = new Date(instance.period_end);
+              const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+              if (periodType === "Daily" && durationDays <= 1) return true;
+              if (periodType === "Weekly" && durationDays > 1 && durationDays <= 7) return true;
+              if (periodType === "Monthly" && durationDays > 7 && durationDays <= 31) return true;
+              if (periodType === "Yearly" && durationDays > 31) return true;
+              return false;
+            });
 
-            if (periodType === "Daily" && durationDays <= 1) return true;
-            if (periodType === "Weekly" && durationDays > 1 && durationDays <= 7) return true;
-            if (periodType === "Monthly" && durationDays > 7 && durationDays <= 31) return true;
-            if (periodType === "Yearly" && durationDays > 31) return true;
-            return false;
-          });
-
-          // Find the active or most recent instance
           const activeInstance = filteredInstances
             .filter((instance) => {
               const start = new Date(instance.period_start);
@@ -100,6 +120,7 @@ export const OnboardingTasksCard = () => {
           const instance = activeInstance || latestInstance;
 
           return {
+            goal_type: "Submission",
             period_type: periodType,
             progress: instance ? parseFloat(instance.progress) || 0 : 0,
             period_start: instance ? instance.period_start : "",
@@ -107,15 +128,53 @@ export const OnboardingTasksCard = () => {
           };
         });
 
-        setInstances(groupedInstances);
+        // Process Onboarding instances
+        const onboardingGrouped: GoalInstance[] = onboardingPeriodTypes.map((periodType) => {
+          const filteredInstances = instancesData
+            .filter((instance) => {
+              const goal = assignedGoals.find((ag) => ag.id === instance.assigned_goal_id);
+              if (goal?.goal_id !== onboardingGoal.id) return false;
+              const start = new Date(instance.period_start);
+              const end = new Date(instance.period_end);
+              const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+              if (periodType === "Monthly" && durationDays > 7 && durationDays <= 31) return true;
+              if (periodType === "Yearly" && durationDays > 31) return true;
+              return false;
+            });
+
+          const activeInstance = filteredInstances
+            .filter((instance) => {
+              const start = new Date(instance.period_start);
+              const end = new Date(instance.period_end);
+              return currentDate >= start && currentDate <= end;
+            })
+            .sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime())[0];
+
+          const latestInstance = filteredInstances.sort(
+            (a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime()
+          )[0];
+
+          const instance = activeInstance || latestInstance;
+
+          return {
+            goal_type: "Onboarding",
+            period_type: periodType,
+            progress: instance ? parseFloat(instance.progress) || 0 : 0,
+            period_start: instance ? instance.period_start : "",
+            period_end: instance ? instance.period_end : "",
+          };
+        });
+
+        setSubmissionInstances(submissionGrouped);
+        setOnboardingInstances(onboardingGrouped);
       } catch (error) {
-        console.error("Error fetching Submission goal data:", error);
-        toast.error("Failed to load Submission goal data");
+        console.error("Error fetching goal data:", error);
+        toast.error("Failed to load goal data");
       }
     };
 
-    fetchSubmissionGoalInstances();
-  }, [user?.id]);
+    fetchGoalInstances();
+  }, [user?.id, employeeId]);
 
   // Format period as "MMM D - MMM D"
   const formatPeriod = (start: string, end: string) => {
@@ -127,26 +186,67 @@ export const OnboardingTasksCard = () => {
   };
 
   return (
-    <Card className="p-6 card-gradient-wave hover:shadow-md transition-shadow h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-medium text-[#0055D4]">Submission Goal</h3>
-        <div className="text-sm text-white">Total: {totalSubmissionCount}</div>
-      </div>
-      <div className="space-y-4 flex-1">
-        {instances.map((instance) => (
-          <div key={instance.period_type} className="flex items-center gap-2">
-            <div className="w-20 text-sm text-white">{instance.period_type}</div>
-            <div className="flex-1">
-              <div className="text-xs text-gray-300 mb-1">
-                {formatPeriod(instance.period_start, instance.period_end)}
-              </div>
-              <Progress value={instance.progress} />
-            </div>
-            <span className="text-sm font-medium w-12 text-right text-white">
-              {Math.round(instance.progress)}%
-            </span>
+    <Card className="p-6 bg-gradient-to-br from-purple-600 to-pink-500 border-none rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col">
+      <h2 className="text-xl font-semibold text-white mb-6">Performance Goals</h2>
+      <div className="flex flex-col gap-6 flex-1 overflow-y-auto">
+        {/* Submission Section */}
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-white">Submission Goals</h3>
+            <span className="text-sm text-gray-200">Overall: {totalSubmissionCount}</span>
           </div>
-        ))}
+          <div className="space-y-4">
+            {submissionInstances
+              .filter((instance) => formatPeriod(instance.period_start, instance.period_end) !== "N/A")
+              .map((instance) => (
+                <div key={`${instance.goal_type}-${instance.period_type}`} className="flex items-center gap-3">
+                  <div className="w-20 text-sm font-medium text-gray-200">{instance.period_type}</div>
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-300 mb-1">
+                      {formatPeriod(instance.period_start, instance.period_end)}
+                    </div>
+                    <Progress
+                      value={instance.progress}
+                      className="h-2 bg-gray-100"
+                      indicatorClassName="bg-indigo-600"
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-200 w-12 text-right">
+                    {Math.round(instance.progress)}%
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+        {/* Onboarding Section */}
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-white">Onboarding Goals</h3>
+            <span className="text-sm text-gray-200">Overall: {totalOnboardingCount}</span>
+          </div>
+          <div className="space-y-4">
+            {onboardingInstances
+              .filter((instance) => formatPeriod(instance.period_start, instance.period_end) !== "N/A")
+              .map((instance) => (
+                <div key={`${instance.goal_type}-${instance.period_type}`} className="flex items-center gap-3">
+                  <div className="w-20 text-sm font-medium text-gray-200">{instance.period_type}</div>
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-300 mb-1">
+                      {formatPeriod(instance.period_start, instance.period_end)}
+                    </div>
+                    <Progress
+                      value={instance.progress}
+                      className="h-2 bg-gray-100"
+                      indicatorClassName="bg-teal-600"
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-200 w-12 text-right">
+                    {Math.round(instance.progress)}%
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
       </div>
     </Card>
   );

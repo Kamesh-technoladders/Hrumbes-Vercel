@@ -121,7 +121,7 @@ export const TimeTrackerCard: React.FC<TimeTrackerCardProps> = ({ employeeId }) 
   return (
     <>
       <Card
-        className="p-6 hover:shadow-md transition-shadow card-gradient-wave h-full flex flex-col justify-between relative"
+        className="p-6 bg-gradient-to-br from-purple-600 to-pink-500 border-none rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col justify-between relative"
       >
         <Button
           size="icon"
@@ -129,11 +129,11 @@ export const TimeTrackerCard: React.FC<TimeTrackerCardProps> = ({ employeeId }) 
           className="absolute top-4 right-4 hover:bg-white/20 rounded-full"
           onClick={() => setIsHistoryModalOpen(true)}
         >
-          <List className="h-4 w-4 text-white/80" />
+          <List className="h-4 w-4 text-gray-200" />
         </Button>
 
         <div className="flex-1 flex flex-col items-center justify-center">
-          <h3 className="font-medium mb-6 text-[#0055D4] text-lg">Time Tracker</h3>
+          <h3 className="font-medium mb-6 text-white text-lg">Time Tracker</h3>
 
           <TimerDisplay
             elapsedTime={elapsedTime}

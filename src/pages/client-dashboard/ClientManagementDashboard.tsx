@@ -617,7 +617,7 @@ const ClientManagementDashboard = () => {
                   </CardContent>
                 </Card>
               </div>
-              <Card className="mb-6">
+              {/* <Card className="mb-6">
                 <CardHeader>
                   <CardTitle className="text-base sm:text-lg">Revenue and Profit by Service Type</CardTitle>
                 </CardHeader>
@@ -659,7 +659,7 @@ const ClientManagementDashboard = () => {
                     />
                   </div>
                 </CardContent>
-              </Card>
+              </Card> */}
               <Card className="mb-6">
                 <CardHeader>
                   <CardTitle className="text-base sm:text-lg">Revenue and Profit by Client</CardTitle>
