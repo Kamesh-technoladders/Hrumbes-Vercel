@@ -150,7 +150,7 @@ interface TruthScreenResponse {
   tsTransId?: string;
 }
 
-const API_BASE_URL = process.env.TRUTH_ACCESS_BACKEND_API_URL;
+const API_BASE_URL = "http://62.72.51.159:4001";
 
 const dualEncryptData = async (transID: string, uan: string, employer_name: string): Promise<string> => {
   try {
