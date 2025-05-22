@@ -58,6 +58,26 @@ import ClientManagementDashboard from "./pages/client-dashboard/ClientManagement
 import ClientCandidatesView from "./pages/client-dashboard/ClientCandidatesView";
 import ClientMetricsDashboard from "./pages/client-dashboard/ClientMetricsDashboard";
 
+// TimeTracker, Timesheet, Attendance and Leave
+// Employee routes
+import TimeTracker from "./pages/TimeManagement/employee/TimeTracker";
+import Timesheet from "./pages/TimeManagement/employee/Timesheet";
+import Leave from "./pages/TimeManagement/employee/Leave";
+import Attendance from "./pages/TimeManagement/employee/Attendance";
+import Calendar from "./pages/TimeManagement/employee/Calendar";
+import EmployeeRegularization from "./pages/TimeManagement/employee/Regularization";
+
+// Approval routes
+import TimesheetApproval from "./pages/TimeManagement/approvals/TimesheetApproval";
+import LeaveApproval from "./pages/TimeManagement/approvals/LeaveApproval";
+import AutoTerminated from "./pages/TimeManagement/approvals/AutoTerminated";
+import RegularizationApproval from "./pages/TimeManagement/approvals/RegularizationApproval";
+
+// Admin routes
+import LeavePolicies from "./pages/TimeManagement/admin/LeavePolicies";
+import Holidays from "./pages/TimeManagement/admin/Holidays";
+import Projects from "./pages/TimeManagement/admin/Projects";
+
 function App() {
   return (
     <Router>
@@ -158,6 +178,27 @@ function App() {
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/companies/:id" element={<CompanyDetail />} />
           <Route path="/companies/:id/edit" element={<CompanyEdit />} />
+
+          {/* TimeTracker, Timesheet, Attendance and Leave */}
+            {/* Employee routes */}
+              <Route path="/employee/time-tracker" element={<TimeTracker />} />
+              <Route path="/employee/timesheet" element={<Timesheet />} />
+              <Route path="/employee/regularization" element={<EmployeeRegularization />} />
+              <Route path="/employee/leave" element={<Leave />} />
+              <Route path="/employee/attendance" element={<Attendance />} />
+              <Route path="/employee/calendar" element={<Calendar />} />
+              
+              {/* Approval routes */}
+              <Route path="/approvals/timesheet" element={<TimesheetApproval />} />
+              <Route path="/approvals/regularization" element={<RegularizationApproval />} />
+              <Route path="/approvals/leave" element={<LeaveApproval />} />
+              <Route path="/approvals/auto-terminated" element={<AutoTerminated />} />
+              
+              {/* Admin routes */}
+              <Route path="/admin/leave-policies" element={<LeavePolicies />} />
+              <Route path="/admin/holidays" element={<Holidays />} />
+              <Route path="/admin/projects" element={<Projects />} />
+          
           </Route>
         </Route>
       </Routes>

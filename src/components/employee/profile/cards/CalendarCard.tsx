@@ -103,7 +103,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId }) => {
   }
 
   return (
-    <Card className="p-4 hover:shadow-md transition-shadow bg-white/80 backdrop-blur-sm h-[350px] overflow-hidden">
+    <Card className="p-4 hover:shadow-md transition-shadow bg-white/80 backdrop-blur-sm h-[300px] overflow-hidden">
       <div className="grid grid-cols-[2fr_3fr] gap-4 h-full">
         <div className="flex flex-col space-y-2 min-w-0">
           <CalendarHeader 

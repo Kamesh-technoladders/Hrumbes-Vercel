@@ -1,10 +1,22 @@
-import { VStack, IconButton, Tooltip, Box, Text, Flex, useColorModeValue, Icon, Image, useMediaQuery, Collapse } from "@chakra-ui/react";
+import {
+  VStack,
+  IconButton,
+  Tooltip,
+  Box,
+  Text,
+  Flex,
+  useColorModeValue,
+  Icon,
+  Image,
+  useMediaQuery,
+  Collapse,
+} from "@chakra-ui/react";
 import { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLocation, Link, useNavigate } from "react-router-dom";
-import { menuItemsByRole, extraMenuItems } from "./SidebarMenuItem";
 import { logout } from "../../Redux/authSlice";
 import { ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
+import { menuItemsByRole, extraMenuItems } from "./SidebarMenuItem";
 
 const Sidebar = ({ isExpanded, setExpanded }) => {
   const location = useLocation();
@@ -13,25 +25,22 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
   const { role, user } = useSelector((state) => state.auth);
   const { departments } = useSelector((state) => state.departments);
 
-  // Function to get department name by ID
   const getDepartmentName = (departmentId) => {
     const dept = departments.find((d) => d.id === departmentId);
     return dept ? dept.name : "Unknown Department";
   };
 
-  // Get department name for the logged-in user
   const departmentName = user?.department_id
     ? getDepartmentName(user.department_id)
     : "Unknown Department";
 
-  // Get menu items based on role
   const menuItems =
     role === "employee"
-      ? menuItemsByRole.employee(departmentName) // Call the function for employee role
+      ? menuItemsByRole.employee(departmentName)
       : menuItemsByRole[role] || [];
 
   const [isMobile] = useMediaQuery("(max-width: 768px)");
-  const [openDropdown, setOpenDropdown] = useState(null); // Track which dropdown is open
+  const [openDropdown, setOpenDropdown] = useState(null);
 
   const bgColor = useColorModeValue("#F6F6FC", "base.bgdark");
   const hoverBg = useColorModeValue("rgba(123, 67, 241, 0.1)", "secondary.800");
@@ -113,8 +122,8 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
                   w="full"
                 >
                   <IconButton
-                    as={path !== "#" ? Link : "button"}
-                    to={path !== "#" ? path : undefined}
+                    as={Link}
+                    to={path}
                     icon={<Icon as={icon} color={isActive ? activeIconColor : iconColor} />}
                     aria-label={label}
                     variant="ghost"
@@ -124,8 +133,8 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
                   {isExpanded && (
                     <Flex justify="space-between" align="center" w="full">
                       <Text
-                        as={path !== "#" ? Link : "span"}
-                        to={path !== "#" ? path : undefined}
+                        as={Link}
+                        to={path}
                         fontWeight={isActive ? "bold" : "normal"}
                         color={isActive ? activeTextColor : textColor}
                         flex="1"
@@ -163,6 +172,7 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
                             _hover={{ bg: hoverBg }}
                             transition="background 0.3s ease-in-out"
                             w="full"
+                            onClick={() => console.log(`Navigating to ${subItem.path}`)} // Debug navigation
                           >
                             <Icon as={subItem.icon} color={isSubActive ? activeIconColor : iconColor} boxSize={4} />
                             <Text
@@ -184,7 +194,7 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
         })}
       </VStack>
       <VStack spacing={4} mt={4}>
-        {extraMenuItems.map(({ icon, label, action }) => (
+        {extraMenuItems.map(({ icon, label, action, path }) => (
           <Tooltip key={label} label={label} placement="right" isDisabled={isExpanded}>
             <Flex
               align="center"
@@ -196,6 +206,8 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
               transition="background 0.3s ease-in-out"
               w="full"
               cursor="pointer"
+              as={Link}
+              to={path}
               onClick={action === "logout" ? handleLogout : undefined}
             >
               <IconButton

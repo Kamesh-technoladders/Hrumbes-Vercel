@@ -3612,11 +3612,19 @@ console.log("paginated candidate", paginatedCandidates)
   <DialogContent className="sm:max-w-md">
     <DialogHeader>
       <DialogTitle>Client Submission</DialogTitle>
+          {job.jobType !== "Internal" && (
+      <DialogDescription>
+        Select the Submission Date
+      </DialogDescription>
+      )}
+       {job.jobType !== "External" && (
       <DialogDescription>
         Enter the Client Billable Rate and Submission Date
       </DialogDescription>
+      )}
     </DialogHeader>
     <div className="grid gap-4 py-4">
+       {job.jobType !== "External" && (
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right" htmlFor="actual-ctc">
           Client Billing
@@ -3663,6 +3671,7 @@ console.log("paginated candidate", paginatedCandidates)
           </Select1>
         </div>
       </div>
+       )}
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right" htmlFor="submission-date">
           Submission Date

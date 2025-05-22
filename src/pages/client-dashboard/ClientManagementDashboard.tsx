@@ -52,8 +52,9 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Le
 const OFFERED_STATUS_ID = "9d48d0f9-8312-4f60-aaa4-bafdce067417";
 const JOINED_STATUS_ID = "5b4e0b82-0774-4e3b-bb1e-96bc2743f96e";
 
-// Static USD to INR conversion rate
-const USD_TO_INR_RATE = 83.5;
+// Static USD to INR conversion rates
+const USD_TO_INR_RATE_CANDIDATES = 83.5;
+const USD_TO_INR_RATE_EMPLOYEES = 84;
 
 interface Client {
   id: string;
@@ -81,6 +82,20 @@ interface Candidate {
   main_status_id?: string;
 }
 
+interface Employee {
+  id: string;
+  assign_employee: string;
+  project_id: string;
+  client_id: string;
+  salary: number;
+  client_billing: number;
+  billing_type: string;
+  hr_employees?: {
+    first_name?: string;
+    last_name?: string;
+  };
+}
+
 interface Job {
   id: string;
   title: string;
@@ -90,13 +105,22 @@ interface Job {
   budget_type?: string;
 }
 
+interface Project {
+  id: string;
+  client_id: string;
+}
+
 interface Metrics {
   totalRevenue: number;
   totalProfit: number;
   totalCandidates: number;
+  totalEmployees: number;
   permanentCandidates: number;
   contractualCandidates: number;
   bothCandidates: number;
+  permanentEmployees: number;
+  contractualEmployees: number;
+  bothEmployees: number;
 }
 
 const ClientManagementDashboard = () => {
@@ -106,9 +130,13 @@ const ClientManagementDashboard = () => {
     totalRevenue: 0,
     totalProfit: 0,
     totalCandidates: 0,
+    totalEmployees: 0,
     permanentCandidates: 0,
     contractualCandidates: 0,
     bothCandidates: 0,
+    permanentEmployees: 0,
+    contractualEmployees: 0,
+    bothEmployees: 0,
   });
   const [chartData, setChartData] = useState<any>({});
   const [clientChartData, setClientChartData] = useState<any>({});
@@ -134,7 +162,10 @@ const ClientManagementDashboard = () => {
     { value: "USD", symbol: "$" },
   ];
 
-  // Parse salary strings with currency and type conversion
+  console.log("metrics", metrics)
+
+
+  // Parse salary strings with currency and type conversion for candidates
   const parseSalary = (salary: string | undefined): number => {
     if (!salary) return 0;
     const currency = currencies.find((c) => salary.startsWith(c.symbol)) || currencies[0];
@@ -145,7 +176,7 @@ const ClientManagementDashboard = () => {
     let convertedAmount = amount;
 
     if (currency.value === "USD") {
-      convertedAmount *= USD_TO_INR_RATE;
+      convertedAmount *= USD_TO_INR_RATE_CANDIDATES;
     }
 
     if (budgetType === "Monthly") {
@@ -157,7 +188,30 @@ const ClientManagementDashboard = () => {
     return convertedAmount;
   };
 
-  // Calculate profit
+  // Convert employee billing to LPA
+  const convertToLPA = (employee: Employee, clientCurrency: string): number => {
+    let clientBilling = Number(employee.client_billing) || 0;
+
+    if (clientCurrency === "USD") {
+      clientBilling *= USD_TO_INR_RATE_EMPLOYEES;
+    }
+
+    switch (employee.billing_type) {
+      case "Monthly":
+        clientBilling *= 12;
+        break;
+      case "Hourly":
+        clientBilling *= 8 * 22 * 12;
+        break;
+      case "LPA":
+      default:
+        break;
+    }
+
+    return clientBilling;
+  };
+
+  // Calculate candidate profit
   const calculateProfit = (
     candidate: Candidate,
     job: Job,
@@ -196,7 +250,7 @@ const ClientManagementDashboard = () => {
     }
 
     if (salaryCurrency === "USD") {
-      salaryAmount *= USD_TO_INR_RATE;
+      salaryAmount *= USD_TO_INR_RATE_CANDIDATES;
     }
     if (salaryType === "Monthly") {
       salaryAmount *= 12;
@@ -205,7 +259,7 @@ const ClientManagementDashboard = () => {
     }
 
     if (budgetCurrency === "USD") {
-      budgetAmount *= USD_TO_INR_RATE;
+      budgetAmount *= USD_TO_INR_RATE_CANDIDATES;
     }
     if (budgetType === "Monthly") {
       budgetAmount *= 12;
@@ -214,7 +268,7 @@ const ClientManagementDashboard = () => {
     }
 
     if (client.currency === "USD" && client.commission_type === "fixed") {
-      commissionValue *= USD_TO_INR_RATE;
+      commissionValue *= USD_TO_INR_RATE_CANDIDATES;
     }
 
     if (job.job_type_category === "Internal") {
@@ -229,6 +283,13 @@ const ClientManagementDashboard = () => {
     }
 
     return 0;
+  };
+
+  // Calculate employee profit
+  const calculateEmployeeProfit = (employee: Employee, clientCurrency: string): number => {
+    const clientBillingLPA = convertToLPA(employee, clientCurrency);
+    const salary = Number(employee.salary) || 0;
+    return clientBillingLPA - salary;
   };
 
   const fetchClients = async () => {
@@ -283,26 +344,35 @@ const ClientManagementDashboard = () => {
 
       if (candidatesError) throw candidatesError;
 
-      if (!candidatesData || candidatesData.length === 0) {
-        setMetrics({
-          totalRevenue: 0,
-          totalProfit: 0,
-          totalCandidates: 0,
-          permanentCandidates: 0,
-          contractualCandidates: 0,
-          bothCandidates: 0,
-        });
-        setChartData({});
-        setClientChartData({});
-        setLoading(false);
-        return;
-      }
+      const { data: projectsData, error: projectsError } = await supabase
+        .from("hr_projects")
+        .select("id, client_id");
+
+      if (projectsError) throw projectsError;
+
+      const { data: employeesData, error: employeesError } = await supabase
+        .from("hr_project_employees")
+        .select(`
+          id,
+          assign_employee,
+          project_id,
+          client_id,
+          salary,
+          client_billing,
+          billing_type,
+          hr_employees:hr_employees!hr_project_employees_assign_employee_fkey(first_name, last_name)
+        `);
+
+      if (employeesError) throw employeesError;
 
       let totalRevenue = 0;
       let totalProfit = 0;
       let permanentCandidates = 0;
       let contractualCandidates = 0;
       let bothCandidates = 0;
+      let permanentEmployees = 0;
+      let contractualEmployees = 0;
+      let bothEmployees = 0;
 
       const metricsByServiceType: {
         [key: string]: { revenue: number; profit: number };
@@ -316,50 +386,97 @@ const ClientManagementDashboard = () => {
         [clientName: string]: { revenue: number; profit: number };
       } = {};
 
-      candidatesData.forEach((candidate) => {
-        const job = jobsData?.find((j) => j.id === candidate.job_id);
-        const client = clientsData?.find((c) => c.client_name === job?.client_owner);
+      // Process candidates
+      if (candidatesData && candidatesData.length > 0) {
+        candidatesData.forEach((candidate) => {
+          const job = jobsData?.find((j) => j.id === candidate.job_id);
+          const client = clientsData?.find((c) => c.client_name === job?.client_owner);
 
-        if (!job || !client) return;
+          if (!job || !client) return;
 
-        const revenue = candidate.accrual_ctc ? parseSalary(candidate.accrual_ctc) : 0;
-        const profit = calculateProfit(candidate, job, client);
+          const revenue = candidate.accrual_ctc ? parseSalary(candidate.accrual_ctc) : 0;
+          const profit = calculateProfit(candidate, job, client);
 
-        totalRevenue += revenue;
-        totalProfit += profit;
+          totalRevenue += revenue;
+          totalProfit += profit;
 
-        if (!metricsByClient[client.client_name]) {
-          metricsByClient[client.client_name] = { revenue: 0, profit: 0 };
-        }
-        metricsByClient[client.client_name].revenue += revenue;
-        metricsByClient[client.client_name].profit += profit;
+          if (!metricsByClient[client.client_name]) {
+            metricsByClient[client.client_name] = { revenue: 0, profit: 0 };
+          }
+          metricsByClient[client.client_name].revenue += revenue;
+          metricsByClient[client.client_name].profit += profit;
 
-        const isPermanent = client.service_type.includes("permanent") && !client.service_type.includes("contractual");
-        const isContractual = client.service_type.includes("contractual") && !client.service_type.includes("permanent");
-        const isBoth = client.service_type.includes("permanent") && client.service_type.includes("contractual");
+          const isPermanent = client.service_type.includes("permanent") && !client.service_type.includes("contractual");
+          const isContractual = client.service_type.includes("contractual") && !client.service_type.includes("permanent");
+          const isBoth = client.service_type.includes("permanent") && client.service_type.includes("contractual");
 
-        if (isPermanent) {
-          permanentCandidates++;
-          metricsByServiceType.permanent.revenue += revenue;
-          metricsByServiceType.permanent.profit += profit;
-        } else if (isContractual) {
-          contractualCandidates++;
-          metricsByServiceType.contractual.revenue += revenue;
-          metricsByServiceType.contractual.profit += profit;
-        } else if (isBoth) {
-          bothCandidates++;
-          metricsByServiceType.both.revenue += revenue;
-          metricsByServiceType.both.profit += profit;
-        }
-      });
+          if (isPermanent) {
+            permanentCandidates++;
+            metricsByServiceType.permanent.revenue += revenue;
+            metricsByServiceType.permanent.profit += profit;
+          } else if (isContractual) {
+            contractualCandidates++;
+            metricsByServiceType.contractual.revenue += revenue;
+            metricsByServiceType.contractual.profit += profit;
+          } else if (isBoth) {
+            bothCandidates++;
+            metricsByServiceType.both.revenue += revenue;
+            metricsByServiceType.both.profit += profit;
+          }
+        });
+      }
+
+      // Process employees
+      if (employeesData && employeesData.length > 0) {
+        employeesData.forEach((employee) => {
+          const project = projectsData?.find((p) => p.id === employee.project_id);
+          const client = clientsData?.find((c) => c.id === project?.client_id || c.id === employee.client_id);
+
+          if (!client) return;
+
+          const revenue = convertToLPA(employee, client.currency);
+          const profit = calculateEmployeeProfit(employee, client.currency);
+
+          totalRevenue += revenue;
+          totalProfit += profit;
+
+          if (!metricsByClient[client.client_name]) {
+            metricsByClient[client.client_name] = { revenue: 0, profit: 0 };
+          }
+          metricsByClient[client.client_name].revenue += revenue;
+          metricsByClient[client.client_name].profit += profit;
+
+          const isPermanent = client.service_type.includes("permanent") && !client.service_type.includes("contractual");
+          const isContractual = client.service_type.includes("contractual") && !client.service_type.includes("permanent");
+          const isBoth = client.service_type.includes("permanent") && client.service_type.includes("contractual");
+
+          if (isPermanent) {
+            permanentEmployees++;
+            metricsByServiceType.permanent.revenue += revenue;
+            metricsByServiceType.permanent.profit += profit;
+          } else if (isContractual) {
+            contractualEmployees++;
+            metricsByServiceType.contractual.revenue += revenue;
+            metricsByServiceType.contractual.profit += profit;
+          } else if (isBoth) {
+            bothEmployees++;
+            metricsByServiceType.both.revenue += revenue;
+            metricsByServiceType.both.profit += profit;
+          }
+        });
+      }
 
       setMetrics({
         totalRevenue,
         totalProfit,
-        totalCandidates: candidatesData.length,
+        totalCandidates: candidatesData?.length || 0,
+        totalEmployees: employeesData?.length || 0,
         permanentCandidates,
         contractualCandidates,
         bothCandidates,
+        permanentEmployees,
+        contractualEmployees,
+        bothEmployees,
       });
 
       setChartData({
@@ -662,7 +779,7 @@ const ClientManagementDashboard = () => {
             </Button>
           </div>
           <CardDescription className="text-xs sm:text-sm mt-2">
-            View and manage your clients. Click on a client to see associated candidates.
+            View and manage your clients. Click on a client to see associated candidates and employees.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -684,6 +801,18 @@ const ClientManagementDashboard = () => {
                     <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                       {formatCurrency(metrics.totalRevenue)}
                     </p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          {/* <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
+                            $ {(metrics.totalRevenue / USD_TO_INR_RATE_EMPLOYEES).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+                          </p> */}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Converted at 1 USD = ₹ {USD_TO_INR_RATE_EMPLOYEES}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </CardContent>
                 </Card>
                 <Card className="bg-green-50 border-green-200">
@@ -697,21 +826,34 @@ const ClientManagementDashboard = () => {
                     <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                       {formatCurrency(metrics.totalProfit)}
                     </p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          {/* <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
+                            $ {(metrics.totalProfit / USD_TO_INR_RATE_EMPLOYEES).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+                          </p> */}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Converted at 1 USD = ₹ {USD_TO_INR_RATE_EMPLOYEES}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </CardContent>
                 </Card>
                 <Card className="bg-blue-50 border-blue-200">
                   <CardHeader className="py-2 sm:py-3">
                     <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-                      Total Candidates
+                      Total Count
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="py-2 sm:py-3">
                     <p className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-800">
-                      {metrics.totalCandidates}
+                      {metrics.totalCandidates + metrics.totalEmployees}
                     </p>
                     <p className="text-[10px] sm:text-xs text-gray-600 mt-1 sm:mt-2">
-                      Permanent: {metrics.permanentCandidates} | Contractual: {metrics.contractualCandidates} | Both: {metrics.bothCandidates}
+                     Permanent Candidates: {metrics.bothCandidates} <br />
+                     Contractual Employees:  {metrics.bothEmployees}
                     </p>
                   </CardContent>
                 </Card>
@@ -955,7 +1097,9 @@ const ClientManagementDashboard = () => {
                                   >
                                     {client.client_name}
                                   </span>
-                                  
+                                  {/* <Badge variant="outline" className="mt-1 bg-purple-100 text-purple-800 hover:bg-purple-200 rounded-full text-[8px] sm:text-[10px]">
+                                    {client.display_name || 'N/A'}
+                                  </Badge> */}
                                 </div>
                               </td>
                               <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-[10px] sm:text-sm text-gray-900">
