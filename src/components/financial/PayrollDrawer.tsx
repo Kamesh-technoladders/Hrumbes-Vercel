@@ -537,6 +537,7 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
             conveyance_allowance: adjustedConveyance,
             fixed_allowance: adjustedFixedAllowance,
             total_earnings: grossEarnings,
+            gross_earnings: grossEarnings, // Add gross_earnings field
             is_ctc_mode: isCTCMode,
             hourly_rate: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.hourlyRate),
             total_hours_worked: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.totalHoursWorked),
@@ -650,6 +651,7 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
             conveyance_allowance: adjustedConveyance,
             fixed_allowance: adjustedFixedAllowance,
             total_earnings: grossEarnings,
+            gross_earnings: grossEarnings, // Add gross_earnings field
             is_ctc_mode: isCTCMode,
             hourly_rate: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.hourlyRate),
             total_hours_worked: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.totalHoursWorked),

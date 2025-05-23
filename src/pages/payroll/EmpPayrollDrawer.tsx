@@ -83,7 +83,7 @@ interface CTCFormData {
   fixedAllowance: string;
 }
 
-const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year }: EmployeesPayrollDrawerProps) => {
+const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year }: EmployeesPayrollDrawerProps) => {
   const [activeTab, setActiveTab] = useState("details");
   const [paymentRecord, setPaymentRecord] = useState<PaymentRecord>(() => ({
     employee_id: "",
@@ -1147,4 +1147,4 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
   );
 };
 
-export default EmployeesPayrollDrawer;
+export default EmpPayrollDrawer;

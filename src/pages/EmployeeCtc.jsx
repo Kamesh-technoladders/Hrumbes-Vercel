@@ -537,6 +537,7 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
             conveyance_allowance: adjustedConveyance,
             fixed_allowance: adjustedFixedAllowance,
             total_earnings: grossEarnings,
+            gross_earnings: grossEarnings, // Add gross_earnings field
             is_ctc_mode: isCTCMode,
             hourly_rate: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.hourlyRate),
             total_hours_worked: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.totalHoursWorked),
@@ -650,6 +651,7 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
             conveyance_allowance: adjustedConveyance,
             fixed_allowance: adjustedFixedAllowance,
             total_earnings: grossEarnings,
+            gross_earnings: grossEarnings, // Add gross_earnings field
             is_ctc_mode: isCTCMode,
             hourly_rate: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.hourlyRate),
             total_hours_worked: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.totalHoursWorked),
@@ -789,7 +791,6 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
                 <SelectContent className="bg-white border border-gray-200 rounded-lg shadow-lg">
                   <SelectItem value="Success" className="text-green-600 hover:bg-green-50">Success</SelectItem>
                   <SelectItem value="Pending" className="text-yellow-600 hover:bg-yellow-50">Pending</SelectItem>
-                  {/* <SelectItem value="Overdue" className="text-orange-600 hover:bg-orange-50">Overdue</SelectItem> */}
                   <SelectItem value="Unpaid" className="text-red-600 hover:bg-red-50">Unpaid</SelectItem>
                 </SelectContent>
               </Select>

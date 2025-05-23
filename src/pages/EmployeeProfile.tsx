@@ -5,9 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Edit, Mail, Phone, Globe, User, Activity, Clock, FileText, Home, Eye, Download, Copy, Briefcase } from "lucide-react";
+import { Input } from '@/components/ui/input';
+import { Edit, Mail, Phone, Globe, User, MoreVertical, Activity, Clock, FileText, Home, Eye, Download, Copy, Briefcase } from "lucide-react";
 
 interface PaymentEarning {
   id: string;
@@ -169,6 +171,16 @@ const EmployeeProfile = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("personal");
   const [showFullAccountNumber, setShowFullAccountNumber] = useState(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+  const [paySettlementOption, setPaySettlementOption] = useState<'regular' | 'date'>('regular');
+  const [exitForm, setExitForm] = useState({
+    lastWorkingDay: '',
+    reason: '',
+    comments: '',
+    finalSettlementDate: '',
+    personalEmail: '',
+    notes: '',
+  });
 
   useEffect(() => {
     if (id) {
@@ -413,6 +425,90 @@ const EmployeeProfile = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExitProcessSubmit = async () => {
+    // Validate required fields
+    if (!exitForm.lastWorkingDay || !exitForm.reason) {
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+
+    if (paySettlementOption === 'date' && !exitForm.finalSettlementDate) {
+      toast.error('Please select a Final Settlement Date.');
+      return;
+    }
+
+    if (!exitForm.personalEmail) {
+      toast.error('Please provide a personal email address.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(exitForm.personalEmail)) {
+      toast.error('Please provide a valid email address.');
+      return;
+    }
+
+    // Prepare data for submission
+    const exitData = {
+      employee_id: employee!.employee_id,
+      employee_name: `${employee!.first_name} ${employee!.last_name}`,
+      designation: employee!.designation_name,
+      department: employee!.department_name,
+      date_of_joining: employee!.joining_date,
+      last_working_day: exitForm.lastWorkingDay,
+      exit_reason: exitForm.reason,
+      exit_comments: exitForm.comments,
+      pay_settlement_option: paySettlementOption,
+      final_settlement_date: paySettlementOption === 'date' ? exitForm.finalSettlementDate : null,
+      personal_email: exitForm.personalEmail,
+      exit_notes: exitForm.notes,
+      initiated_at: new Date().toISOString(),
+      employment_status: 'Terminated',
+    };
+
+    try {
+      // Insert into hr_employee_exits table
+      const { error: insertError } = await supabase
+        .from('hr_employee_exits')
+        .insert([exitData]);
+
+      if (insertError) throw insertError;
+
+      // Update employee's employment status
+      const { error: updateError } = await supabase
+        .from('hr_employees')
+        .update({
+          employment_status: 'Terminated',
+          last_working_day: exitForm.lastWorkingDay,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', employee!.id);
+
+      if (updateError) throw updateError;
+
+      toast.success('Exit process initiated successfully.');
+    } catch (error: any) {
+      console.error('Error initiating exit process:', error);
+      toast.error(`Failed to initiate exit process: ${error.message}`);
+      return;
+    }
+
+    // Reset form and close modal
+    setExitForm({
+      lastWorkingDay: '',
+      reason: '',
+      comments: '',
+      finalSettlementDate: '',
+      personalEmail: '',
+      notes: '',
+    });
+    setPaySettlementOption('regular');
+    setIsExitModalOpen(false);
+
+    // Refresh employee data
+    fetchEmployeeDetails(employee!.id);
   };
 
   const getAge = (dateOfBirth?: string) => {
@@ -795,13 +891,281 @@ const EmployeeProfile = () => {
                 <TabsTrigger value="activity" className="rounded-full">Activity</TabsTrigger>
                 <TabsTrigger value="salary" className="rounded-full">Salary Info</TabsTrigger>
               </TabsList>
-              <Button
-                onClick={() => navigate(`/employee/${id}`)}
-                className="bg-purple-500 hover:bg-purple-600 text-white rounded-full"
-              >
-                Edit Profile
-              </Button>
+              <div className="flex items-center space-x-2">
+                <Button
+                  onClick={() => navigate(`/employee/${id}`)}
+                  className="bg-purple-500 hover:bg-purple-600 text-white rounded-full"
+                >
+                  Edit Profile
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100"
+                      aria-label="More actions"
+                    >
+                      <MoreVertical className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsExitModalOpen(true)}>
+                      Initiate Exit Process
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
+
+            {/* Exit Process Modal */}
+            {isExitModalOpen && (
+              <div className="fixed inset-0 flex items-center justify-center z-50">
+                <div
+                  className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300"
+                  onClick={() => setIsExitModalOpen(false)}
+                ></div>
+
+                <div
+                  className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl relative z-50 border border-gray-200 transform transition-all duration-300 scale-100 opacity-100"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="exit-modal-title"
+                >
+                  <button
+                    className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full p-1"
+                    onClick={() => setIsExitModalOpen(false)}
+                    aria-label="Close modal"
+                  >
+                    <svg
+                      className="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+
+                  <div className="flex flex-col">
+                    <h2
+                      id="exit-modal-title"
+                      className="text-xl font-semibold text-gray-800 mb-4"
+                    >
+                      Initiate Exit Process
+                    </h2>
+
+                    <div className="flex flex-col md:flex-row md:space-x-4">
+                      {/* Form Fields (Left Side) */}
+                      <div className="flex-1 space-y-4">
+                        {/* Last Working Day Field */}
+                        <div>
+                          <label htmlFor="last-working-day" className="text-sm font-medium text-gray-600">
+                            Last Working Day <span className="text-red-500">*</span>
+                          </label>
+                          <Input
+                            id="last-working-day"
+                            type="date"
+                            value={exitForm.lastWorkingDay}
+                            onChange={(e) => setExitForm({ ...exitForm, lastWorkingDay: e.target.value })}
+                            className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            min="2025-05-23" // Restrict to today or future dates
+                            required
+                          />
+                        </div>
+
+                        {/* Reason for Exit */}
+                        <div>
+                          <label htmlFor="exit-reason" className="text-sm font-medium text-gray-600">
+                            Reason for Exit <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            id="exit-reason"
+                            value={exitForm.reason}
+                            onChange={(e) => setExitForm({ ...exitForm, reason: e.target.value })}
+                            className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                          >
+                            <option value="">Select a reason</option>
+                            <option value="Resignation">Resignation</option>
+                            <option value="Termination">Termination</option>
+                            <option value="Retirement">Retirement</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+
+                        {/* Comments */}
+                        <div>
+                          <label htmlFor="exit-comments" className="text-sm font-medium text-gray-600">
+                            Comments
+                          </label>
+                          <textarea
+                            id="exit-comments"
+                            value={exitForm.comments}
+                            onChange={(e) => setExitForm({ ...exitForm, comments: e.target.value })}
+                            className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={3}
+                            placeholder="Enter any additional comments"
+                          />
+                        </div>
+
+                        {/* Final Pay Settlement Options */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">
+                            When do you want to settle the final pay?
+                          </label>
+                          <div className="mt-2 space-y-2">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="regular-pay-schedule"
+                                name="pay-settlement"
+                                value="regular"
+                                checked={paySettlementOption === 'regular'}
+                                onChange={() => setPaySettlementOption('regular')}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                              />
+                              <label
+                                htmlFor="regular-pay-schedule"
+                                className="ml-2 text-sm text-gray-700 dark:text-gray-300"
+                              >
+                                Pay as per the regular pay schedule
+                              </label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="pay-on-date"
+                                name="pay-settlement"
+                                value="date"
+                                checked={paySettlementOption === 'date'}
+                                onChange={() => setPaySettlementOption('date')}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                              />
+                              <label
+                                htmlFor="pay-on-date"
+                                className="ml-2 text-sm text-gray-700 dark:text-gray-300"
+                              >
+                                Pay on a given date
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Final Settlement Date (Conditional) */}
+                          {paySettlementOption === 'date' && (
+                            <div className="mt-4">
+                              <label htmlFor="final-settlement-date" className="text-sm font-medium text-gray-600">
+                                Final Settlement Date <span className="text-red-500">*</span>
+                              </label>
+                              <Input
+                                id="final-settlement-date"
+                                type="date"
+                                value={exitForm.finalSettlementDate || ''}
+                                onChange={(e) => setExitForm({ ...exitForm, finalSettlementDate: e.target.value })}
+                                className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                min="2025-05-23" // Restrict to today or future dates
+                                required
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Personal Email Address */}
+                        <div>
+                          <label htmlFor="personal-email" className="text-sm font-medium text-gray-600">
+                            Personal Email Address <span className="text-red-500">*</span>
+                          </label>
+                          <Input
+                            id="personal-email"
+                            type="email"
+                            value={exitForm.personalEmail || ''}
+                            onChange={(e) => setExitForm({ ...exitForm, personalEmail: e.target.value })}
+                            className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter personal email address"
+                            required
+                          />
+                        </div>
+
+                        {/* Notes */}
+                        <div>
+                          <label htmlFor="exit-notes" className="text-sm font-medium text-gray-600">
+                            Notes
+                          </label>
+                          <textarea
+                            id="exit-notes"
+                            value={exitForm.notes || ''}
+                            onChange={(e) => setExitForm({ ...exitForm, notes: e.target.value })}
+                            className="w-full mt-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={3}
+                            placeholder="Enter any additional notes"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Employee Details (Right Side) */}
+                      <div className="flex-1 mt-4 md:mt-0">
+                        <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                          <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">Employee Details</h4>
+                          <div className="space-y-2 text-sm">
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Employee Name: </span>
+                              <span className="font-medium text-gray-800 dark:text-gray-200">
+                                {employee.first_name} {employee.last_name}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Employee ID: </span>
+                              <span className="font-medium text-gray-800 dark:text-gray-200">
+                                {employee.employee_id || 'Not provided'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Designation: </span>
+                              <span className="font-medium text-gray-800 dark:text-gray-200">
+                                {employee.designation_name || 'Not provided'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Department: </span>
+                              <span className="font-medium text-gray-800 dark:text-gray-200">
+                                {employee.department_name || 'Not provided'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Date of Joining: </span>
+                              <span className="font-medium text-gray-800 dark:text-gray-200">
+                                {employee.joining_date ? formatDate(employee.joining_date) : 'Not provided'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-4 mt-6">
+                      <Button
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400"
+                        onClick={() => setIsExitModalOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 font-semibold rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                        onClick={handleExitProcessSubmit}
+                      >
+                        Submit
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <TabsContent value="personal" className="space-y-6">
               <Card className="shadow-md rounded-xl">
