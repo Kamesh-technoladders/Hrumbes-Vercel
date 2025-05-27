@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { supabase } from '@/integrations/supabase/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2 } from 'lucide-react'; // For loading spinner (assuming ShadCN or similar)
 
 interface RecruiterData {
   recruiter: string;
@@ -19,19 +21,48 @@ function OrganizationSuperadminDashboard() {
   const [resumeStatsData, setResumeStatsData] = useState<ResumeStatsData[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resumeStatsError, setResumeStatsError] = useState<string | null>(null);
+  const [timeFilter, setTimeFilter] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState<boolean>(true); // Loading state
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (filter: string) => {
+      setIsLoading(true);
       try {
-        // First Fetch: Count candidates from hr_job_candidates
-        const { data: candidateData, error: candidateError } = await supabase
+        let dateFilter: { gte?: string; lte?: string } = {};
+        const today = new Date();
+        const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+        const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+        if (filter === 'today') {
+          dateFilter = { gte: startOfDay, lte: endOfDay };
+        } else if (filter === 'this_week') {
+          const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay())).toISOString();
+          dateFilter = { gte: startOfWeek, lte: endOfDay };
+        } else if (filter === 'this_month') {
+          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+          dateFilter = { gte: startOfMonth, lte: endOfDay };
+        } else if (filter === 'year') {
+          const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString();
+          dateFilter = { gte: startOfYear, lte: endOfDay };
+        }
+
+        let candidateQuery = supabase
           .from('hr_job_candidates')
           .select(`
             created_by,
+            created_at,
             hr_employees!hr_job_candidates_created_by_fkey (
               first_name
             )
           `);
+
+        if (filter !== 'all') {
+          candidateQuery = candidateQuery
+            .gte('created_at', dateFilter.gte!)
+            .lte('created_at', dateFilter.lte!);
+        }
+
+        const { data: candidateData, error: candidateError } = await candidateQuery;
 
         if (candidateError) {
           console.error("Supabase query error (hr_job_candidates):", candidateError);
@@ -40,13 +71,7 @@ function OrganizationSuperadminDashboard() {
 
         console.log("Raw candidate data from Supabase:", candidateData);
 
-        if (!candidateData || candidateData.length === 0) {
-          console.log("No data returned from hr_job_candidates table.");
-        }
-
-        // Group candidates by recruiter
         const candidateCounts: { [key: string]: number } = candidateData?.reduce((acc: any, record: any) => {
-          console.log("Processing candidate record:", record);
           if (!record.created_by) {
             console.warn("Skipping record with null created_by in hr_job_candidates");
             return acc;
@@ -60,13 +85,11 @@ function OrganizationSuperadminDashboard() {
           return acc;
         }, {}) || {};
 
-        console.log("Candidate counts:", candidateCounts);
-
-        // Second Fetch: Count resume analyses from candidate_resume_analysis
-        const { data: analysisData, error: analysisError } = await supabase
+        let analysisQuery = supabase
           .from('candidate_resume_analysis')
           .select(`
             candidate_id,
+            updated_at,
             hr_job_candidates!candidate_resume_analysis_candidate_id_fkey (
               created_by,
               hr_employees!hr_job_candidates_created_by_fkey (
@@ -75,6 +98,14 @@ function OrganizationSuperadminDashboard() {
             )
           `);
 
+        if (filter !== 'all') {
+          analysisQuery = analysisQuery
+            .gte('updated_at', dateFilter.gte!)
+            .lte('updated_at', dateFilter.lte!);
+        }
+
+        const { data: analysisData, error: analysisError } = await analysisQuery;
+
         if (analysisError) {
           console.error("Supabase query error (candidate_resume_analysis):", analysisError);
           throw new Error(`Error fetching resume analysis data: ${analysisError.message}`);
@@ -82,14 +113,8 @@ function OrganizationSuperadminDashboard() {
 
         console.log("Raw analysis data from Supabase:", analysisData);
 
-        if (!analysisData || analysisData.length === 0) {
-          console.log("No data returned from candidate_resume_analysis table.");
-        }
-
-        // Track unique candidate_ids to avoid overcounting analyses
         const seenCandidateIds = new Set<string>();
         const analysisCounts: { [key: string]: number } = analysisData?.reduce((acc: any, record: any) => {
-          console.log("Processing analysis record:", record);
           if (!record.hr_job_candidates) {
             console.warn(`No hr_job_candidates data for candidate_id: ${record.candidate_id}`);
             return acc;
@@ -113,9 +138,6 @@ function OrganizationSuperadminDashboard() {
           return acc;
         }, {}) || {};
 
-        console.log("Analysis counts:", analysisCounts);
-
-        // Combine the counts into a single dataset by summing
         const allRecruiters = new Set([
           ...Object.keys(candidateCounts),
           ...Object.keys(analysisCounts),
@@ -126,10 +148,7 @@ function OrganizationSuperadminDashboard() {
           total_resumes_analyzed: (candidateCounts[recruiter] || 0) + (analysisCounts[recruiter] || 0),
         }));
 
-        console.log("Formatted recruiter data:", formattedRecruiterData);
-
         if (formattedRecruiterData.length === 0) {
-          console.log("No valid recruiter data after processing.");
           setRecruiterData([]);
           setErrorMessage("No valid recruiter data found.");
         } else {
@@ -137,9 +156,7 @@ function OrganizationSuperadminDashboard() {
           setErrorMessage(null);
         }
 
-        // Fetch data for Total Resumes in Database Pie Chart
         try {
-          // Count non-null report_url from candidate_resume_analysis (With Attachment)
           const { data: withAttachmentData, error: withAttachmentError } = await supabase
             .from('candidate_resume_analysis')
             .select('report_url')
@@ -152,7 +169,6 @@ function OrganizationSuperadminDashboard() {
 
           const withAttachmentCount = withAttachmentData?.length || 0;
 
-          // Count non-null resume_text from resume_analysis (Without Attachment)
           const { data: resumeTextData, error: resumeTextError } = await supabase
             .from('resume_analysis')
             .select('resume_text')
@@ -165,13 +181,10 @@ function OrganizationSuperadminDashboard() {
 
           const resumeTextCount = resumeTextData?.length || 0;
 
-          // Prepare pie chart data
           const pieData: ResumeStatsData[] = [
             { name: 'With Attachment', value: withAttachmentCount, fill: '#4f46e5' },
             { name: 'Without Attachment', value: resumeTextCount, fill: '#a5b4fc' },
           ];
-
-          console.log("Pie chart data:", pieData);
 
           setResumeStatsData(pieData);
           setResumeStatsError(null);
@@ -184,55 +197,87 @@ function OrganizationSuperadminDashboard() {
         console.error("Error in fetchData:", err);
         setRecruiterData([]);
         setErrorMessage("Error fetching data. Check the console for details.");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchData();
-  }, []);
+    fetchData(timeFilter);
+  }, [timeFilter]);
 
   const hasNoResumeStatsData = resumeStatsData.every(item => item.value === 0);
 
   return (
-    <div className="text-center p-10">
-      <h1 className="text-4xl font-bold mb-8">Welcome to the Organization SuperAdmin Dashboard!</h1>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
+      <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 text-center mb-10 tracking-tight">
+        Organization SuperAdmin Dashboard
+      </h1>
 
-      <div className="w-full max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="w-full max-w-7xl mx-auto space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Bar Chart: Resumes Analyzed by Recruiter */}
-          <Card className="shadow-lg border-none bg-gradient-to-br from-purple-50 to-white">
-            <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-gray-800">
-                Resumes Analyzed by Recruiter
-              </CardTitle>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-xl md:text-2xl font-semibold">
+                  Resumes Analyzed by Recruiter
+                </CardTitle>
+                <Select value={timeFilter} onValueChange={setTimeFilter}>
+                  <SelectTrigger className="w-[160px] bg-white text-gray-800 border-gray-300 focus:ring-2 focus:ring-indigo-400 transition-all duration-200">
+                    <SelectValue placeholder="Select time period" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200 shadow-lg">
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="this_week">This Week</SelectItem>
+                    <SelectItem value="this_month">This Month</SelectItem>
+                    <SelectItem value="year">This Year</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
-            <CardContent>
-              {errorMessage ? (
-                <p className="text-red-500">{errorMessage}</p>
+            <CardContent className="p-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-[400px]">
+                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                </div>
+              ) : errorMessage ? (
+                <p className="text-red-500 text-center font-medium">{errorMessage}</p>
               ) : recruiterData.length === 0 ? (
-                <div className="flex items-center justify-center h-[400px] text-gray-500">
+                <div className="flex items-center justify-center h-[400px] text-gray-500 font-medium">
                   <p>No recruiter data available.</p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={400}>
                   <BarChart
                     data={recruiterData}
-                    margin={{ top: 20, right: 0, left: 0, bottom: 60 }}
+                    margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
+                    className="animate-fade-in"
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="recruiter"
                       angle={0}
                       textAnchor="middle"
                       interval={0}
                       height={50}
-                      label={{ value: "Recruiters", position: "insideBottom", offset: -20 }}
+                      label={{ value: "Recruiters", position: "insideBottom", offset: -10, fill: "#4b5563" }}
+                      className="text-sm font-medium"
                     />
                     <YAxis
-                      label={{ value: "Resumes Analyzed", angle: -90, position: "insideLeft", offset: -10 }}
+                      label={{ value: "Resumes Analyzed", angle: -90, position: "insideLeft", offset: -10, fill: "#4b5563" }}
+                      className="text-sm font-medium"
                     />
-                    <Tooltip />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
+                    />
                     <Legend verticalAlign="top" height={36} />
-                    <Bar dataKey="total_resumes_analyzed" fill="#4f46e5" name="Resumes Analyzed" />
+                    <Bar
+                      dataKey="total_resumes_analyzed"
+                      fill="#4f46e5"
+                      name="Resumes Analyzed"
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -240,45 +285,51 @@ function OrganizationSuperadminDashboard() {
           </Card>
 
           {/* Pie Chart: Total Resumes in Database */}
-          <Card className="shadow-lg border-none bg-gradient-to-br from-purple-50 to-white">
-            <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-gray-800">
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
+              <CardTitle className="text-xl md:text-2xl font-semibold">
                 Total Resumes in Database
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {resumeStatsError ? (
-                <p className="text-red-500">{resumeStatsError}</p>
+            <CardContent className="p-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-[400px]">
+                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                </div>
+              ) : resumeStatsError ? (
+                <p className="text-red-500 text-center font-medium">{resumeStatsError}</p>
               ) : hasNoResumeStatsData ? (
-                <div className="flex items-center justify-center h-[400px] text-gray-500">
+                <div className="flex items-center justify-center h-[400px] text-gray-500 font-medium">
                   <p>No data to display</p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={400}>
-                  <PieChart>
+                  <PieChart className="animate-fade-in">
                     <Pie
                       data={resumeStatsData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
+                      innerRadius={80}
+                      outerRadius={120}
                       fill="#8884d8"
                       paddingAngle={5}
                       dataKey="value"
                       label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                       labelLine={false}
+                      className="font-medium"
                     >
                       {resumeStatsData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
                     </Pie>
                     <Tooltip
+                      contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
                       formatter={(value, name) => [
                         `${value} (${((value as number / resumeStatsData.reduce((sum, entry) => sum + entry.value, 0)) * 100).toFixed(1)}%)`,
                         name,
                       ]}
                     />
-                    <Legend verticalAlign="bottom" />
+                    <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
                   </PieChart>
                 </ResponsiveContainer>
               )}

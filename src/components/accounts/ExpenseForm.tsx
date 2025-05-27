@@ -283,6 +283,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose }) => {
                 <SelectItem value="Utilities">Utilities</SelectItem>
                 <SelectItem value="Salary">Salary</SelectItem>
                 <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                <SelectItem value="Food">Food</SelectItem>
                 <SelectItem value="Travel">Travel</SelectItem>
                 <SelectItem value="Marketing">Marketing</SelectItem>
                 <SelectItem value="Software">Software</SelectItem>
