@@ -99,35 +99,14 @@ const TimesheetDialog = ({
         </DialogContent>
       </Dialog>
 
-      <Sheet open={viewDetailsOpen} onOpenChange={setViewDetailsOpen}>
-        <SheetContent className="sm:max-w-md overflow-y-auto bg-gradient-to-b from-white to-slate-50">
-          <SheetHeader>
-            <SheetTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-              Timesheet Details
-            </SheetTitle>
-            <SheetDescription>
-              Full details of the submitted timesheet
-            </SheetDescription>
-          </SheetHeader>
-          <div className="py-4">
+      
             <TimeLogDetailsDialog
               timeLog={dialogTimesheet}
               open={viewDetailsOpen}
               onOpenChange={setViewDetailsOpen}
               getProjectName={getProjectName}
             />
-          </div>
-          <SheetFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setViewDetailsOpen(false)}
-              className="w-full"
-            >
-              Close Details
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          
     </>
   );
 };

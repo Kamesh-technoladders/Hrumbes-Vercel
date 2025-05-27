@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Add useCallback
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -41,7 +41,7 @@ const Timesheet = () => {
           .from('hr_project_employees')
           .select('id, status, end_date')
           .eq('assign_employee', employeeId)
-          .neq('status', 'Terminated') // Fix: Exclude terminated projects
+          .neq('status', 'Terminated')
           .or('end_date.is.null,end_date.gte.' + new Date().toISOString().split('T')[0])
           .limit(1);
 
@@ -62,7 +62,6 @@ const Timesheet = () => {
     fetchEmployeeHasProjects();
   }, [employeeId]);
 
-  // Use useCallback to memoize handlers and prevent unnecessary re-renders
   const handleViewTimesheet = useCallback((timesheet: TimeLog) => {
     console.log('handleViewTimesheet triggered:', { timesheetId: timesheet.id });
     setSelectedTimesheet(timesheet);
@@ -85,7 +84,6 @@ const Timesheet = () => {
     fetchTimesheetData();
   }, [fetchTimesheetData]);
 
-  // Log state changes for debugging
   useEffect(() => {
     console.log('Timesheet state updated:', { 
       employeeId, 
@@ -117,6 +115,7 @@ const Timesheet = () => {
         loading={loading}
         onViewTimesheet={handleViewTimesheet}
         onRespondToClarification={handleClarificationResponse}
+        employeeHasProjects={employeeHasProjects} // Pass employeeHasProjects
       />
       
       {employeeHasProjects && (
@@ -137,10 +136,11 @@ const Timesheet = () => {
           onOpenChange={(open) => {
             console.log('ViewTimesheetDialog open changed:', { open });
             setViewDialogOpen(open);
-            if (!open) setSelectedTimesheet(null); // Clear selectedTimesheet when dialog closes
+            if (!open) setSelectedTimesheet(null);
           }}
           timesheet={selectedTimesheet}
           onSubmitTimesheet={fetchTimesheetData}
+          employeeHasProjects={employeeHasProjects} // Pass employeeHasProjects
         />
       )}
       
@@ -150,7 +150,7 @@ const Timesheet = () => {
           onOpenChange={(open) => {
             console.log('TimesheetClarificationDialog open changed:', { open });
             setClarificationDialogOpen(open);
-            if (!open) setSelectedTimesheet(null); // Clear selectedTimesheet when dialog closes
+            if (!open) setSelectedTimesheet(null);
           }}
           timesheet={selectedTimesheet}
           onSubmitClarification={fetchTimesheetData}

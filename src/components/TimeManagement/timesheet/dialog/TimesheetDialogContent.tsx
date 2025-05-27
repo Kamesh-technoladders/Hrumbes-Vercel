@@ -1,13 +1,12 @@
-
 import React, { useState } from 'react';
 import { DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TimesheetFormFields } from "./TimesheetFormFields";
-import { ProjectTimesheetForm } from '../ProjectTimesheetForm';
+import { ProjectAllocationForm } from './ProjectAllocationForm';
 import { StandardTimesheetForm } from '../StandardTimesheetForm';
 import { DetailedTimesheetEntry } from '@/types/time-tracker-types';
-import { ProjectAllocationForm } from './ProjectAllocationForm';
 import { useProjectData } from '@/hooks/TimeManagement/useProjectData';
+import { useSelector } from 'react-redux';
 
 interface TimesheetDialogContentProps {
   date: Date;
@@ -20,12 +19,14 @@ interface TimesheetDialogContentProps {
   setWorkReport: (report: string) => void;
   detailedEntries: DetailedTimesheetEntry[];
   setDetailedEntries: React.Dispatch<React.SetStateAction<DetailedTimesheetEntry[]>>;
-  projectEntries: {projectId: string; hours: number; report: string}[];
-  setProjectEntries: React.Dispatch<React.SetStateAction<{projectId: string; hours: number; report: string}[]>>;
+  projectEntries: { projectId: string; hours: number; report: string; clientId?: string }[];
+  setProjectEntries: React.Dispatch<React.SetStateAction<{ projectId: string; hours: number; report: string; clientId?: string }[]>>;
   employeeHasProjects: boolean;
   isSubmitting: boolean;
   handleClose: () => void;
   handleSubmit: () => void;
+  employeeId: string;
+  hrProjectEmployees: any[];
 }
 
 export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
@@ -44,68 +45,66 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
   employeeHasProjects,
   isSubmitting,
   handleClose,
-  handleSubmit
+  handleSubmit,
+  employeeId,
+  hrProjectEmployees,
 }) => {
   const { projects, loading } = useProjectData();
-  const [projectTimeData, setProjectTimeData] = useState<{[key: string]: number}>({});
-  const [projectReports, setProjectReports] = useState<{[key: string]: string}>({});
-  
-  // Initialize project allocation state from projectEntries
+  const [projectTimeData, setProjectTimeData] = useState<{ [key: string]: number }>({});
+  const [projectReports, setProjectReports] = useState<{ [key: string]: string }>({});
+
   const [multipleProjects, setMultipleProjects] = useState(
-    projectEntries.map(entry => ({
+    projectEntries.map((entry) => ({
       projectId: entry.projectId,
-      hours: entry.hours
+      hours: entry.hours,
+      clientId: entry.clientId || "",
     }))
   );
-  
-  // Calculate total allocated hours
+
   const totalAllocatedHours = multipleProjects.reduce((sum, project) => {
     return sum + (project.hours || 0);
   }, 0);
 
-  // Update project time allocation
   const updateProjectTimeAllocation = (projectId: string, hours: number) => {
-    setProjectTimeData(prev => ({
+    setProjectTimeData((prev) => ({
       ...prev,
-      [projectId]: hours
+      [projectId]: hours,
     }));
   };
 
-  // Update project report
   const updateProjectReport = (projectId: string, report: string) => {
-    setProjectReports(prev => ({
+    setProjectReports((prev) => ({
       ...prev,
-      [projectId]: report
+      [projectId]: report,
     }));
   };
 
-  // Sync project entries when form is submitted
   React.useEffect(() => {
     if (employeeHasProjects) {
       const updatedEntries = multipleProjects
-        .filter(project => project.projectId)
-        .map(project => ({
+        .filter((project) => project.projectId)
+        .map((project) => ({
           projectId: project.projectId,
           hours: project.hours,
-          report: projectReports[project.projectId] || ''
+          report: projectReports[project.projectId] || "",
+          clientId: project.clientId || "",
         }));
-      
+
       setProjectEntries(updatedEntries);
     }
-  }, [multipleProjects, projectReports, employeeHasProjects]);
+  }, [multipleProjects, projectReports, employeeHasProjects, setProjectEntries]);
 
-  // Sync initial project reports from projectEntries
   React.useEffect(() => {
     if (employeeHasProjects && projectEntries.length > 0) {
-      const initialReports: {[key: string]: string} = {};
-      projectEntries.forEach(entry => {
+      const initialReports: { [key: string]: string } = {};
+      projectEntries.forEach((entry) => {
         if (entry.projectId) {
           initialReports[entry.projectId] = entry.report;
         }
       });
       setProjectReports(initialReports);
     }
-  }, []);
+  }, [projectEntries, employeeHasProjects]);
 
   return (
     <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -126,7 +125,7 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
         workReport={workReport}
         setWorkReport={setWorkReport}
       />
-      
+
       {employeeHasProjects ? (
         <ProjectAllocationForm
           multipleProjects={multipleProjects}
@@ -137,6 +136,8 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
           updateProjectTimeAllocation={updateProjectTimeAllocation}
           projectReports={projectReports}
           updateProjectReport={updateProjectReport}
+          employeeId={employeeId}
+          hrProjectEmployees={hrProjectEmployees}
         />
       ) : (
         <StandardTimesheetForm
@@ -148,16 +149,16 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
 
       <DialogFooter>
         <Button variant="outline" onClick={handleClose}>Cancel</Button>
-        <Button 
-          onClick={handleSubmit} 
-          disabled={isSubmitting || 
-            (employeeHasProjects && (
-              totalAllocatedHours > totalWorkingHours ||
-              multipleProjects.some(p => p.projectId && !projectReports[p.projectId])
-            ))
+        <Button
+          onClick={handleSubmit}
+          disabled={
+            isSubmitting ||
+            (employeeHasProjects &&
+              (totalAllocatedHours > totalWorkingHours ||
+                multipleProjects.some((p) => p.projectId && !projectReports[p.projectId])))
           }
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Timesheet'}
+          {isSubmitting ? "Submitting..." : "Submit Timesheet"}
         </Button>
       </DialogFooter>
     </DialogContent>

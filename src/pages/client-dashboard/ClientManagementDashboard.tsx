@@ -182,7 +182,7 @@ const ClientManagementDashboard = () => {
     if (budgetType === "Monthly") {
       convertedAmount *= 12;
     } else if (budgetType === "Hourly") {
-      convertedAmount *= 2080;
+      convertedAmount *= 2016;
     }
 
     return convertedAmount;
@@ -255,7 +255,7 @@ const ClientManagementDashboard = () => {
     if (salaryType === "Monthly") {
       salaryAmount *= 12;
     } else if (salaryType === "Hourly") {
-      salaryAmount *= 2080;
+      salaryAmount *= 2016;
     }
 
     if (budgetCurrency === "USD") {
@@ -264,7 +264,7 @@ const ClientManagementDashboard = () => {
     if (budgetType === "Monthly") {
       budgetAmount *= 12;
     } else if (budgetType === "Hourly") {
-      budgetAmount *= 2080;
+      budgetAmount *= 2016;
     }
 
     if (client.currency === "USD" && client.commission_type === "fixed") {

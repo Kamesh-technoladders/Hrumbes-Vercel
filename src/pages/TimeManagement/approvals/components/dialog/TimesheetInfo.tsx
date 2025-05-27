@@ -9,16 +9,20 @@ interface TimesheetInfoProps {
 }
 
 export const TimesheetInfo = ({ dialogTimesheet, type }: TimesheetInfoProps) => {
+
+  console.log("dialogTimesheet", dialogTimesheet)
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <h4 className="text-sm font-semibold">Employee</h4>
-          <p>{dialogTimesheet.employees?.name || 'Unknown'}</p>
+          <p>{dialogTimesheet.employee?.first_name && dialogTimesheet.employee?.last_name
+    ? `${dialogTimesheet.employee.first_name} ${dialogTimesheet.employee.last_name}`
+    : 'Unknown Employee'}</p>
         </div>
         <div>
           <h4 className="text-sm font-semibold">Department</h4>
-          <p>{dialogTimesheet.employees?.department || 'Unknown'}</p>
+          <p>{dialogTimesheet?.employee?.department.name || 'Unknown'}</p>
         </div>
       </div>
       
@@ -33,11 +37,16 @@ export const TimesheetInfo = ({ dialogTimesheet, type }: TimesheetInfoProps) => 
               <h4 className="text-sm font-semibold">Duration</h4>
               <p>{formatDuration(dialogTimesheet.duration_minutes)}</p>
             </div>
-          </div>
           <div>
             <h4 className="text-sm font-semibold">Notes</h4>
             <p className="text-sm text-muted-foreground">{dialogTimesheet.notes || 'No notes provided'}</p>
           </div>
+          <div>
+            <h4 className="text-sm font-semibold">Status</h4>
+            <p className="text-sm text-muted-foreground">{dialogTimesheet.status || 'No notes provided'}</p>
+          </div>
+          </div>
+
         </>
       ) : (
         <>

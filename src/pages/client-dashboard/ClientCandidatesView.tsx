@@ -153,7 +153,7 @@ const ClientCandidatesView = () => {
     if (budgetType === "Monthly") {
       convertedAmount *= 12;
     } else if (budgetType === "Hourly") {
-      convertedAmount *= 2080;
+      convertedAmount *= 2016;
     }
 
     return convertedAmount;
@@ -202,7 +202,7 @@ const ClientCandidatesView = () => {
     if (salaryType === "Monthly") {
       salaryAmount *= 12;
     } else if (salaryType === "Hourly") {
-      salaryAmount *= 2080;
+      salaryAmount *= 2016;
     }
 
     if (budgetCurrency === "USD") {
@@ -211,7 +211,7 @@ const ClientCandidatesView = () => {
     if (budgetType === "Monthly") {
       budgetAmount *= 12;
     } else if (budgetType === "Hourly") {
-      budgetAmount *= 2080;
+      budgetAmount *= 2016;
     }
 
     if (client.currency === "USD" && client.commission_type === "fixed") {
@@ -296,7 +296,7 @@ const ClientCandidatesView = () => {
           .from("hr_job_candidates")
           .select(`
             id, name, email, phone, experience, skills, status, job_id,
-            main_status_id, sub_status_id, ctc, accrual_ctc, expected_salary, joining_date,
+            main_status_id, sub_status_id, ctc, accrual_ctc, expected_salary, joining_date, applied_from,
             hr_jobs!hr_job_candidates_job_id_fkey(id, title, job_type_category, client_details)
           `)
           .in("job_id", jobIds)
@@ -744,6 +744,7 @@ const ClientCandidatesView = () => {
     </Card>
   );
 
+  console.log("candidates", candidates)
   const renderCandidateTable = (candidates: Candidate[], title: string) => (
     <div className="w-full min-w-0">
       <h3 className="text-lg font-semibold mb-2">{title}</h3>
@@ -797,6 +798,14 @@ const ClientCandidatesView = () => {
                       <Link to={`/employee/${candidate.id}/${candidate.job_id}`} className="font-medium text-black-600 hover:underline">
                         {candidate.name}
                       </Link>
+                      <span className="text-xs text-gray-500">
+                        <Badge
+                          variant="outline"
+                          className="bg-purple-100 text-purple-800 hover:bg-purple-200 rounded-full text-[10px]"
+                        >
+                          {candidate?.applied_from ?? 'N/A'}
+                        </Badge>
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -812,6 +821,7 @@ const ClientCandidatesView = () => {
                       <Link to={`/jobs/${candidate.job_id}`} className="font-medium text-black-600 hover:underline">
                         {candidate.job_title || 'Unknown'}
                       </Link>
+                       
                       <span className="text-xs text-gray-500">
                         <Badge
                           variant="outline"
@@ -937,7 +947,7 @@ const ClientCandidatesView = () => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary (LPA)</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th>
+              {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th> */}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -967,9 +977,9 @@ const ClientCandidatesView = () => {
                       </span> */}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {employee.currency}
-                  </td>
+                  </td> */}
                 </tr>
               ))
             ) : (

@@ -113,7 +113,7 @@ const ClientMetricsDashboard = () => {
     if (budgetType === "Monthly") {
       convertedAmount *= 12; // Convert Monthly to LPA
     } else if (budgetType === "Hourly") {
-      convertedAmount *= 2080; // Convert Hourly to LPA (40 hours/week * 52 weeks)
+      convertedAmount *= 2016; // Convert Hourly to LPA (40 hours/week * 52 weeks)
     }
 
     return convertedAmount;
@@ -166,7 +166,7 @@ const ClientMetricsDashboard = () => {
     if (salaryType === "Monthly") {
       salaryAmount *= 12;
     } else if (salaryType === "Hourly") {
-      salaryAmount *= 2080;
+      salaryAmount *= 2016;
     }
 
     // Convert budget to INR and normalize to LPA
@@ -176,7 +176,7 @@ const ClientMetricsDashboard = () => {
     if (budgetType === "Monthly") {
       budgetAmount *= 12;
     } else if (budgetType === "Hourly") {
-      budgetAmount *= 2080;
+      budgetAmount *= 2016;
     }
 
     // Convert commissionValue to INR if fixed

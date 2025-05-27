@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { FileText, MessageCircleQuestion } from "lucide-react";
@@ -11,6 +10,7 @@ interface TimesheetTableProps {
   onViewTimesheet: (timesheet: TimeLog) => void;
   onRespondToClarification?: (timesheet: TimeLog) => void;
   type: 'pending' | 'clarification' | 'approved';
+  employeeHasProjects: boolean; // Add employeeHasProjects
 }
 
 export const TimesheetTable: React.FC<TimesheetTableProps> = ({
@@ -18,9 +18,9 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
   loading,
   onViewTimesheet,
   onRespondToClarification,
-  type
+  type,
+  employeeHasProjects, // Destructure employeeHasProjects
 }) => {
-  // Function to format status for display
   const formatStatus = (timesheet: TimeLog) => {
     if (type === 'pending') {
       return timesheet.is_submitted ? 'Pending Approval' : 'Not Submitted';
@@ -31,7 +31,6 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
     }
   };
 
-  // Function to get the right status color
   const getStatusColor = (timesheet: TimeLog) => {
     if (type === 'pending') {
       return timesheet.is_submitted ? 'text-amber-500' : 'text-red-500';

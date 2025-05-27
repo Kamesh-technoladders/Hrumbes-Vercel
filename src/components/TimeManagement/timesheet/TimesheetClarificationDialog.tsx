@@ -25,51 +25,62 @@ export const TimesheetClarificationDialog: React.FC<TimesheetClarificationDialog
   const [clarification, setClarification] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const handleSubmit = async () => {
-    if (!clarification.trim()) {
-      toast({
-        title: "Error",
-        description: "Please provide a clarification response",
-        variant: "destructive"
-      });
-      return;
+const handleSubmit = async () => {
+  if (!clarification.trim()) {
+    toast({
+      title: "Error",
+      description: "Please provide a clarification response",
+      variant: "destructive"
+    });
+    return;
+  }
+  
+  setIsSubmitting(true);
+  
+  try {
+    const { error: timeLogError } = await supabase
+      .from('time_logs')
+      .update({ 
+        clarification_response: clarification,
+        clarification_status: 'submitted',
+        clarification_submitted_at: new Date().toISOString()
+      })
+      .eq('id', timesheet.id);
+    
+    if (timeLogError) throw timeLogError;
+    
+    const { error: approvalError } = await supabase
+      .from('timesheet_approvals')
+      .update({
+        clarification_response: clarification,
+        clarification_status: 'submitted',
+        clarification_submitted_at: new Date().toISOString()
+      })
+      .eq('time_log_id', timesheet.id);
+    
+    if (approvalError) throw approvalError;
+    
+    toast({
+      title: "Success",
+      description: "Clarification submitted successfully",
+    });
+    
+    if (onSubmitClarification) {
+      onSubmitClarification();
     }
     
-    setIsSubmitting(true);
-    
-    try {
-      const { error } = await supabase
-        .from('time_logs')
-        .update({ 
-          clarification_response: clarification,
-          clarification_status: 'submitted',
-          clarification_submitted_at: new Date().toISOString()
-        })
-        .eq('id', timesheet.id);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Success",
-        description: "Clarification submitted successfully",
-      });
-      
-      if (onSubmitClarification) {
-        onSubmitClarification();
-      }
-      
-      onOpenChange(false);
-    } catch (error) {
-      console.error("Error submitting clarification:", error);
-      toast({
-        title: "Error",
-        description: "Failed to submit clarification",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    onOpenChange(false);
+  } catch (error) {
+    console.error("Error submitting clarification:", error);
+    toast({
+      title: "Error",
+      description: "Failed to submit clarification",
+      variant: "destructive"
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -16,7 +16,7 @@ export const fetchPendingTimesheets = async (): Promise<TimeLog[]> => {
         id,
         first_name,
         last_name,
-        department_id,
+        department:hr_departments!hr_employees_department_id_fkey(name),
         email
       )
         )
@@ -64,7 +64,7 @@ export const fetchClarificationTimesheets = async (): Promise<TimeLog[]> => {
         id,
         first_name,
         last_name,
-        department_id,
+        department:hr_departments!hr_employees_department_id_fkey(name),
         email
       )
         )
@@ -108,7 +108,7 @@ export const fetchApprovedTimesheets = async (): Promise<TimeLog[]> => {
         id,
         first_name,
         last_name,
-        department_id,
+        hr_departments!hr_employees_department_id_fkey(name),
         email
       )
         )
@@ -144,16 +144,27 @@ export const fetchApprovedTimesheets = async (): Promise<TimeLog[]> => {
 // Approve a timesheet using the new timesheet_approvals table
 export const approveTimesheet = async (approvalId: string): Promise<boolean> => {
   try {
-    const { error } = await supabase
+    const { error: approvalError } = await supabase
       .from('timesheet_approvals')
       .update({
         status: 'approved',
         approved_at: new Date().toISOString(),
         clarification_status: null
       })
+      .eq('time_log_id', approvalId);
+    
+    if (approvalError) throw approvalError;
+    
+    const { error: timeLogError } = await supabase
+      .from('time_logs')
+      .update({
+        is_approved: true,
+        approved_at: new Date().toISOString(),
+        clarification_status: null
+      })
       .eq('id', approvalId);
     
-    if (error) throw error;
+    if (timeLogError) throw timeLogError;
     
     toast.success("Timesheet approved successfully");
     return true;
@@ -167,16 +178,30 @@ export const approveTimesheet = async (approvalId: string): Promise<boolean> => 
 // Request clarification using the new timesheet_approvals table
 export const requestClarification = async (approvalId: string, reason: string): Promise<boolean> => {
   try {
-    const { error } = await supabase
+    // Update timesheet_approvals table
+    const { error: approvalError } = await supabase
       .from('timesheet_approvals')
       .update({
         clarification_status: 'needed',
-        rejection_reason: reason
+        rejection_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('time_log_id', approvalId);
+
+    if (approvalError) throw approvalError;
+
+    // Update time_logs table
+    const { error: timeLogError } = await supabase
+      .from('time_logs')
+      .update({
+        clarification_status: 'needed',
+        rejection_reason: reason,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', approvalId);
-    
-    if (error) throw error;
-    
+
+    if (timeLogError) throw timeLogError;
+
     toast.success("Clarification requested successfully");
     return true;
   } catch (error: any) {
@@ -185,3 +210,4 @@ export const requestClarification = async (approvalId: string, reason: string): 
     return false;
   }
 };
+

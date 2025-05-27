@@ -59,10 +59,10 @@ const ClientManagement = () => {
     // Convert client_billing to LPA based on billing_type
     switch (employee.billing_type) {
       case "Monthly":
-        clientBilling *= 12; // Convert Monthly to LPA
+        clientBilling *= 1; // Convert Monthly to LPA
         break;
       case "Hourly":
-        clientBilling *= 8 * 22 * 12; // Convert Hourly to LPA (8 hours/day, 22 days/month, 12 months)
+        clientBilling *= 168; // Convert Hourly to LPA (8 hours/day, 22 days/month, 12 months)
         break;
       case "LPA":
       default:
@@ -76,7 +76,7 @@ const ClientManagement = () => {
   // Calculate profit
   const calculateProfit = (employee: any, clientCurrency: string) => {
     const clientBillingLPA = convertToLPA(employee, clientCurrency);
-    const salary = Number(employee.salary) || 0; // Salary is always in LPA, INR
+    const salary = Number(employee.salary)/12 || 0; // Salary is always in LPA, INR
     return clientBillingLPA - salary;
   };
 

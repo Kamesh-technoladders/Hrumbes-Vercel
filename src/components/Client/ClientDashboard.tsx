@@ -62,9 +62,30 @@ interface AssignEmployee {
   client_billing: number;
   status: string;
   billing_type?: string;
+  start_date: string;
+  end_date: string;
+  duration: number;
+}
+
+interface TimeLog {
+  id: string;
+  employee_id: string;
+  date: string;
+  project_time_data: {
+    projects: { hours: number; report: string; clientId: string; projectId: string }[];
+  };
+  total_working_hours: string;
 }
 
 const EXCHANGE_RATE_USD_TO_INR = 84;
+
+const formatINR = (number: number) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+  }).format(number);
+};
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
@@ -78,6 +99,7 @@ const ClientDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [loading, setLoading] = useState(true);
+  const [calculationMode, setCalculationMode] = useState<"accrual" | "actual">("accrual");
 
   const user = useSelector((state: any) => state.auth.user);
   const organization_id = useSelector((state: any) => state.auth.organization_id);
@@ -150,7 +172,7 @@ const ClientDashboard = () => {
       if (!id) throw new Error("Client ID is missing");
       const { data, error } = await supabase
         .from("hr_project_employees")
-        .select("id, project_id, client_id, salary, client_billing, status, billing_type")
+        .select("id, project_id, client_id, salary, client_billing, status, billing_type, start_date, end_date")
         .eq("client_id", id)
         .eq("organization_id", organization_id);
       if (error) throw error;
@@ -162,21 +184,60 @@ const ClientDashboard = () => {
         client_billing: employee.client_billing ?? 0,
         status: employee.status ?? "No Status",
         billing_type: employee.billing_type ?? "LPA",
+        start_date: employee.start_date ?? "",
+        end_date: employee.end_date ?? "",
+        duration: employee.start_date && employee.end_date
+          ? Math.ceil(
+              (new Date(employee.end_date).getTime() - new Date(employee.start_date).getTime()) /
+                (1000 * 60 * 60 * 24)
+            )
+          : 0,
       }));
     },
     enabled: !!id,
   });
 
-  useEffect(() => {
-    if (clientError || projectsError || employeesError) {
-      toast.error("Failed to fetch data");
-      console.error("Errors:", { clientError, projectsError, employeesError });
-    }
-    setLoading(loadingClient || loadingProjects || loadingEmployees);
-  }, [clientError, projectsError, employeesError, loadingClient, loadingProjects, loadingEmployees]);
+  // Fetch time logs for actual calculations
+  const { data: timeLogs = [], isLoading: loadingTimeLogs, error: timeLogsError } = useQuery<
+    TimeLog[]
+  >({
+    queryKey: ["time_logs", id],
+    queryFn: async () => {
+      if (!id) throw new Error("Client ID is missing");
+      const { data, error } = await supabase
+        .from("time_logs")
+        .select("id, employee_id, date, project_time_data, total_working_hours")
+        .eq("organization_id", organization_id);
+      if (error) throw error;
+      return data.filter((log) =>
+        log.project_time_data?.projects?.some((proj) => projects.some((p) => p.id === proj.projectId))
+      ) as TimeLog[];
+    },
+    enabled: calculationMode === "actual" && !!id,
+  });
 
-  // Convert client_billing to LPA
-  const convertToLPA = (employee: AssignEmployee) => {
+  useEffect(() => {
+    if (clientError || projectsError || employeesError || timeLogsError) {
+      toast.error("Failed to fetch data");
+      console.error("Errors:", { clientError, projectsError, employeesError, timeLogsError });
+    }
+    setLoading(loadingClient || loadingProjects || loadingEmployees || loadingTimeLogs);
+  }, [clientError, projectsError, employeesError, timeLogsError, loadingClient, loadingProjects, loadingEmployees, loadingTimeLogs]);
+
+  // Calculate total hours per employee from time logs
+  const calculateEmployeeHours = (employeeId: string, projectId: string) => {
+    return timeLogs
+      .filter((log) => log.employee_id === employeeId)
+      .reduce((acc, log) => {
+        const projectEntry = log.project_time_data?.projects?.find(
+          (proj) => proj.projectId === projectId
+        );
+        return acc + (projectEntry?.hours || 0);
+      }, 0);
+  };
+
+  // Convert client_billing to LPA or per-hour for accrual and actual calculations
+  const convertToLPA = (employee: AssignEmployee, mode: "accrual" | "actual") => {
     const currency = client?.currency || "INR";
     let clientBilling = employee.client_billing || 0;
 
@@ -184,33 +245,80 @@ const ClientDashboard = () => {
       clientBilling *= EXCHANGE_RATE_USD_TO_INR;
     }
 
-    switch (employee.billing_type) {
-      case "Monthly":
-        clientBilling *= 12;
-        break;
-      case "Hourly":
-        clientBilling *= 8 * 22 * 12;
-        break;
-      case "LPA":
-      default:
-        break;
+    const durationDays = employee.duration || 1; // Fallback to 1 to avoid division by zero
+    const workingHours = durationDays * 8; // 8 hours per day
+
+    if (mode === "accrual") {
+      switch (employee.billing_type) {
+        case "Monthly":
+          clientBilling = (clientBilling * 12 * durationDays) / 365; // Prorate monthly to duration
+          break;
+        case "Hourly":
+          clientBilling *= workingHours; // Convert hourly to total for duration
+          break;
+        case "LPA":
+        default:
+          clientBilling = (clientBilling * durationDays) / 365; // Prorate LPA to duration
+          break;
+      }
+    } else {
+      switch (employee.billing_type) {
+        case "Monthly":
+          clientBilling = (clientBilling * 12) / (365 * 8); // Convert monthly to hourly
+          break;
+        case "Hourly":
+          // Already in hourly rate
+          break;
+        case "LPA":
+          clientBilling = clientBilling / (365 * 8); // Convert LPA to hourly
+          break;
+        default:
+          break;
+      }
     }
 
     return clientBilling;
   };
 
+  // Calculate revenue for an employee
+  const calculateRevenue = (employee: AssignEmployee, mode: "accrual" | "actual", projectId: string) => {
+    if (mode === "accrual") {
+      return convertToLPA(employee, "accrual");
+    } else {
+      const hours = calculateEmployeeHours(employee.employee_id, projectId);
+      const hourlyRate = convertToLPA(employee, "actual");
+      return hours * hourlyRate;
+    }
+  };
+
   // Calculate profit for an employee
-  const calculateProfit = (employee: AssignEmployee) => {
-    const clientBillingLPA = convertToLPA(employee);
-    const salary = employee.salary || 0;
-    return clientBillingLPA - salary;
+  const calculateProfit = (employee: AssignEmployee, mode: "accrual" | "actual", projectId: string) => {
+    const revenue = calculateRevenue(employee, mode, projectId);
+    let salary = employee.salary || 0;
+
+    if (mode === "accrual") {
+      const durationDays = employee.duration || 1;
+      salary = (salary * durationDays) / 365; // Prorate yearly salary to duration
+    } else {
+      const hours = calculateEmployeeHours(employee.employee_id, projectId);
+      const hourlySalary = salary / (365 * 8); // Convert yearly to hourly
+      salary = hours * hourlySalary;
+    }
+
+    return revenue - salary;
   };
 
   // Calculate project financials
   const calculateProjectFinancials = (projectId: string) => {
     const projectEmployees = assignedEmployees.filter((emp) => emp.project_id === projectId) || [];
-    const totalRevenue = projectEmployees.reduce((acc, emp) => acc + convertToLPA(emp), 0);
-    const totalProfit = projectEmployees.reduce((acc, emp) => acc + calculateProfit(emp), 0);
+    const totalRevenue = projectEmployees.reduce(
+      (acc, emp) => acc + calculateRevenue(emp, calculationMode, projectId),
+      0
+    );
+    const totalProfit = projectEmployees.reduce(
+      (acc, emp) => acc + calculateProfit(emp, calculationMode, projectId),
+      0
+    );
     return { totalRevenue, totalProfit };
   };
 
@@ -225,8 +333,8 @@ const ClientDashboard = () => {
   });
 
   // Calculate total revenue and profit for the client
-  const totalRevenue = assignedEmployees.reduce((acc, emp) => acc + convertToLPA(emp), 0) || 0;
-  const totalProfit = assignedEmployees.reduce((acc, emp) => acc + calculateProfit(emp), 0) || 0;
+  const totalRevenue = projectData.reduce((acc, project) => acc + project.revenue, 0) || 0;
+  const totalProfit = projectData.reduce((acc, project) => acc + project.profit, 0) || 0;
 
   // Count employees based on status
   const workingCount = assignedEmployees.filter((emp) => emp.status === "Working").length || 0;
@@ -283,36 +391,36 @@ const ClientDashboard = () => {
       Duration: `${project.duration} days`,
       "Start Date": new Date(project.start_date).toLocaleDateString(),
       "End Date": new Date(project.end_date).toLocaleDateString(),
-      "Revenue (LPA)": `₹ ${project.revenue.toLocaleString()}`,
-      "Profit (LPA)": `₹ ${project.profit.toLocaleString()}`,
+      Revenue: formatINR(project.revenue),
+      Profit: formatINR(project.profit),
       Status: project.status,
       Attachment: project.attachment || "None",
     }));
     const worksheet = XLSX.utils.json_to_sheet(csvData || []);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Projects");
-    XLSX.writeFile(workbook, "Projects.csv");
+    XLSX.writeFile(workbook, `Projects_${calculationMode}.csv`);
   };
 
   // Export to PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
-    doc.text("Projects Report", 14, 10);
+    doc.text(`Projects Report (${calculationMode.toUpperCase()})`, 14, 10);
     (doc as any).autoTable({
-      head: [["Project Name", "Duration", "Start Date", "End Date", "Revenue (LPA)", "Profit (LPA)", "Status", "Attachment"]],
+      head: [["Project Name", "Duration", "Start Date", "End Date", "Revenue", "Profit", "Status", "Attachment"]],
       body: filteredProjects.map((project) => [
         project.name,
         `${project.duration} days`,
         new Date(project.start_date).toLocaleDateString(),
         new Date(project.end_date).toLocaleDateString(),
-        `₹ ${project.revenue.toLocaleString()}`,
-        `₹ ${project.profit.toLocaleString()}`,
+        formatINR(project.revenue),
+        formatINR(project.profit),
         project.status,
         project.attachment || "None",
       ]),
       startY: 20,
     });
-    doc.save("Projects.pdf");
+    doc.save(`Projects_${calculationMode}.pdf`);
   };
 
   // Mutation for updating project status
@@ -361,10 +469,10 @@ const ClientDashboard = () => {
                   End Date
                 </th>
                 <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
-                  Revenue (LPA)
+                  Revenue
                 </th>
                 <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
-                  Profit (LPA)
+                  Profit
                 </th>
                 <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
                   Status
@@ -386,8 +494,8 @@ const ClientDashboard = () => {
                   <td className="px-4 py-2">{project.duration} days</td>
                   <td className="px-4 py-2">{new Date(project.start_date).toLocaleDateString()}</td>
                   <td className="px-4 py-2">{new Date(project.end_date).toLocaleDateString()}</td>
-                  <td className="px-4 py-2">₹ {project.revenue.toLocaleString()}</td>
-                  <td className="px-4 py-2">₹ {project.profit.toLocaleString()}</td>
+                  <td className="px-4 py-2">{formatINR(project.revenue)}</td>
+                  <td className="px-4 py-2">{formatINR(project.profit)}</td>
                   <td className="px-4 py-2">
                     <Select
                       defaultValue={project.status}
@@ -562,6 +670,18 @@ const ClientDashboard = () => {
             </Button>
           </div>
 
+          {/* Calculation Mode Tabs */}
+          <Tabs
+            value={calculationMode}
+            onValueChange={(value) => setCalculationMode(value as "accrual" | "actual")}
+            className="mb-6"
+          >
+            <TabsList className="grid grid-cols-2 w-[200px]">
+              <TabsTrigger value="accrual">Accrual</TabsTrigger>
+              <TabsTrigger value="actual">Actual</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           {/* Stats Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
@@ -610,8 +730,8 @@ const ClientDashboard = () => {
             </Card>
             <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Total Revenue (LPA)</p>
-              <h3 className="text-2xl font-bold">₹ {totalRevenue.toLocaleString()}</h3>
+                <p className="text-sm font-medium text-gray-500 mb-2">Total Revenue</p>
+                <h3 className="text-2xl font-bold">{formatINR(totalRevenue)}</h3>
                 <p className="text-xs text-gray-500 mt-1">From all projects</p>
               </div>
               <div className="stat-icon bg-blue-100 p-3 rounded-full">
@@ -620,8 +740,8 @@ const ClientDashboard = () => {
             </Card>
             <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Total Profit (LPA)</p>
-                <h3 className="text-2xl font-bold">₹ {totalProfit.toLocaleString()}</h3>
+                <p className="text-sm font-medium text-gray-500 mb-2">Total Profit</p>
+                <h3 className="text-2xl font-bold">{formatINR(totalProfit)}</h3>
                 <p className="text-xs text-gray-500 mt-1">From all projects</p>
               </div>
               <div className="stat-icon bg-green-100 p-3 rounded-full">
@@ -633,20 +753,20 @@ const ClientDashboard = () => {
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className="p-6 rounded-xl shadow-sm border border-gray-200">
-              <h2 className="text-lg sm:text-xl font-semibold mb-4">Project Financials (LPA)</h2>
+              <h2 className="text-lg sm:text-xl font-semibold mb-4">Project Financials</h2>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={projectData}>
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
+                  <Tooltip formatter={(value: number) => formatINR(value)} />
                   <Legend />
-                  <Bar dataKey="revenue" fill="#3b82f6" name="Revenue (LPA)" radius={[5, 5, 0, 0]} />
-                  <Bar dataKey="profit" fill="#10b981" name="Profit (LPA)" radius={[5, 5, 0, 0]} />
+                  <Bar dataKey="revenue" fill="#3b82f6" name="Revenue" radius={[5, 5, 0, 0]} />
+                  <Bar dataKey="profit" fill="#10b981" name="Profit" radius={[5, 5, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
             <Card className="p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center">
-              <h2 className="text-lg sm:text-xl font-semibold mb-4">Revenue vs Profit (LPA)</h2>
+              <h2 className="text-lg sm:text-xl font-semibold mb-4">Revenue vs Profit</h2>
               <RevenueProfitChart revenue={totalRevenue} profit={totalProfit} />
             </Card>
           </div>

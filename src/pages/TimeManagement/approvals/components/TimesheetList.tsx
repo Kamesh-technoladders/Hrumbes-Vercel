@@ -65,8 +65,9 @@ const TimesheetList = ({
   openDialog
 }: TimesheetListProps) => {
   const filteredTimesheets = filterTimesheetsByEmployee(timesheets, searchTerm);
-  
+
   console.log("filteredTimesheets", filteredTimesheets);
+  
   return (
     <Table>
       <TableHeader>
@@ -96,7 +97,12 @@ const TimesheetList = ({
               className="hover:bg-muted cursor-pointer"
               onClick={() => openDialog(timesheet)}
             >
-              <TableCell>{(timesheet as any).employees?.name || 'Unknown Employee'}</TableCell>
+             <TableCell>
+  {timesheet.employee?.first_name && timesheet.employee?.last_name
+    ? `${timesheet.employee.first_name} ${timesheet.employee.last_name}`
+    : 'Unknown Employee'}
+</TableCell>
+
               <TableCell>{calculatePeriod(timesheet.date)}</TableCell>
               {badgeText !== "Approved" && (
                 <TableCell>

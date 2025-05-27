@@ -35,6 +35,8 @@ export const RegularizationTable = ({
         return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
     }
   };
+  console.log("RegularizationTable requests:", requests);
+
 
   // Format time in 12-hour format preserving original input time
   const formatTime = (dateTimeStr: string | null) => {
@@ -105,7 +107,12 @@ export const RegularizationTable = ({
           requests.map((request) => (
             <TableRow key={request.id}>
               <TableCell>{formatDate(request.date)}</TableCell>
-              <TableCell>{request.employees?.name || 'Unknown'}</TableCell>
+              <TableCell>
+  {request?.employee?.first_name && request?.employee?.last_name
+    ? `${request.employee.first_name} ${request.employee.last_name}`
+    : 'Unknown'}
+</TableCell>
+
               <TableCell>
                 {formatTime(request.requested_clock_in)} - {formatTime(request.requested_clock_out)}
               </TableCell>

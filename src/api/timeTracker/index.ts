@@ -2,12 +2,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { TimeLog } from "@/types/time-tracker-types";
 import { fetchActiveTimeLog } from "./activeTimeLogAPI";
 
-// Active Time Log API
+export const fetchHrProjectEmployees = async (employeeId: string): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('hr_project_employees')
+      .select('id, assign_employee, project_id, client_id')
+      .eq('assign_employee', employeeId);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching hr_project_employees:', error);
+    return [];
+  }
+};
+
 export const checkActiveTimeLog = async (employeeId: string): Promise<TimeLog | null> => {
   return await fetchActiveTimeLog(employeeId);
 };
 
-// Clock In/Out API
 export const clockIn = async (
   employeeId: string,
   notes: string,
@@ -92,10 +105,8 @@ export const autoTerminateTimeLog = async (
   }
 };
 
-// Time Logs API
 export const fetchTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
   try {
-    // Remove the project relationship from the query since it's causing errors
     const { data, error } = await supabase
       .from('time_logs')
       .select('*')
@@ -105,7 +116,6 @@ export const fetchTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
     
     if (error) throw error;
     
-    // Transform the data to ensure it matches the TimeLog interface
     const typedData: TimeLog[] = (data || []).map(item => {
       return {
         id: item.id,
@@ -124,7 +134,7 @@ export const fetchTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
         rejection_reason: item.rejection_reason || null,
         project_time_data: item.project_time_data || null,
         created_at: item.created_at || null,
-        updated_at: null, // Set this to null as it's required by the type but not returned from the database
+        updated_at: null,
         project: item.project_id ? { name: `Project ${item.project_id.substring(0, 8)}` } : null,
         clarification_status: item.clarification_status || null,
         clarification_response: item.clarification_response || null,
@@ -140,28 +150,42 @@ export const fetchTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
   }
 };
 
-// Timesheet submission API
 export const submitTimesheet = async (
   timeLogId: string,
   formData: any
 ): Promise<boolean> => {
   try {
-    // Update the timesheet with submitted status
-    const { error } = await supabase
+    const projectTimeData = formData.projectEntries
+      ? { projects: formData.projectEntries }
+      : null;
+
+    const { error: timeLogError } = await supabase
       .from('time_logs')
       .update({
         is_submitted: true,
-        notes: formData.workReport || formData.notes,
-        project_time_data: formData.projectAllocations || null,
-        created_at: new Date().toISOString()
+        notes: formData.title || formData.workReport || null,
+        project_time_data: projectTimeData,
+        total_working_hours: formData.totalWorkingHours || 8,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', timeLogId);
-    
-    if (error) throw error;
-    
-    // Create a timesheet approval entry (simulated)
-    console.log(`Submitting timesheet for time log ${timeLogId}`);
-    
+
+    if (timeLogError) throw timeLogError;
+
+    const { error: approvalError } = await supabase
+      .from('timesheet_approvals')
+      .insert({
+        time_log_id: timeLogId,
+        employee_id: formData.employeeId,
+        status: 'pending',
+        submitted_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+    if (approvalError) throw approvalError;
+
+    console.log(`Submitted timesheet for time log ${timeLogId} and created approval record`);
     return true;
   } catch (error) {
     console.error('Error submitting timesheet:', error);
@@ -169,27 +193,39 @@ export const submitTimesheet = async (
   }
 };
 
-// Add a consistent function to submit clarification responses
 export const submitClarificationResponse = async (
   timeLogId: string,
   clarificationResponse: string
 ): Promise<boolean> => {
   try {
-    // Update the timesheet with clarification response
-    const { error } = await supabase
+    const { error: timeLogError } = await supabase
       .from('time_logs')
       .update({
         clarification_status: 'submitted',
         clarification_response: clarificationResponse,
-        clarification_submitted_at: new Date().toISOString()
+        clarification_submitted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', timeLogId);
-    
-    if (error) throw error;
-    
+
+    if (timeLogError) throw timeLogError;
+
+    const { error: approvalError } = await supabase
+      .from('timesheet_approvals')
+      .update({
+        clarification_status: 'submitted',
+        clarification_response: clarificationResponse,
+        clarification_submitted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('time_log_id', timeLogId);
+
+    if (approvalError) throw approvalError;
+
     return true;
   } catch (error) {
     console.error('Error submitting clarification:', error);
     return false;
   }
 };
+// 

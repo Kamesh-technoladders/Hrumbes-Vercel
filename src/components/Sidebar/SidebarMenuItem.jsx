@@ -40,7 +40,7 @@ const menuItemsByRole = {
         { icon: TbDatabaseDollar, label: "Overall", path: "/accounts/overall" },
       ],
     },
-        {
+    {
       icon: TbCheckbox,
       label: "Approvals",
       path: "#",
@@ -53,45 +53,70 @@ const menuItemsByRole = {
     },
     { icon: GoOrganization, label: "Company", path: "/companies" },
     { icon: VscOrganization, label: "Contacts", path: "/contacts" },
-     { icon: FiSettings, label: "Settings", path: "#",
+    {
+      icon: FiSettings,
+      label: "Settings",
+      path: "#",
       dropdown: [
         { icon: FiSettings, label: "Leave Policies", path: "/admin/leave-policies" },
         { icon: IoCalendarNumberOutline, label: "Official Holidays", path: "/admin/holidays" },
       ],
-     },
+    },
     { icon: MdOutlineManageAccounts, label: "User Management", path: "/user-management" },
-   
   ],
-  admin: [
-    { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
-    { icon: FiUsers, label: "Employees", path: "/employee" },
-    { icon: MdOutlineEmojiPeople, label: "Projects", path: "/projects" },
-    { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
-    { icon: GoGoal, label: "Goals", path: "/goals" },
-    { icon: AiOutlineProfile, label: "Reports", path: "/reports" },
-    { icon: ImProfile, label: "My Profile", path: "/profile" },
-    // { icon: GoOrganization, label: "Company", path: "/companies" },
-    // { icon: VscOrganization, label: "Contacts", path: "/contacts" },
-    { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
-      { icon: MdMoreTime , label:"Regularization", path: "/employee/regularization"},
-        { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
-        { icon: FaRegCalendarCheck, label: "Attendance", path: "/employee/attendance" },
-        { icon: IoCalendarNumberOutline , label:"Calendar", path: "/employee/calendar"},
-    { icon: FiSettings, label: "Settings", path: "#" },
-  ],
+  admin: (departmentName) => {
+    const baseMenu = [
+      { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
+      { icon: FiUsers, label: "Employees", path: "/employee" },
+      { icon: MdOutlineEmojiPeople, label: "Projects", path: "/projects" },
+      { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
+      { icon: GoGoal, label: "Goals", path: "/goals" },
+      { icon: AiOutlineProfile, label: "Reports", path: "/reports" },
+      { icon: ImProfile, label: "My Profile", path: "/profile" },
+      { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
+      { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization" },
+      { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
+      { icon: FaRegCalendarCheck, label: "Attendance", path: "/employee/attendance" },
+      { icon: IoCalendarNumberOutline, label: "Calendar", path: "/employee/calendar" },
+      // { icon: FiSettings, label: "Settings", path: "#" },
+    ];
+
+    // Add Company and Contacts if the user's department is Sales & Marketing
+    if (departmentName === "Sales & Marketing") {
+      baseMenu.splice(7, 0, // Insert after "My Profile" for consistency
+        { icon: GoOrganization, label: "Company", path: "/companies" },
+        { icon: VscOrganization, label: "Contacts", path: "/contacts" }
+      );
+    }
+
+    if (departmentName === "Human Resource") {
+      baseMenu.splice(11, 0,
+        {
+      icon: FiSettings,
+      label: "Settings",
+      path: "#",
+      dropdown: [
+        { icon: FiSettings, label: "Leave Policies", path: "/admin/leave-policies" },
+        { icon: IoCalendarNumberOutline, label: "Official Holidays", path: "/admin/holidays" },
+      ],
+    },
+        
+      )
+    }
+
+    return baseMenu;
+  },
   employee: (departmentName) => {
     const baseMenu = [
       { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
       { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
       { icon: ImProfile, label: "My Profile", path: "/profile" },
       { icon: GoGoal, label: "Goals", path: "/goalsview" },
-      // { icon: FaFileInvoiceDollar, label: "Time Tracker", path: "/employee/time-tracker" },
       { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
-      { icon: MdMoreTime , label:"Regularization", path: "/employee/regularization"},
-        { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
-        { icon: FaRegCalendarCheck, label: "Attendance", path: "/employee/attendance" },
-        { icon: IoCalendarNumberOutline , label:"Calendar", path: "/employee/calendar"},
-      // { icon: FiCheckSquare, label: "My Tasks", path: "#" },
+      { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization" },
+      { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
+      { icon: FaRegCalendarCheck, label: "Attendance", path: "/employee/attendance" },
+      { icon: IoCalendarNumberOutline, label: "Calendar", path: "/employee/calendar" },
     ];
 
     // Add Company and Contacts if the user's department is Sales & Marketing
@@ -130,8 +155,8 @@ export const SidebarMenu = () => {
 
   // Get menu items based on role
   const menuItems =
-    userRole === "employee"
-      ? menuItemsByRole.employee(departmentName)
+    userRole === "employee" || userRole === "admin"
+      ? menuItemsByRole[userRole](departmentName)
       : menuItemsByRole[userRole] || [];
 
   return (

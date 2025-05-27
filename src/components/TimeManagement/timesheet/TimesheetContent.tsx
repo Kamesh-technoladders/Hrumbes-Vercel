@@ -13,6 +13,7 @@ interface TimesheetContentProps {
   loading: boolean;
   onViewTimesheet: (timesheet: TimeLog) => void;
   onRespondToClarification: (timesheet: TimeLog) => void;
+  employeeHasProjects: boolean; // Add employeeHasProjects
 }
 
 export const TimesheetContent: React.FC<TimesheetContentProps> = ({
@@ -24,6 +25,7 @@ export const TimesheetContent: React.FC<TimesheetContentProps> = ({
   loading,
   onViewTimesheet,
   onRespondToClarification,
+  employeeHasProjects, // Destructure employeeHasProjects
 }) => {
   return (
     <Card>
@@ -64,6 +66,7 @@ export const TimesheetContent: React.FC<TimesheetContentProps> = ({
                   loading={loading}
                   onViewTimesheet={onViewTimesheet}
                   type="pending"
+                  employeeHasProjects={employeeHasProjects} // Pass employeeHasProjects
                 />
               )}
             </TabsContent>
@@ -78,6 +81,7 @@ export const TimesheetContent: React.FC<TimesheetContentProps> = ({
                   onViewTimesheet={onViewTimesheet}
                   onRespondToClarification={onRespondToClarification}
                   type="clarification"
+                  employeeHasProjects={employeeHasProjects} // Pass employeeHasProjects
                 />
               )}
             </TabsContent>
@@ -91,6 +95,7 @@ export const TimesheetContent: React.FC<TimesheetContentProps> = ({
                   loading={loading}
                   onViewTimesheet={onViewTimesheet}
                   type="approved"
+                  employeeHasProjects={employeeHasProjects} // Pass employeeHasProjects
                 />
               )}
             </TabsContent>

@@ -7,6 +7,7 @@ import { hasUnsubmittedTimesheets, filterUnsubmittedTimesheets, isPreviousDayTim
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useEmployeeLeaves } from "@/hooks/TimeManagement/useEmployeeLeaves";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface TimeTrackerProps {
   employeeId: string;
@@ -57,50 +58,49 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ employeeId }) => {
   };
 
   return (
-    <div className="content-area">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2 text-primary">
-          <Timer className="h-6 w-6" />
-          Time Tracker
-        </h1>
-        <p className="text-muted-foreground">
-          Track your daily work hours and attendance
-        </p>
-      </div>
-
-      {hasPreviousDayUnsubmitted && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTitle>Unsubmitted Timesheets</AlertTitle>
-          <AlertDescription className="flex justify-between items-center">
-            <div>You have unsubmitted timesheets from previous days. Please submit them before clocking in today.</div>
-            <Button onClick={goToTimesheet} variant="outline">Go to Timesheets</Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {hasUnsubmitted && !hasPreviousDayUnsubmitted && (
-        <Alert variant="warning" className="mb-6">
-          <AlertTitle>Pending Timesheets</AlertTitle>
-          <AlertDescription className="flex justify-between items-center">
-            <div>You have timesheets that need to be submitted.</div>
-            <Button onClick={goToTimesheet} variant="outline">Go to Timesheets</Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <TimeTrackerCard
-        employeeId={employeeId}
-        isTracking={isTracking}
-        time={time}
-        notes={notes}
-        setNotes={setNotes}
-        handleClockIn={isOnApprovedLeave ? undefined : (hasPreviousDayUnsubmitted ? undefined : handleClockIn)}
-        handleClockOut={handleClockOut}
-        inGracePeriod={inGracePeriod}
-        timeLogs={timeLogs}
-        isOnApprovedLeave={isOnApprovedLeave}
-      />
-    </div>
+    <Card className="shadow-md rounded-xl h-[300px] md:h-[325px] lg:h-[600px] flex flex-col">
+      <CardContent className="pt-6 flex flex-col h-full">
+        <div className="flex items-center mb-4">
+          <Timer className="h-5 w-5 text-purple-500 dark:text-purple-400 mr-2" />
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Time Tracker</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto pr-2">
+          <p className="text-sm text-muted-foreground mb-4">
+            Track your daily work hours and attendance
+          </p>
+          {hasPreviousDayUnsubmitted && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTitle>Unsubmitted Timesheets</AlertTitle>
+              <AlertDescription className="flex justify-between items-center">
+                <div>You have unsubmitted timesheets from previous days. Please submit them before clocking in today.</div>
+                <Button onClick={goToTimesheet} variant="outline">Go to Timesheets</Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          {hasUnsubmitted && !hasPreviousDayUnsubmitted && (
+            <Alert variant="warning" className="mb-6">
+              <AlertTitle>Pending Timesheets</AlertTitle>
+              <AlertDescription className="flex justify-between items-center">
+                <div>You have timesheets that need to be submitted.</div>
+                <Button onClick={goToTimesheet} variant="outline">Go to Timesheets</Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          <TimeTrackerCard
+            employeeId={employeeId}
+            isTracking={isTracking}
+            time={time}
+            notes={notes}
+            setNotes={setNotes}
+            handleClockIn={isOnApprovedLeave ? undefined : (hasPreviousDayUnsubmitted ? undefined : handleClockIn)}
+            handleClockOut={handleClockOut}
+            inGracePeriod={inGracePeriod}
+            timeLogs={timeLogs}
+            isOnApprovedLeave={isOnApprovedLeave}
+          />
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

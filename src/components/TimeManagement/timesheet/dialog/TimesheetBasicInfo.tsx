@@ -15,6 +15,8 @@ export const TimesheetBasicInfo: React.FC<TimesheetBasicInfoProps> = ({ timeshee
     return `${hours}h ${remainingMinutes}m`;
   };
 
+  console.log("Timesheet data:", timesheet);
+
   return (
     <div className="grid grid-cols-2 gap-4">
       <div>

@@ -62,12 +62,20 @@ interface AssignEmployeeDialogProps {
   projectId: string;
   clientId: string;
   editEmployee?: AssignEmployee | null;
+  project: string | any; // Update to allow string or object
 }
 
-const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmployee }: AssignEmployeeDialogProps) => {
+const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmployee, project }: AssignEmployeeDialogProps) => {
   const queryClient = useQueryClient();
   const user = useSelector((state: any) => state.auth.user);
   const organization_id = useSelector((state: any) => state.auth.organization_id);
+
+  // Parse project data if it's a string
+  const projectData = typeof project === "string" ? JSON.parse(project) : project;
+
+  // Extract project start and end dates
+  const projectStartDate = projectData?.start_date ? new Date(projectData.start_date) : new Date();
+  const projectEndDate = projectData?.end_date ? new Date(projectData.end_date) : null;
 
   // State for selected employees and form data
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
@@ -86,6 +94,8 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
       noOfDays: number;
     }[]
   >([]);
+
+  console.log("dateproject", projectData);
 
   // Fetch clients from Supabase
   const { data: clients = [], isLoading: loadingClients, error: clientsError } = useQuery<Client[]>({
@@ -106,7 +116,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
   const currencySymbol = client?.currency === "USD" ? "$" : "₹";
 
   // Billing type options
-  const billingTypeOptions = ["LPA", "Monthly", "Hourly"];
+  const billingTypeOptions = ["Monthly", "Hourly"];
 
   // Fetch employees from `hr_employees`
   useEffect(() => {
@@ -167,14 +177,14 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
         ...prev,
         {
           assign_employee: employeeId,
-          start_date: "",
-          end_date: "",
+          start_date: projectData.start_date || "", // Initialize with project start date
+          end_date: projectData.end_date || "", // Initialize with project end date
           salary: employee.salary?.toString() || "0",
           client_billing: "",
           billing_type: "Monthly",
           status: "Working",
           sowFile: null,
-          noOfDays: 0,
+          noOfDays: projectData.duration || 0, // Initialize with project duration
         },
       ]);
     }
@@ -237,7 +247,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
         return;
       }
 
-      // Validate required fields
+      // Validate required fields and date range
       for (const assignment of employeeAssignments) {
         if (
           !assignment.assign_employee ||
@@ -247,6 +257,20 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           !assignment.billing_type
         ) {
           toast.error("Please fill in all required fields (Employee, Start Date, End Date, Client Billing, Billing Type)");
+          return;
+        }
+
+        // Validate dates within project range
+        const startDate = new Date(assignment.start_date);
+        const endDate = new Date(assignment.end_date);
+        if (startDate < projectStartDate || endDate > projectEndDate) {
+          toast.error(
+            `Assignment dates must be within project range (${format(projectStartDate, "PPP")} to ${format(projectEndDate, "PPP")})`
+          );
+          return;
+        }
+        if (startDate > endDate) {
+          toast.error("End date must be after start date");
           return;
         }
       }
@@ -415,7 +439,9 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                     className="border-b last:border-b-0 pb-4 last:pb-0 space-y-4"
                   >
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold">
+                      <h3
+                        className="text-sm font-semibold"
+                      >
                         {employee?.first_name} {employee?.last_name}
                       </h3>
                       {!editEmployee && (
@@ -453,7 +479,8 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                               onSelect={(date) => handleFieldChange(index, "start_date", date)}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              fromDate={new Date()}
+                              fromDate={projectStartDate} // Restrict to project start date
+                              toDate={projectEndDate} // Restrict to project end date
                             />
                           </PopoverContent>
                         </Popover>
@@ -481,7 +508,8 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                               onSelect={(date) => handleFieldChange(index, "end_date", date)}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              fromDate={startDate || new Date()}
+                              fromDate={startDate || projectStartDate} // Restrict to start date or project start date
+                              toDate={projectEndDate} // Restrict to project end date
                             />
                           </PopoverContent>
                         </Popover>
@@ -528,7 +556,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                             onValueChange={(value) => handleFieldChange(index, "billing_type", value)}
                             required
                           >
-                            <SelectTrigger className="w-[110px] text-sm rounded-l-none border-l-0">
+                            <SelectTrigger className="w-[80px] text-sm rounded-l-none border-l-0">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

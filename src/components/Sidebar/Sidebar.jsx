@@ -11,33 +11,20 @@ import {
   useMediaQuery,
   Collapse,
 } from "@chakra-ui/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { logout } from "../../Redux/authSlice";
 import { ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
 import { menuItemsByRole, extraMenuItems } from "./SidebarMenuItem";
+import  supabase  from "../../config/supabaseClient"; // Import Supabase client
 
 const Sidebar = ({ isExpanded, setExpanded }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { role, user } = useSelector((state) => state.auth);
-  const { departments } = useSelector((state) => state.departments);
-
-  const getDepartmentName = (departmentId) => {
-    const dept = departments.find((d) => d.id === departmentId);
-    return dept ? dept.name : "Unknown Department";
-  };
-
-  const departmentName = user?.department_id
-    ? getDepartmentName(user.department_id)
-    : "Unknown Department";
-
-  const menuItems =
-    role === "employee"
-      ? menuItemsByRole.employee(departmentName)
-      : menuItemsByRole[role] || [];
+  const [departmentName, setDepartmentName] = useState("Unknown Department");
 
   const [isMobile] = useMediaQuery("(max-width: 768px)");
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -50,6 +37,61 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
   const activeIconColor = useColorModeValue("#7B43F1", "base.primary1");
   const activeTextColor = useColorModeValue("#7B43F1", "base.primary1");
   const scrolbarColor = useColorModeValue("#F6F6FC", "base.bgboxdark");
+
+  // Fetch department name from Supabase
+  useEffect(() => {
+    const fetchDepartmentName = async () => {
+      if (!user?.id) {
+        setDepartmentName("Unknown Department");
+        return;
+      }
+
+      try {
+        // Step 1: Fetch department_id from hr_employees where id matches user.id
+        const { data: employeeData, error: employeeError } = await supabase
+          .from("hr_employees")
+          .select("department_id")
+          .eq("id", user.id)
+          .single();
+
+        if (employeeError) {
+          console.error("Error fetching employee data:", employeeError);
+          setDepartmentName("Unknown Department");
+          return;
+        }
+
+        if (!employeeData?.department_id) {
+          setDepartmentName("Unknown Department");
+          return;
+        }
+
+        // Step 2: Fetch department name from hr_departments using department_id
+        const { data: departmentData, error: departmentError } = await supabase
+          .from("hr_departments")
+          .select("name")
+          .eq("id", employeeData.department_id)
+          .single();
+
+        if (departmentError) {
+          console.error("Error fetching department data:", departmentError);
+          setDepartmentName("Unknown Department");
+          return;
+        }
+
+        setDepartmentName(departmentData.name || "Unknown Department");
+      } catch (error) {
+        console.error("Unexpected error:", error);
+        setDepartmentName("Unknown Department");
+      }
+    };
+
+    fetchDepartmentName();
+  }, [user?.id]);
+
+  const menuItems =
+    role === "employee" || role === "admin"
+      ? menuItemsByRole[role](departmentName)
+      : menuItemsByRole[role] || [];
 
   const handleLogout = () => {
     dispatch(logout());
@@ -104,7 +146,9 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
         }}
       >
         {menuItems.map(({ icon, label, path, dropdown }) => {
-          const isActive = location.pathname === path || (dropdown && dropdown.some((item) => location.pathname === item.path));
+          const isActive =
+            location.pathname === path ||
+            (dropdown && dropdown.some((item) => location.pathname === item.path));
           const isDropdownOpen = openDropdown === label;
 
           return (
@@ -159,7 +203,12 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
                     {dropdown.map((subItem) => {
                       const isSubActive = location.pathname === subItem.path;
                       return (
-                        <Tooltip key={subItem.label} label={subItem.label} placement="right" isDisabled={isExpanded}>
+                        <Tooltip
+                          key={subItem.label}
+                          label={subItem.label}
+                          placement="right"
+                          isDisabled={isExpanded}
+                        >
                           <Flex
                             as={Link}
                             to={subItem.path}
@@ -172,9 +221,13 @@ const Sidebar = ({ isExpanded, setExpanded }) => {
                             _hover={{ bg: hoverBg }}
                             transition="background 0.3s ease-in-out"
                             w="full"
-                            onClick={() => console.log(`Navigating to ${subItem.path}`)} // Debug navigation
+                            onClick={() => console.log(`Navigating to ${subItem.path}`)}
                           >
-                            <Icon as={subItem.icon} color={isSubActive ? activeIconColor : iconColor} boxSize={4} />
+                            <Icon
+                              as={subItem.icon}
+                              color={isSubActive ? activeIconColor : iconColor}
+                              boxSize={4}
+                            />
                             <Text
                               fontSize="sm"
                               fontWeight={isSubActive ? "bold" : "normal"}
