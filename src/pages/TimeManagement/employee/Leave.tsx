@@ -11,6 +11,7 @@ import { useLeaveRequests } from "@/hooks/TimeManagement/useLeaveRequests";
 import { useEmployeeLeaveBalances } from "@/hooks/TimeManagement/useEmployeeLeaveBalances";
 import { useHolidays } from "@/hooks/TimeManagement/useHolidays";
 import { LeaveRequest, LeaveRequestFormValues } from "@/types/leave-types";
+import { format } from "date-fns"; // Add import
 
 const Leave = () => {
   const user = useSelector((state: any) => state.auth.user);
@@ -82,11 +83,12 @@ const Leave = () => {
   const handleLeaveRequestSubmit = useCallback((values: LeaveRequestFormValues) => {
     const formData = {
       leaveTypeId: values.leave_type_id,
-      startDate: values.start_date.toISOString().split('T')[0],
-      endDate: values.end_date.toISOString().split('T')[0],
+      startDate: format(values.start_date, "yyyy-MM-dd"), // Use date-fns format
+      endDate: format(values.end_date, "yyyy-MM-dd"), // Use date-fns format
       notes: values.reason
     };
     
+    console.log('Submitting leave request with formData:', formData);
     createLeaveRequest(formData);
   }, [createLeaveRequest]);
 

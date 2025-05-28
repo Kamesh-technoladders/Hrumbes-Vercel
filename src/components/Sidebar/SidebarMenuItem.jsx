@@ -12,6 +12,7 @@ import { VscOrganization } from "react-icons/vsc";
 import { GrDocumentTime } from "react-icons/gr";
 import { LuCalendarPlus } from "react-icons/lu";
 import { useSelector } from "react-redux";
+import { BsShieldLock } from "react-icons/bs";
 import { Link } from "react-router-dom";
 
 const menuItemsByRole = {
@@ -60,6 +61,7 @@ const menuItemsByRole = {
       dropdown: [
         { icon: FiSettings, label: "Leave Policies", path: "/admin/leave-policies" },
         { icon: IoCalendarNumberOutline, label: "Official Holidays", path: "/admin/holidays" },
+        { icon: BsShieldLock, label: "Password", path: "/password" },
       ],
     },
     { icon: MdOutlineManageAccounts, label: "User Management", path: "/user-management" },
@@ -109,9 +111,6 @@ const menuItemsByRole = {
   employee: (departmentName) => {
     const baseMenu = [
       { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
-      { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
-      { icon: ImProfile, label: "My Profile", path: "/profile" },
-      { icon: GoGoal, label: "Goals", path: "/goalsview" },
       { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
       { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization" },
       { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
@@ -120,7 +119,15 @@ const menuItemsByRole = {
     ];
 
     // Add Company and Contacts if the user's department is Sales & Marketing
-    if (departmentName === "Sales & Marketing") {
+    if (departmentName === "Human Resource") {
+      baseMenu.splice(1, 0,
+      { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
+      { icon: ImProfile, label: "My Profile", path: "/profile" },
+      { icon: GoGoal, label: "Goals", path: "/goalsview" },
+      );
+    }
+
+        if (departmentName === "Sales & Marketing") {
       baseMenu.push(
         { icon: GoOrganization, label: "Company", path: "/companies" },
         { icon: VscOrganization, label: "Contacts", path: "/contacts" }

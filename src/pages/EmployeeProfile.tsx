@@ -78,7 +78,7 @@ interface AppraisalRecord {
   created_at: string;
   updated_at: string;
   last_updated_by: string;
-  paymentRecord?: PaymentRecord; // Joined payment record for details
+  paymentRecord?: PaymentRecord;
 }
 
 interface EmployeeDetail {
@@ -249,18 +249,19 @@ const EmployeeProfile = () => {
         .select('*, last_updated_by')
         .eq('employee_id', employeeData.employee_id)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (paymentRecordsError) throw paymentRecordsError;
 
       let latestPaymentRecord: PaymentRecord | undefined;
 
-      if (paymentRecordsData) {
+      if (paymentRecordsData && paymentRecordsData.length > 0) {
+        const paymentRecord = paymentRecordsData[0];
+
         const { data: earningsData, error: earningsError } = await supabase
           .from('payment_earnings')
           .select('*')
-          .eq('payment_id', paymentRecordsData.id)
+          .eq('payment_id', paymentRecord.id)
           .maybeSingle();
 
         if (earningsError) throw earningsError;
@@ -268,7 +269,7 @@ const EmployeeProfile = () => {
         const { data: deductionsData, error: deductionsError } = await supabase
           .from('payment_deductions')
           .select('*')
-          .eq('payment_id', paymentRecordsData.id)
+          .eq('payment_id', paymentRecord.id)
           .maybeSingle();
 
         if (deductionsError) throw deductionsError;
@@ -276,24 +277,24 @@ const EmployeeProfile = () => {
         const { data: customDeductionsData, error: customDeductionsError } = await supabase
           .from('payment_custom_deductions')
           .select('*')
-          .eq('payment_id', paymentRecordsData.id);
+          .eq('payment_id', paymentRecord.id);
 
         if (customDeductionsError) throw customDeductionsError;
 
         latestPaymentRecord = {
-          id: paymentRecordsData.id,
-          employee_id: paymentRecordsData.employee_id,
-          employee_name: paymentRecordsData.employee_name,
-          designation: paymentRecordsData.designation,
-          joining_date: paymentRecordsData.joining_date,
-          payment_date: paymentRecordsData.payment_date,
-          payment_amount: paymentRecordsData.payment_amount,
-          payment_category: paymentRecordsData.payment_category,
-          status: paymentRecordsData.status,
-          created_at: paymentRecordsData.created_at,
-          updated_at: paymentRecordsData.updated_at,
-          source: paymentRecordsData.source,
-          last_updated_by: paymentRecordsData.last_updated_by,
+          id: paymentRecord.id,
+          employee_id: paymentRecord.employee_id,
+          employee_name: paymentRecord.employee_name,
+          designation: paymentRecord.designation,
+          joining_date: paymentRecord.joining_date,
+          payment_date: paymentRecord.payment_date,
+          payment_amount: paymentRecord.payment_amount,
+          payment_category: paymentRecord.payment_category,
+          status: paymentRecord.status,
+          created_at: paymentRecord.created_at,
+          updated_at: paymentRecord.updated_at,
+          source: paymentRecord.source,
+          last_updated_by: paymentRecord.last_updated_by,
           earnings: earningsData,
           deductions: deductionsData,
           customDeductions: customDeductionsData || [],
@@ -456,7 +457,7 @@ const EmployeeProfile = () => {
       employee_name: `${employee!.first_name} ${employee!.last_name}`,
       designation: employee!.designation_name,
       department: employee!.department_name,
-      date_of_joining: employee!.joining_date,
+      date_of_joining: employeejoining_date,
       last_working_day: exitForm.lastWorkingDay,
       exit_reason: exitForm.reason,
       exit_comments: exitForm.comments,
@@ -760,10 +761,10 @@ const EmployeeProfile = () => {
         {record.paymentRecord && (
           <Dialog>
             <DialogTrigger asChild>
-            <Button 
-            variant="outline" 
-            className="text-purple-500 border-purple-500 hover:bg-purple-50 hover:text-black dark:text-purple-400 dark:border-purple-400 dark:hover:bg-purple-900 dark:hover:text-black"
-          >
+              <Button 
+                variant="outline" 
+                className="text-purple-500 border-purple-500 hover:bg-purple-50 hover:text-black dark:text-purple-400 dark:border-purple-400 dark:hover:bg-purple-900 dark:hover:text-black"
+              >
                 View Info
               </Button>
             </DialogTrigger>

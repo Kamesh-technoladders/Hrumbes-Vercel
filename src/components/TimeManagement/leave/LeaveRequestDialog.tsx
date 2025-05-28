@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { 
@@ -37,6 +36,13 @@ import { cn } from "@/lib/utils";
 import { LeaveType } from "@/types/leave-types";
 import { Holiday } from "@/types/time-tracker-types";
 
+// Utility function to normalize date to midnight local time (IST)
+const normalizeToMidnight = (date: Date): Date => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0); // Set to midnight local time
+  return normalized;
+};
+
 export type LeaveRequestFormValues = {
   leave_type_id: string;
   start_date: Date;
@@ -62,21 +68,26 @@ export function LeaveRequestDialog({
   const form = useForm<LeaveRequestFormValues>({
     defaultValues: {
       leave_type_id: "",
-      start_date: new Date(),
-      end_date: new Date(),
+      start_date: normalizeToMidnight(new Date()), // Default to midnight local time
+      end_date: normalizeToMidnight(new Date()), // Default to midnight local time
       reason: "",
     },
   });
 
   const activeLeaveTypes = leaveTypes.filter(type => type.is_active);
 
-  // Get all holiday dates
-  const holidayDates = holidays.map(holiday => new Date(holiday.date));
+  // Get all holiday dates, normalized to midnight
+  const holidayDates = holidays.map(holiday => normalizeToMidnight(new Date(holiday.date)));
 
   // Custom validation to check if there's at least one working day
   const validateDateRange = () => {
     const start = form.getValues("start_date");
     const end = form.getValues("end_date");
+    
+    console.log('Validating date range:', { 
+      start: format(start, "yyyy-MM-dd"), 
+      end: format(end, "yyyy-MM-dd") 
+    });
     
     if (!start || !end) return true;
     
@@ -93,6 +104,12 @@ export function LeaveRequestDialog({
   };
 
   const handleSubmit = (values: LeaveRequestFormValues) => {
+    console.log('Form submitted with values:', {
+      leave_type_id: values.leave_type_id,
+      start_date: format(values.start_date, "yyyy-MM-dd"),
+      end_date: format(values.end_date, "yyyy-MM-dd"),
+      reason: values.reason,
+    });
     if (validateDateRange()) {
       onSubmit(values);
     }
@@ -168,9 +185,15 @@ export function LeaveRequestDialog({
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            if (date) {
+                              const normalizedDate = normalizeToMidnight(date);
+                              console.log('Start date selected:', format(normalizedDate, "yyyy-MM-dd"));
+                              field.onChange(normalizedDate);
+                            }
+                          }}
                           disabled={(date) => 
-                            date < new Date(new Date().setHours(0, 0, 0, 0))
+                            date < normalizeToMidnight(new Date())
                           }
                           modifiers={{
                             holiday: holidayDates,
@@ -215,9 +238,15 @@ export function LeaveRequestDialog({
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            if (date) {
+                              const normalizedDate = normalizeToMidnight(date);
+                              console.log('End date selected:', format(normalizedDate, "yyyy-MM-dd"));
+                              field.onChange(normalizedDate);
+                            }
+                          }}
                           disabled={(date) => 
-                            date < form.getValues("start_date")
+                            date < normalizeToMidnight(form.getValues("start_date"))
                           }
                           modifiers={{
                             holiday: holidayDates,
