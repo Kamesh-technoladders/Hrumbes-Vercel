@@ -6,10 +6,12 @@ import { toast } from "sonner";
 import { TimeLogDetails } from "./dialog/TimeLogDetails";
 import { TimesheetBasicInfo } from "./dialog/TimesheetBasicInfo";
 import { TimesheetDialogContent } from './dialog/TimesheetDialogContent';
+import { TimesheetEditForm } from "./dialog/TimesheetEditForm"; // Import TimesheetEditForm
 import { useTimesheetValidation } from './hooks/useTimesheetValidation';
 import { useTimesheetSubmission } from './hooks/useTimesheetSubmission';
 import { useSelector } from 'react-redux';
-import { fetchHrProjectEmployees } from '@/api/timeTracker';
+import { fetchHrProjectEmployees, submitTimesheet } from '@/api/timeTracker';
+
 
 interface ViewTimesheetDialogProps {
   open: boolean;
@@ -40,6 +42,13 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
   const [hrProjectEmployees, setHrProjectEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // State for old component's formData when employeeHasProjects is false
+  const [formData, setFormData] = useState({
+    workReport: timesheet?.notes || '',
+    projectAllocations: timesheet?.project_time_data?.projects || [],
+    totalHours: 0,
+  });
+
   useEffect(() => {
     const fetchData = async () => {
       if (employeeId && employeeHasProjects) {
@@ -53,15 +62,16 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
   }, [employeeId, employeeHasProjects]);
 
   useEffect(() => {
-    if (employeeHasProjects && timesheet?.clock_in_time && timesheet?.clock_out_time) {
+    if (timesheet?.clock_in_time && timesheet?.clock_out_time) {
       const clockIn = new Date(timesheet.clock_in_time);
       const clockOut = new Date(timesheet.clock_out_time);
       const diffMs = clockOut.getTime() - clockIn.getTime();
       const totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
       setTotalWorkingHours(totalHours);
+      setFormData((prev) => ({ ...prev, totalHours })); // Update formData for old component logic
       console.log('Calculated login hours:', { totalHours, clockIn, clockOut });
     }
-  }, [timesheet, employeeHasProjects]);
+  }, [timesheet]);
 
   const handleClose = () => {
     setDate(new Date(timesheet?.date || Date.now()));
@@ -70,6 +80,11 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
     setWorkReport(timesheet?.notes || '');
     setDetailedEntries(timesheet?.project_time_data?.projects || []);
     setProjectEntries(timesheet?.project_time_data?.projects || []);
+    setFormData({
+      workReport: timesheet?.notes || '',
+      projectAllocations: timesheet?.project_time_data?.projects || [],
+      totalHours: timesheet?.total_working_hours || 0,
+    });
     onOpenChange(false);
   };
 
@@ -80,35 +95,60 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
       return;
     }
 
-    if (!validateForm({
-      title,
-      employeeHasProjects,
-      projectEntries,
-      detailedEntries,
-      totalWorkingHours
-    })) {
-      console.log('Validation failed:', { title, employeeHasProjects, projectEntries, detailedEntries, totalWorkingHours });
-      return;
-    }
+    if (employeeHasProjects) {
+      if (!validateForm({
+        title,
+        employeeHasProjects,
+        projectEntries,
+        detailedEntries,
+        totalWorkingHours
+      })) {
+        console.log('Validation failed:', { title, employeeHasProjects, projectEntries, detailedEntries, totalWorkingHours });
+        return;
+      }
 
-    const success = await submitTimesheetHook({
-      employeeId: timesheet.employee_id,
-      title,
-      workReport,
-      totalWorkingHours,
-      employeeHasProjects,
-      projectEntries,
-      detailedEntries,
-      timeLogId: timesheet.id,
-    });
+      const success = await submitTimesheetHook({
+        employeeId: timesheet.employee_id,
+        title,
+        workReport,
+        totalWorkingHours,
+        employeeHasProjects,
+        projectEntries,
+        detailedEntries,
+        timeLogId: timesheet.id,
+      });
 
-    if (success) {
-      toast.success('Timesheet submitted successfully');
-      onSubmitTimesheet();
-      handleClose();
+      if (success) {
+        toast.success('Timesheet submitted successfully');
+        onSubmitTimesheet();
+        handleClose();
+      } else {
+        toast.error('Failed to submit timesheet');
+        console.log('Submission failed:', { employeeId: timesheet.employee_id, title, workReport, totalWorkingHours });
+      }
     } else {
-      toast.error('Failed to submit timesheet');
-      console.log('Submission failed:', { employeeId: timesheet.employee_id, title, workReport, totalWorkingHours });
+      // Old component's submission logic
+      setIsLoading(true);
+      try {
+        const success = await submitTimesheet(timesheet.id, {
+          ...formData,
+          approval_id: timesheet.id,
+          employeeId: timesheet.employee_id,
+        });
+
+        if (success) {
+          toast.success("Timesheet submitted successfully");
+          onSubmitTimesheet();
+          handleClose();
+        } else {
+          toast.error("Failed to submit timesheet");
+        }
+      } catch (error) {
+        console.error("Error submitting timesheet:", error);
+        toast.error("An error occurred while submitting the timesheet");
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -154,6 +194,14 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
                   handleSubmit={handleSubmit}
                   employeeId={employeeId}
                   hrProjectEmployees={hrProjectEmployees}
+                />
+              ) : isEditing && !employeeHasProjects ? (
+                <TimesheetEditForm
+                  formData={formData}
+                  setFormData={setFormData}
+                  timesheet={timesheet}
+                  employeeHasProjects={employeeHasProjects}
+                  totalHours={formData.totalHours}
                 />
               ) : (
                 <TimeLogDetails timeLog={timesheet} />
