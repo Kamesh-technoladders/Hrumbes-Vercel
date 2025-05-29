@@ -6,12 +6,11 @@ import { toast } from "sonner";
 import { TimeLogDetails } from "./dialog/TimeLogDetails";
 import { TimesheetBasicInfo } from "./dialog/TimesheetBasicInfo";
 import { TimesheetDialogContent } from './dialog/TimesheetDialogContent';
-import { TimesheetEditForm } from "./dialog/TimesheetEditForm"; // Import TimesheetEditForm
+import { TimesheetEditForm } from "./dialog/TimesheetEditForm";
 import { useTimesheetValidation } from './hooks/useTimesheetValidation';
 import { useTimesheetSubmission } from './hooks/useTimesheetSubmission';
 import { useSelector } from 'react-redux';
 import { fetchHrProjectEmployees, submitTimesheet } from '@/api/timeTracker';
-
 
 interface ViewTimesheetDialogProps {
   open: boolean;
@@ -41,12 +40,12 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
   >(timesheet?.project_time_data?.projects || []);
   const [hrProjectEmployees, setHrProjectEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFormValid, setIsFormValid] = useState(true);
 
-  // State for old component's formData when employeeHasProjects is false
   const [formData, setFormData] = useState({
     workReport: timesheet?.notes || '',
     projectAllocations: timesheet?.project_time_data?.projects || [],
-    totalHours: 0,
+    totalHours: timesheet?.total_working_hours || 0,
   });
 
   useEffect(() => {
@@ -68,10 +67,11 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
       const diffMs = clockOut.getTime() - clockIn.getTime();
       const totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
       setTotalWorkingHours(totalHours);
-      setFormData((prev) => ({ ...prev, totalHours })); // Update formData for old component logic
+      setFormData((prev) => ({ ...prev, totalHours }));
       console.log('Calculated login hours:', { totalHours, clockIn, clockOut });
     }
-  }, [timesheet]);
+    setIsFormValid(employeeHasProjects || formData.workReport.trim().length > 0);
+  }, [timesheet, employeeHasProjects, formData.workReport]);
 
   const handleClose = () => {
     setDate(new Date(timesheet?.date || Date.now()));
@@ -85,6 +85,8 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
       projectAllocations: timesheet?.project_time_data?.projects || [],
       totalHours: timesheet?.total_working_hours || 0,
     });
+    setIsEditing(!timesheet?.is_submitted);
+    setIsFormValid(true);
     onOpenChange(false);
   };
 
@@ -98,12 +100,13 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
     if (employeeHasProjects) {
       if (!validateForm({
         title,
+        workReport,
         employeeHasProjects,
         projectEntries,
         detailedEntries,
-        totalWorkingHours
+        totalWorkingHours,
       })) {
-        console.log('Validation failed:', { title, employeeHasProjects, projectEntries, detailedEntries, totalWorkingHours });
+        console.log('Validation failed:', { title, workReport, employeeHasProjects, projectEntries, detailedEntries, totalWorkingHours });
         return;
       }
 
@@ -127,7 +130,11 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
         console.log('Submission failed:', { employeeId: timesheet.employee_id, title, workReport, totalWorkingHours });
       }
     } else {
-      // Old component's submission logic
+      if (!formData.workReport.trim()) {
+        toast.error('Work Summary is required');
+        return;
+      }
+
       setIsLoading(true);
       try {
         const success = await submitTimesheet(timesheet.id, {
@@ -155,19 +162,19 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
   const { validateForm } = useTimesheetValidation();
   const { isSubmitting, submitTimesheet: submitTimesheetHook } = useTimesheetSubmission();
 
-  const canSubmit = !timesheet?.is_submitted && !isSubmitting;
+  const canSubmit = !timesheet?.is_submitted && !isSubmitting && isFormValid;
   const canEdit = !timesheet?.is_submitted && !timesheet?.is_approved;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {timesheet?.is_submitted && !employeeHasProjects ? "View Timesheet" : "Submit Timesheet"}
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-4 p-4">
           {isLoading ? (
             <div>Loading project assignments...</div>
           ) : (
@@ -200,8 +207,7 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
                   formData={formData}
                   setFormData={setFormData}
                   timesheet={timesheet}
-                  employeeHasProjects={employeeHasProjects}
-                  totalHours={formData.totalHours}
+                  onValidationChange={setIsFormValid}
                 />
               ) : (
                 <TimeLogDetails timeLog={timesheet} />
@@ -210,7 +216,7 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t pt-4">
           {canEdit && !isEditing && !employeeHasProjects && (
             <Button variant="outline" onClick={() => setIsEditing(true)}>
               Edit
@@ -226,7 +232,7 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
           {canSubmit && (
             <Button 
               onClick={handleSubmit} 
-              disabled={isSubmitting || isLoading}
+              disabled={isSubmitting || isLoading || !isFormValid}
             >
               {isSubmitting ? "Submitting..." : "Submit Timesheet"}
             </Button>

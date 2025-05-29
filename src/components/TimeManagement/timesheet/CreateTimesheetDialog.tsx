@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { Dialog } from "@/components/ui/dialog";
 import { TimesheetDialogContent } from './dialog/TimesheetDialogContent';
@@ -6,6 +6,7 @@ import { useTimesheetValidation } from './hooks/useTimesheetValidation';
 import { useTimesheetSubmission } from './hooks/useTimesheetSubmission';
 import { DetailedTimesheetEntry } from '@/types/time-tracker-types';
 import { toast } from 'sonner';
+import { fetchHrProjectEmployees } from '@/api/timeTracker';
 
 interface CreateTimesheetDialogProps {
   open: boolean;
@@ -24,25 +25,32 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
   const employeeId = user?.id || "";
   
   const [date, setDate] = useState<Date>(new Date());
-  const [title, setTitle] = useState('');
-  const [totalWorkingHours, setTotalWorkingHours] = useState(8);
-  const [workReport, setWorkReport] = useState('');
   const [detailedEntries, setDetailedEntries] = useState<DetailedTimesheetEntry[]>([]);
   const [projectEntries, setProjectEntries] = useState<
     {projectId: string; hours: number; report: string}[]
   >([]);
+  const [hrProjectEmployees, setHrProjectEmployees] = useState<any[]>([]);
+
+  // Fetch hrProjectEmployees
+  useEffect(() => {
+    const fetchData = async () => {
+      if (employeeId && employeeHasProjects) {
+        const data = await fetchHrProjectEmployees(employeeId);
+        setHrProjectEmployees(data);
+      }
+    };
+    fetchData();
+  }, [employeeId, employeeHasProjects]);
 
   // Log employeeId for debugging
   console.log('CreateTimesheetDialog employeeId:', { employeeId });
+  console.log("CreateTimesheetDialog hremployees", hrProjectEmployees );
 
   const { validateForm } = useTimesheetValidation();
   const { isSubmitting, submitTimesheet } = useTimesheetSubmission();
 
   const resetForm = () => {
     setDate(new Date());
-    setTitle('');
-    setTotalWorkingHours(8);
-    setWorkReport('');
     setDetailedEntries([]);
     setProjectEntries([]);
   };
@@ -60,21 +68,17 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
     }
 
     if (!validateForm({
-      title,
       employeeHasProjects,
       projectEntries,
-      detailedEntries,
-      totalWorkingHours
+      detailedEntries
     })) {
-      console.log('Validation failed:', { title, employeeHasProjects, projectEntries, detailedEntries, totalWorkingHours });
+      console.log('Validation failed:', { employeeHasProjects, projectEntries, detailedEntries });
       return;
     }
 
     const success = await submitTimesheet({
       employeeId,
-      title,
-      workReport,
-      totalWorkingHours,
+      date,
       employeeHasProjects,
       projectEntries,
       detailedEntries
@@ -88,7 +92,7 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
       handleClose();
     } else {
       toast.error('Failed to create timesheet');
-      console.log('Submission failed:', { employeeId, title, workReport, totalWorkingHours });
+      console.log('Submission failed:', { employeeId, date });
     }
   };
 
@@ -97,12 +101,6 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
       <TimesheetDialogContent
         date={date}
         setDate={setDate}
-        title={title}
-        setTitle={setTitle}
-        totalWorkingHours={totalWorkingHours}
-        setTotalWorkingHours={setTotalWorkingHours}
-        workReport={workReport}
-        setWorkReport={setWorkReport}
         detailedEntries={detailedEntries}
         setDetailedEntries={setDetailedEntries}
         projectEntries={projectEntries}
@@ -111,6 +109,8 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
         isSubmitting={isSubmitting}
         handleClose={handleClose}
         handleSubmit={handleSubmit}
+        hrProjectEmployees={hrProjectEmployees}
+        employeeId={employeeId}
       />
     </Dialog>
   );

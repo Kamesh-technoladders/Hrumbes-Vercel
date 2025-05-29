@@ -70,6 +70,7 @@ const menuItemsByRole = {
     const baseMenu = [
       { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
       { icon: FiUsers, label: "Employees", path: "/employee" },
+    { icon: MdOutlineEmojiPeople, label: "Clients", path: "/clients" },
       { icon: MdOutlineEmojiPeople, label: "Projects", path: "/projects" },
       { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
       { icon: GoGoal, label: "Goals", path: "/goals" },
@@ -111,6 +112,7 @@ const menuItemsByRole = {
   employee: (departmentName) => {
     const baseMenu = [
       { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
+      { icon: ImProfile, label: "My Profile", path: "/profile" },
       { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
       { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization" },
       { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
@@ -122,7 +124,6 @@ const menuItemsByRole = {
     if (departmentName === "Human Resource") {
       baseMenu.splice(1, 0,
       { icon: FiBriefcase, label: "Jobs", path: "/jobs" },
-      { icon: ImProfile, label: "My Profile", path: "/profile" },
       { icon: GoGoal, label: "Goals", path: "/goalsview" },
       );
     }

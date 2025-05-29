@@ -4,8 +4,29 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import supabase from "../../config/supabaseClient";
 import { useSelector } from "react-redux";
 import { Button } from "../../components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { ArrowLeft, Download, Plus, Search, Briefcase, Calendar, Clock, ChevronLeft, ChevronRight, DollarSign, TrendingUp, Pencil, Trash2, FileText } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
+import {
+  ArrowLeft,
+  Download,
+  Plus,
+  Search,
+  Briefcase,
+  Calendar,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  DollarSign,
+  TrendingUp,
+  Pencil,
+  Trash2,
+  FileText,
+} from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs";
 import { Input } from "../../components/ui/input";
@@ -32,14 +53,12 @@ interface Project {
   id: string;
   name: string;
   start_date: string;
-  end_date: string;
-  duration: number;
   revenue: number;
   profit: number;
   status: string;
-  employees_needed: number;
-  employees_assigned: number;
   attachment?: string | null;
+  numberOfEmployees: number;
+  activeEmployees: number;
 }
 
 interface Client {
@@ -56,6 +75,7 @@ interface Client {
 
 interface AssignEmployee {
   id: string;
+  assign_employee: string;
   project_id: string;
   client_id: string;
   salary: number;
@@ -64,7 +84,9 @@ interface AssignEmployee {
   billing_type?: string;
   start_date: string;
   end_date: string;
-  duration: number;
+  hr_employees?: {
+    salary_type: string;
+  } | null;
 }
 
 interface TimeLog {
@@ -79,13 +101,12 @@ interface TimeLog {
 
 const EXCHANGE_RATE_USD_TO_INR = 84;
 
-const formatINR = (number: number) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+const formatINR = (number: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
     minimumFractionDigits: 2,
   }).format(number);
-};
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
@@ -98,8 +119,6 @@ const ClientDashboard = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [loading, setLoading] = useState(true);
-  const [calculationMode, setCalculationMode] = useState<"accrual" | "actual">("accrual");
 
   const user = useSelector((state: any) => state.auth.user);
   const organization_id = useSelector((state: any) => state.auth.organization_id);
@@ -135,7 +154,7 @@ const ClientDashboard = () => {
         currency: data.currency ?? "INR",
       };
     },
-    enabled: !!id,
+    enabled: !!id && !!organization_id,
   });
 
   // Fetch projects for the client
@@ -151,16 +170,16 @@ const ClientDashboard = () => {
       if (error) throw error;
       return data.map((project) => ({
         ...project,
-        duration: project.duration ?? 0,
         start_date: project.start_date ?? "",
-        end_date: project.end_date ?? "",
         status: project.status ?? "unknown",
         revenue: 0,
         profit: 0,
         attachment: project.attachment ?? null,
-      })) as Project[];
+        numberOfEmployees: 0,
+        activeEmployees: 0,
+      }));
     },
-    enabled: !!id,
+    enabled: !!id && !!organization_id,
   });
 
   // Fetch assigned employees for the client’s projects
@@ -172,12 +191,25 @@ const ClientDashboard = () => {
       if (!id) throw new Error("Client ID is missing");
       const { data, error } = await supabase
         .from("hr_project_employees")
-        .select("id, project_id, client_id, salary, client_billing, status, billing_type, start_date, end_date")
+        .select(`
+          id,
+          assign_employee,
+          project_id,
+          client_id,
+          salary,
+          client_billing,
+          status,
+          billing_type,
+          start_date,
+          end_date,
+          hr_employees:hr_employees!hr_project_employees_assign_employee_fkey (salary_type)
+        `)
         .eq("client_id", id)
         .eq("organization_id", organization_id);
       if (error) throw error;
       return data.map((employee) => ({
         id: employee.id,
+        assign_employee: employee.assign_employee ?? "",
         project_id: employee.project_id,
         client_id: employee.client_id ?? "",
         salary: employee.salary ?? 0,
@@ -186,15 +218,10 @@ const ClientDashboard = () => {
         billing_type: employee.billing_type ?? "LPA",
         start_date: employee.start_date ?? "",
         end_date: employee.end_date ?? "",
-        duration: employee.start_date && employee.end_date
-          ? Math.ceil(
-              (new Date(employee.end_date).getTime() - new Date(employee.start_date).getTime()) /
-                (1000 * 60 * 60 * 24)
-            )
-          : 0,
+        hr_employees: employee.hr_employees ?? null,
       }));
     },
-    enabled: !!id,
+    enabled: !!id && !!organization_id,
   });
 
   // Fetch time logs for actual calculations
@@ -207,26 +234,32 @@ const ClientDashboard = () => {
       const { data, error } = await supabase
         .from("time_logs")
         .select("id, employee_id, date, project_time_data, total_working_hours")
-        .eq("organization_id", organization_id);
+        // .eq("organization_id", organization_id);
       if (error) throw error;
       return data.filter((log) =>
         log.project_time_data?.projects?.some((proj) => projects.some((p) => p.id === proj.projectId))
-      ) as TimeLog[];
+      );
     },
-    enabled: calculationMode === "actual" && !!id,
+    enabled: !!id && !!organization_id && projects.length > 0,
   });
 
+  // Combine loading states
+  const isLoading = loadingClient || loadingProjects || loadingEmployees || loadingTimeLogs;
+
+  // Error handling
+  if (clientError || projectsError || employeesError || timeLogsError) {
+    toast.error("Failed to fetch data");
+    console.error("Errors:", { clientError, projectsError, employeesError, timeLogsError });
+  }
+
+  // Reset currentPage when searchQuery or activeTab changes
   useEffect(() => {
-    if (clientError || projectsError || employeesError || timeLogsError) {
-      toast.error("Failed to fetch data");
-      console.error("Errors:", { clientError, projectsError, employeesError, timeLogsError });
-    }
-    setLoading(loadingClient || loadingProjects || loadingEmployees || loadingTimeLogs);
-  }, [clientError, projectsError, employeesError, timeLogsError, loadingClient, loadingProjects, loadingEmployees, loadingTimeLogs]);
+    setCurrentPage(1);
+  }, [searchQuery, activeTab]);
 
   // Calculate total hours per employee from time logs
-  const calculateEmployeeHours = (employeeId: string, projectId: string) => {
-    return timeLogs
+  const calculateEmployeeHours = (employeeId: string, projectId: string) =>
+    timeLogs
       .filter((log) => log.employee_id === employeeId)
       .reduce((acc, log) => {
         const projectEntry = log.project_time_data?.projects?.find(
@@ -234,10 +267,9 @@ const ClientDashboard = () => {
         );
         return acc + (projectEntry?.hours || 0);
       }, 0);
-  };
 
-  // Convert client_billing to LPA or per-hour for accrual and actual calculations
-  const convertToLPA = (employee: AssignEmployee, mode: "accrual" | "actual") => {
+  // Convert client_billing to hourly rate
+  const convertToHourly = (employee: AssignEmployee) => {
     const currency = client?.currency || "INR";
     let clientBilling = employee.client_billing || 0;
 
@@ -245,101 +277,83 @@ const ClientDashboard = () => {
       clientBilling *= EXCHANGE_RATE_USD_TO_INR;
     }
 
-    const durationDays = employee.duration || 1; // Fallback to 1 to avoid division by zero
-    const workingHours = durationDays * 8; // 8 hours per day
-
-    if (mode === "accrual") {
-      switch (employee.billing_type) {
-        case "Monthly":
-          clientBilling = (clientBilling * 12 * durationDays) / 365; // Prorate monthly to duration
-          break;
-        case "Hourly":
-          clientBilling *= workingHours; // Convert hourly to total for duration
-          break;
-        case "LPA":
-        default:
-          clientBilling = (clientBilling * durationDays) / 365; // Prorate LPA to duration
-          break;
-      }
-    } else {
-      switch (employee.billing_type) {
-        case "Monthly":
-          clientBilling = (clientBilling * 12) / (365 * 8); // Convert monthly to hourly
-          break;
-        case "Hourly":
-          // Already in hourly rate
-          break;
-        case "LPA":
-          clientBilling = clientBilling / (365 * 8); // Convert LPA to hourly
-          break;
-        default:
-          break;
-      }
+    switch (employee.billing_type) {
+      case "Monthly":
+        clientBilling = (clientBilling * 12) / (365 * 8);
+        break;
+      case "Hourly":
+        break;
+      case "LPA":
+        clientBilling = clientBilling / (365 * 8);
+        break;
+      default:
+        break;
     }
 
     return clientBilling;
   };
 
   // Calculate revenue for an employee
-  const calculateRevenue = (employee: AssignEmployee, mode: "accrual" | "actual", projectId: string) => {
-    if (mode === "accrual") {
-      return convertToLPA(employee, "accrual");
-    } else {
-      const hours = calculateEmployeeHours(employee.employee_id, projectId);
-      const hourlyRate = convertToLPA(employee, "actual");
-      return hours * hourlyRate;
-    }
+  const calculateRevenue = (employee: AssignEmployee, projectId: string) => {
+    const hours = calculateEmployeeHours(employee.assign_employee, projectId);
+    const hourlyRate = convertToHourly(employee);
+    return hours * hourlyRate;
   };
 
   // Calculate profit for an employee
-  const calculateProfit = (employee: AssignEmployee, mode: "accrual" | "actual", projectId: string) => {
-    const revenue = calculateRevenue(employee, mode, projectId);
+  const calculateProfit = (employee: AssignEmployee, projectId: string) => {
+    const revenue = calculateRevenue(employee, projectId);
     let salary = employee.salary || 0;
+    const salaryType = employee.hr_employees?.salary_type || "LPA";
+    const hours = calculateEmployeeHours(employee.assign_employee, projectId);
 
-    if (mode === "accrual") {
-      const durationDays = employee.duration || 1;
-      salary = (salary * durationDays) / 365; // Prorate yearly salary to duration
-    } else {
-      const hours = calculateEmployeeHours(employee.employee_id, projectId);
-      const hourlySalary = salary / (365 * 8); // Convert yearly to hourly
+    if (salaryType === "LPA") {
+      const hourlySalary = salary / (365 * 8);
       salary = hours * hourlySalary;
+    } else if (salaryType === "Monthly") {
+      const monthlyToHourly = (salary / 30) / 8;
+      salary = hours * monthlyToHourly;
+    } else if (salaryType === "Hourly") {
+      salary = hours * salary;
     }
 
     return revenue - salary;
   };
 
-  // Calculate project financials
+  // Calculate project financials and employee counts
   const calculateProjectFinancials = (projectId: string) => {
-    const projectEmployees = assignedEmployees.filter((emp) => emp.project_id === projectId) || [];
+    const projectEmployees = assignedEmployees.filter((emp) => emp.project_id === projectId);
     const totalRevenue = projectEmployees.reduce(
-      (acc, emp) => acc + calculateRevenue(emp, calculationMode, projectId),
+      (acc, emp) => acc + calculateRevenue(emp, projectId),
       0
     );
     const totalProfit = projectEmployees.reduce(
-      (acc, emp) => acc + calculateProfit(emp, calculationMode, projectId),
+      (acc, emp) => acc + calculateProfit(emp, projectId),
       0
     );
-    return { totalRevenue, totalProfit };
+    const numberOfEmployees = projectEmployees.length;
+    const activeEmployees = projectEmployees.filter((emp) => emp.status === "Working").length;
+    return { totalRevenue, totalProfit, numberOfEmployees, activeEmployees };
   };
 
-  // Map projects with financials
+  // Map projects with financials and employee counts
   const projectData = projects.map((project) => {
-    const { totalRevenue, totalProfit } = calculateProjectFinancials(project.id);
+    const { totalRevenue, totalProfit, numberOfEmployees, activeEmployees } = calculateProjectFinancials(project.id);
     return {
       ...project,
       revenue: totalRevenue,
       profit: totalProfit,
+      numberOfEmployees,
+      activeEmployees,
     };
   });
 
-  // Calculate total revenue and profit for the client
+  // Calculate total revenue and profit
   const totalRevenue = projectData.reduce((acc, project) => acc + project.revenue, 0) || 0;
   const totalProfit = projectData.reduce((acc, project) => acc + project.profit, 0) || 0;
-
-  // Count employees based on status
   const workingCount = assignedEmployees.filter((emp) => emp.status === "Working").length || 0;
 
-  // Calculate project counts from projects array
+  // Calculate project counts
   const totalProjects = projects.length;
   const ongoingProjects = projects.filter((project) => project.status === "ongoing").length;
   const completedProjects = projects.filter((project) => project.status === "completed").length;
@@ -375,8 +389,8 @@ const ClientDashboard = () => {
   });
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
   const paginatedProjects = filteredProjects.slice(startIndex, startIndex + itemsPerPage);
 
   const handleItemsPerPageChange = (value: string) => {
@@ -388,31 +402,31 @@ const ClientDashboard = () => {
   const exportToCSV = () => {
     const csvData = filteredProjects.map((project) => ({
       Name: project.name,
-      Duration: `${project.duration} days`,
       "Start Date": new Date(project.start_date).toLocaleDateString(),
-      "End Date": new Date(project.end_date).toLocaleDateString(),
+      "No. of Employees": project.numberOfEmployees,
+      "Active Employees": project.activeEmployees,
       Revenue: formatINR(project.revenue),
       Profit: formatINR(project.profit),
       Status: project.status,
       Attachment: project.attachment || "None",
     }));
-    const worksheet = XLSX.utils.json_to_sheet(csvData || []);
+    const worksheet = XLSX.utils.json_to_sheet(csvData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Projects");
-    XLSX.writeFile(workbook, `Projects_${calculationMode}.csv`);
+    XLSX.writeFile(workbook, "Projects_actual.csv");
   };
 
   // Export to PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
-    doc.text(`Projects Report (${calculationMode.toUpperCase()})`, 14, 10);
+    doc.text("Projects Report", 14, 10);
     (doc as any).autoTable({
-      head: [["Project Name", "Duration", "Start Date", "End Date", "Revenue", "Profit", "Status", "Attachment"]],
+      head: [["Project Name", "Start Date", "No. of Employees", "Active Employees", "Revenue", "Profit", "Status", "Attachment"]],
       body: filteredProjects.map((project) => [
         project.name,
-        `${project.duration} days`,
         new Date(project.start_date).toLocaleDateString(),
-        new Date(project.end_date).toLocaleDateString(),
+        project.numberOfEmployees,
+        project.activeEmployees,
         formatINR(project.revenue),
         formatINR(project.profit),
         project.status,
@@ -420,10 +434,10 @@ const ClientDashboard = () => {
       ]),
       startY: 20,
     });
-    doc.save(`Projects_${calculationMode}.pdf`);
+    doc.save("Projects_actual.pdf");
   };
 
-  // Mutation for updating project status
+  // Update project status mutation
   const updateProjectStatus = useMutation({
     mutationFn: async ({ projectId, newStatus }: { projectId: string; newStatus: string }) => {
       const { error } = await supabase
@@ -451,52 +465,54 @@ const ClientDashboard = () => {
     }
 
     return (
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm animate-scale-in">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Project Name
                 </th>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
-                  Duration
-                </th>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Start Date
                 </th>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
-                  End Date
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  No. of Employees
                 </th>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Active Employees
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Revenue
                 </th>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Profit
                 </th>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
-                  Action
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {projects.map((project) => (
-                <tr key={project.id} className="hover:bg-gray-50 transition">
+                <tr key={project.id} className="hover:bg-gray-50">
                   <td
-                    className="px-4 py-2 font-medium cursor-pointer hover:text-primary"
+                    className="px-6 py-4 whitespace-nowrap font-medium cursor-pointer hover:text-primary"
                     onClick={() => navigate(`/project/${project.id}?client_id=${id}`)}
                   >
                     {project.name}
                   </td>
-                  <td className="px-4 py-2">{project.duration} days</td>
-                  <td className="px-4 py-2">{new Date(project.start_date).toLocaleDateString()}</td>
-                  <td className="px-4 py-2">{new Date(project.end_date).toLocaleDateString()}</td>
-                  <td className="px-4 py-2">{formatINR(project.revenue)}</td>
-                  <td className="px-4 py-2">{formatINR(project.profit)}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {new Date(project.start_date).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{project.numberOfEmployees}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{project.activeEmployees}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{formatINR(project.revenue)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{formatINR(project.profit)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <Select
                       defaultValue={project.status}
                       onValueChange={(newStatus) =>
@@ -504,7 +520,7 @@ const ClientDashboard = () => {
                       }
                     >
                       <SelectTrigger
-                        className={`h-8 px-2 py-0 rounded-full text-[10px] ${
+                        className={`h-8 px-2 py-0 rounded-full text-xs ${
                           project.status === "ongoing"
                             ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
                             : project.status === "completed"
@@ -529,7 +545,7 @@ const ClientDashboard = () => {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-4 py-2 flex gap-2">
+                  <td className="px-6 py-4 whitespace-nowrap flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -572,65 +588,63 @@ const ClientDashboard = () => {
     );
   };
 
-  const renderPagination = () => {
-    return (
-      <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Show</span>
-          <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-            <SelectTrigger className="w-[70px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="5">5</SelectItem>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="20">20</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="text-sm text-gray-600">per page</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-1">
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))
-              .map((page) => (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCurrentPage(page)}
-                >
-                  {page}
-                </Button>
-              ))}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <span className="text-sm text-gray-600">
-          Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredProjects.length)} of{" "}
-          {filteredProjects.length} projects
-        </span>
+  const renderPagination = () => (
+    <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-600">Show</span>
+        <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+          <SelectTrigger className="w-[70px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="5">5</SelectItem>
+            <SelectItem value="10">10</SelectItem>
+            <SelectItem value="20">20</SelectItem>
+            <SelectItem value="50">50</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-sm text-gray-600">per page</span>
       </div>
-    );
-  };
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex items-center gap-1">
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))
+            .map((page) => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+      <span className="text-sm text-gray-600">
+        Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredProjects.length)} of{" "}
+        {filteredProjects.length} projects
+      </span>
+    </div>
+  );
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
         <Loader size={60} className="border-[6px]" />
@@ -651,7 +665,7 @@ const ClientDashboard = () => {
                 className="flex items-center gap-2"
               >
                 <ArrowLeft size={16} />
-                <span>Back</span>
+                Back
               </Button>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-semibold mb-2">{client?.display_name} Dashboard</h1>
@@ -666,35 +680,23 @@ const ClientDashboard = () => {
               className="flex items-center gap-2"
             >
               <Plus size={16} />
-              <span>Create New Project</span>
+              Create New Project
             </Button>
           </div>
 
-          {/* Calculation Mode Tabs */}
-          <Tabs
-            value={calculationMode}
-            onValueChange={(value) => setCalculationMode(value as "accrual" | "actual")}
-            className="mb-6"
-          >
-            <TabsList className="grid grid-cols-2 w-[200px]">
-              <TabsTrigger value="accrual">Accrual</TabsTrigger>
-              <TabsTrigger value="actual">Actual</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
           {/* Stats Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            <Card className="p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Total Projects</p>
                 <h3 className="text-2xl font-bold">{totalProjects}</h3>
                 <p className="text-xs text-gray-500 mt-1">All projects</p>
               </div>
-              <div className="stat-icon bg-blue-100 p-3 rounded-full">
+              <div className="bg-blue-100 p-3 rounded-full">
                 <Briefcase size={24} className="text-blue-800" />
               </div>
             </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            <Card className="p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Ongoing Projects</p>
                 <h3 className="text-2xl font-bold">{ongoingProjects}</h3>
@@ -702,11 +704,11 @@ const ClientDashboard = () => {
                   {totalProjects ? Math.round((ongoingProjects / totalProjects) * 100) : 0}% of total
                 </p>
               </div>
-              <div className="stat-icon bg-green-100 p-3 rounded-full">
+              <div className="bg-green-100 p-3 rounded-full">
                 <Calendar size={24} className="text-green-800" />
               </div>
             </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            <Card className="p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Completed Projects</p>
                 <h3 className="text-2xl font-bold">{completedProjects}</h3>
@@ -714,37 +716,37 @@ const ClientDashboard = () => {
                   {totalProjects ? Math.round((completedProjects / totalProjects) * 100) : 0}% of total
                 </p>
               </div>
-              <div className="stat-icon bg-yellow-100 p-3 rounded-full">
-                <Clock size={24} className="text-yellow-800" />
+              <div className="bg-yellow-100 p-3 rounded-full">
+                <Calendar size={24} className="text-yellow-800" />
               </div>
             </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            <Card className="p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Working Employees</p>
                 <h3 className="text-2xl font-bold">{workingCount}</h3>
                 <p className="text-xs text-gray-500 mt-1">Currently active</p>
               </div>
-              <div className="stat-icon bg-purple-100 p-3 rounded-full">
+              <div className="bg-purple-100 p-3 rounded-full">
                 <Briefcase size={24} className="text-purple-800" />
               </div>
             </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            <Card className="p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Total Revenue</p>
                 <h3 className="text-2xl font-bold">{formatINR(totalRevenue)}</h3>
                 <p className="text-xs text-gray-500 mt-1">From all projects</p>
               </div>
-              <div className="stat-icon bg-blue-100 p-3 rounded-full">
+              <div className="bg-blue-100 p-3 rounded-full">
                 <DollarSign size={24} className="text-blue-800" />
               </div>
             </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            <Card className="p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Total Profit</p>
                 <h3 className="text-2xl font-bold">{formatINR(totalProfit)}</h3>
                 <p className="text-xs text-gray-500 mt-1">From all projects</p>
               </div>
-              <div className="stat-icon bg-green-100 p-3 rounded-full">
+              <div className="bg-green-100 p-3 rounded-full">
                 <TrendingUp size={24} className="text-green-800" />
               </div>
             </Card>
@@ -779,15 +781,15 @@ const ClientDashboard = () => {
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="ongoing" className="flex items-center gap-1">
                     <Briefcase size={14} />
-                    <span>Ongoing</span>
+                    Ongoing
                   </TabsTrigger>
                   <TabsTrigger value="completed" className="flex items-center gap-1">
                     <Calendar size={14} />
-                    <span>Completed</span>
+                    Completed
                   </TabsTrigger>
                   <TabsTrigger value="cancelled" className="flex items-center gap-1">
                     <Clock size={14} />
-                    <span>Cancelled</span>
+                    Cancelled
                   </TabsTrigger>
                 </TabsList>
               </Tabs>

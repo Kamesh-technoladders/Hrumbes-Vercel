@@ -338,8 +338,10 @@ const ClientManagementDashboard = () => {
       const { data: candidatesData, error: candidatesError } = await supabase
         .from("hr_job_candidates")
         .select(`
-          id, name, job_id, ctc, accrual_ctc, expected_salary, main_status_id
-        `)
+            id, name, email, phone, experience, skills, status, job_id,
+            main_status_id, sub_status_id, ctc, accrual_ctc, expected_salary, joining_date, applied_from,
+            hr_jobs!hr_job_candidates_job_id_fkey(id, title, job_type_category, client_details)
+          `)
         .in("main_status_id", [OFFERED_STATUS_ID, JOINED_STATUS_ID]);
 
       if (candidatesError) throw candidatesError;
@@ -1304,3 +1306,4 @@ const ClientManagementDashboard = () => {
 };
 
 export default ClientManagementDashboard;
+// Profit and Revenue changes Actual value

@@ -6,20 +6,50 @@ import AddClientDialog from "../components/Client/AddClientDialog";
 import { Button } from "../components/ui/button";
 import { Plus, Briefcase, Calendar, Clock, DollarSign, TrendingUp } from "lucide-react";
 import { Card } from "../components/ui/card";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import RevenueProfitChart from "../components/Client/RevenueProfitChart";
 import Loader from "@/components/ui/Loader";
 import { useSelector } from "react-redux";
-import { Tooltip as ShadcnTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
+import { Tooltip , TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 
 const EXCHANGE_RATE_USD_TO_INR = 84;
+
+interface Client {
+  id: string;
+  display_name: string;
+  status: string;
+  internal_contact: string;
+  currency: string;
+}
+
+interface ProjectEmployee {
+  client_id: string;
+  project_id: string;
+  assign_employee: string;
+  salary: number;
+  client_billing: number;
+  billing_type: string;
+  hr_employees?: {
+    salary_type: string;
+  } | null;
+}
+
+interface TimeLog {
+  id: string;
+  employee_id: string;
+  date: string;
+  project_time_data: {
+    projects: { hours: number; report: string; clientId: string; projectId: string }[];
+  };
+  total_working_hours: string;
+}
 
 const ClientManagement = () => {
   const [addClientOpen, setAddClientOpen] = useState(false);
   const organization_id = useSelector((state: any) => state.auth.organization_id);
 
   // Fetch Clients
-  const { data: clients, isLoading } = useQuery({
+  const { data: clients, isLoading: loadingClients } = useQuery({
     queryKey: ["clients", organization_id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -34,12 +64,20 @@ const ClientManagement = () => {
   });
 
   // Fetch Project Employees
-  const { data: projectEmployees } = useQuery({
+  const { data: projectEmployees, isLoading: loadingEmployees } = useQuery({
     queryKey: ["project-employees", organization_id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("hr_project_employees")
-        .select("client_id, project_id, salary, client_billing, billing_type")
+        .select(`
+          client_id,
+          project_id,
+          assign_employee,
+          salary,
+          client_billing,
+          billing_type,
+          hr_employees:hr_employees!hr_project_employees_assign_employee_fkey (salary_type)
+        `)
         .eq("organization_id", organization_id);
       if (error) throw error;
       return data || [];
@@ -47,48 +85,98 @@ const ClientManagement = () => {
     enabled: !!organization_id,
   });
 
-  // Convert client_billing to LPA
-  const convertToLPA = (employee: any, clientCurrency: string) => {
+  // Fetch Time Logs
+  const { data: timeLogs, isLoading: loadingTimeLogs } = useQuery({
+    queryKey: ["time_logs", organization_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("time_logs")
+        .select("id, employee_id, date, project_time_data, total_working_hours")
+        // .eq("organization_id", organization_id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!organization_id,
+  });
+
+  // Combine loading states
+  const isLoading = loadingClients || loadingEmployees || loadingTimeLogs;
+
+  // Calculate total hours per employee from time logs
+  const calculateEmployeeHours = (employeeId: string, projectId: string) => {
+    return (
+      timeLogs
+        ?.filter((log: TimeLog) => log.employee_id === employeeId)
+        .reduce((acc: number, log: TimeLog) => {
+          const projectEntry = log.project_time_data?.projects?.find(
+            (proj) => proj.projectId === projectId
+          );
+          return acc + (projectEntry?.hours || 0);
+        }, 0) || 0
+    );
+  };
+
+  // Convert client_billing to hourly rate
+  const convertToHourly = (employee: ProjectEmployee, clientCurrency: string) => {
     let clientBilling = Number(employee.client_billing) || 0;
 
-    // Convert USD to INR if necessary
     if (clientCurrency === "USD") {
       clientBilling *= EXCHANGE_RATE_USD_TO_INR;
     }
 
-    // Convert client_billing to LPA based on billing_type
     switch (employee.billing_type) {
       case "Monthly":
-        clientBilling *= 1; // Convert Monthly to LPA
+        clientBilling = (clientBilling * 12) / (365 * 8); // Convert monthly to hourly
         break;
       case "Hourly":
-        clientBilling *= 168; // Convert Hourly to LPA (8 hours/day, 22 days/month, 12 months)
+        // Already in hourly rate
         break;
       case "LPA":
+        clientBilling = clientBilling / (365 * 8); // Convert LPA to hourly
+        break;
       default:
-        // No conversion needed for LPA
         break;
     }
 
     return clientBilling;
   };
 
-  // Calculate profit
-  const calculateProfit = (employee: any, clientCurrency: string) => {
-    const clientBillingLPA = convertToLPA(employee, clientCurrency);
-    const salary = Number(employee.salary)/12 || 0; // Salary is always in LPA, INR
-    return clientBillingLPA - salary;
+  // Calculate revenue for an employee
+  const calculateRevenue = (employee: ProjectEmployee, projectId: string, clientCurrency: string) => {
+    const hours = calculateEmployeeHours(employee.assign_employee, projectId);
+    const hourlyRate = convertToHourly(employee, clientCurrency);
+    return hours * hourlyRate;
+  };
+
+  // Calculate profit for an employee
+  const calculateProfit = (employee: ProjectEmployee, projectId: string, clientCurrency: string) => {
+    const revenue = calculateRevenue(employee, projectId, clientCurrency);
+    let salary = Number(employee.salary) || 0;
+    const salaryType = employee.hr_employees?.salary_type || "LPA";
+    const hours = calculateEmployeeHours(employee.assign_employee, projectId);
+
+    if (salaryType === "LPA") {
+      const hourlySalary = salary / (365 * 8);
+      salary = hours * hourlySalary;
+    } else if (salaryType === "Monthly") {
+      const monthlyToHourly = (salary / 30) / 8;
+      salary = hours * monthlyToHourly;
+    } else if (salaryType === "Hourly") {
+      salary = hours * salary;
+    }
+
+    return revenue - salary;
   };
 
   // Calculate Revenue & Profit Per Client
-  const clientFinancials = clients?.map((client) => {
+  const clientFinancials = clients?.map((client: Client) => {
     const clientProjects = projectEmployees?.filter((pe) => pe.client_id === client.id) || [];
     const totalRevenueINR = clientProjects.reduce(
-      (acc, pe) => acc + convertToLPA(pe, client.currency || "INR"),
+      (acc, pe) => acc + calculateRevenue(pe, pe.project_id, client.currency || "INR"),
       0
     );
     const totalProfitINR = clientProjects.reduce(
-      (acc, pe) => acc + calculateProfit(pe, client.currency || "INR"),
+      (acc, pe) => acc + calculateProfit(pe, pe.project_id, client.currency || "INR"),
       0
     );
     return {
@@ -239,10 +327,7 @@ const ClientManagement = () => {
                     formatter={(value, name) => {
                       const val = Number(value);
                       const usd = val / EXCHANGE_RATE_USD_TO_INR;
-                      return [
-                        `₹ ${val.toLocaleString()} `,
-                        name,
-                      ];
+                      return [`₹ ${val.toLocaleString()} `, name];
                     }}
                   />
                   <Bar dataKey="total_projects" fill="#8b5cf6" name="Projects" radius={[10, 10, 0, 0]} />

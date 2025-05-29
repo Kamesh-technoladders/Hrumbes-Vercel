@@ -41,6 +41,8 @@ export const TimeLogDetails = ({
     if (log.notes) parsedNotes.workReport = log.notes;
   }
 
+  console.log("TimeLogDetails", log)
+
   return (
     <div className="space-y-3 max-h-[60vh] overflow-y-auto px-1">
       <BasicInfoSection timeLog={log} parsedNotes={parsedNotes} />

@@ -10,9 +10,9 @@ import {
 } from "@/components/ui/sheet";
 import { 
   Tabs, 
-  TabsContent, 
   TabsList, 
-  TabsTrigger 
+  TabsTrigger,
+  TabsContent 
 } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { JobData, CandidateStatus, Candidate } from "@/lib/types";
@@ -24,7 +24,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { getJobById } from "@/services/jobService";
 import { useQuery } from "@tanstack/react-query";
 import ProofIdTab from "./ProofIdTab";
-
 
 interface AddCandidateDrawerProps {
   job: JobData;
@@ -41,10 +40,10 @@ export type CandidateFormData = {
   phone: string;
   currentLocation: string;
   preferredLocations: string[];
-  totalExperience?: number; // Made optional
-  totalExperienceMonths?: number; // Added
-  relevantExperience?: number; // Made optional
-  relevantExperienceMonths?: number; // Added
+  totalExperience?: number;
+  totalExperienceMonths?: number;
+  relevantExperience?: number;
+  relevantExperienceMonths?: number;
   experience?: string;
   resume: string | null;
   skills: Array<{
@@ -54,17 +53,17 @@ export type CandidateFormData = {
     experienceMonths: number;
   }>;
   location?: string;
-  expectedSalary?: number; // Made optional
-  currentSalary?: number; // Made optional
-  noticePeriod?: number; // Add Notice Period (in days)
-  lastWorkingDay?: string; // Add Last Working Day (date string, e.g., "2025-05-30")
-  uan?: string; // Add UAN (optional)
-  pan?: string; // Add PAN (optional)
-  pf?: string; // Add PF (optional)
-  esicNumber?: string; // Add ESIC Number (optional)
-  linkedInId?: string; // Added
-  hasOffers?: "Yes" | "No"; // Added
-  offerDetails?: string; // Added
+  expectedSalary?: number;
+  currentSalary?: number;
+  noticePeriod?: number;
+  lastWorkingDay?: string;
+  uan?: string;
+  pan?: string;
+  pf?: string;
+  esicNumber?: string;
+  linkedInId?: string;
+  hasOffers?: "Yes" | "No";
+  offerDetails?: string;
 };
 
 const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChange }: AddCandidateDrawerProps) => {
@@ -74,7 +73,6 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
   const user = useSelector((state: any) => state.auth.user);
   const isEditMode = !!candidate;
 
-  // Fetch job data
   const { 
     data: jobs, 
     isLoading: jobLoading, 
@@ -108,7 +106,6 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
       offerDetails: "",
       resume: null,
       skills: [],
-
     },
   });
 
@@ -118,14 +115,15 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
     }
   });
 
-    const proofIdForm = useForm<CandidateFormData>({
-      defaultValues: {
-        uan: candidate?.metadata?.uan || "",
-        pan: candidate?.metadata?.pan || "",
-        pf: candidate?.metadata?.pf || "",
-        esicNumber: candidate?.metadata?.esicNumber || "",
-      },
-    });
+  // Initialize proofIdForm with default empty values
+  const proofIdForm = useForm<CandidateFormData>({
+    defaultValues: {
+      uan: "",
+      pan: "",
+      pf: "",
+      esicNumber: "",
+    },
+  });
 
   useEffect(() => {
     if (candidate && isEditMode) {
@@ -150,25 +148,38 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
         linkedInId: candidate.metadata?.linkedInId || "",
         hasOffers: candidate.metadata?.hasOffers,
         offerDetails: candidate.metadata?.offerDetails || "",
-        
       });
 
-      // Populate skills form with candidate skills or job skills as fallback
+      // Populate skills form
       const candidateSkills = candidate.skillRatings || candidate.skills || [];
       skillsForm.reset({
         skills: candidateSkills.length > 0 
           ? candidateSkills 
           : (jobs?.skills?.map(skill => ({ name: skill, rating: 0 })) || [])
       });
+
+      // Reset and populate proofIdForm with candidate data
+      proofIdForm.reset({
+        uan: candidate.metadata?.uan || "",
+        pan: candidate.metadata?.pan || "",
+        pf: candidate.metadata?.pf || "",
+        esicNumber: candidate.metadata?.esicNumber || "",
+      });
+    } else {
+      // Reset all forms when not in edit mode
+      basicInfoForm.reset();
+      skillsForm.reset();
+      proofIdForm.reset();
     }
-  }, [candidate, isEditMode, basicInfoForm, skillsForm, jobs]);
+  }, [candidate, isEditMode, basicInfoForm, skillsForm, proofIdForm, jobs]);
 
   const handleClose = () => {
     basicInfoForm.reset();
     skillsForm.reset();
+    proofIdForm.reset(); // Add reset for proofIdForm
     setCandidateId(isEditMode ? candidate?.id : null);
     setActiveTab("basic-info");
-    controlledOnOpenChange(false);
+    controlledOnオープンChange(false);
   };
 
   const formatExperience = (years?: number, months?: number): string => {
@@ -216,15 +227,15 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
           currentSalary: data.currentSalary,
           expectedSalary: data.expectedSalary,
           resume_url: data.resume,
-          noticePeriod: data.noticePeriod, // Add Notice Period
-        lastWorkingDay: data.lastWorkingDay,
-        linkedInId: data.linkedInId,
+          noticePeriod: data.noticePeriod,
+          lastWorkingDay: data.lastWorkingDay,
+          linkedInId: data.linkedInId,
           hasOffers: data.hasOffers,
           offerDetails: data.offerDetails,
-        uan: data.uan || undefined, // Include UAN
-          pan: data.pan || undefined, // Include PAN
-          pf: data.pf || undefined, // Include PF
-          esicNumber: data.esicNumber || undefined, // Include ESIC Number
+          uan: data.uan || undefined,
+          pan: data.pan || undefined,
+          pf: data.pf || undefined,
+          esicNumber: data.esicNumber || undefined,
         },
         skillRatings: skillsForm.getValues().skills || [],
         progress: candidate?.progress || {
@@ -290,11 +301,10 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
           expectedSalary: basicInfoData.expectedSalary,
           resume_url: basicInfoData.resume,
           noticePeriod: basicInfoData.noticePeriod,
-        lastWorkingDay: basicInfoData.lastWorkingDay,
-        linkedInId: basicInfoData.linkedInId,
-          hasOffers: basicInfoData.hasOffers,
-          offerDetails: basicInfoData.offerDetails,
-
+          lastWorkingDay: basicInfoData.lastWorkingDay,
+          linkedInId: data.linkedInId,
+          hasOffers: data.hasOffers,
+          offerDetails: data.offerDetails,
         },
         skillRatings: data.skills,
         progress: candidate?.progress || {
@@ -328,18 +338,23 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
         toast.error("Candidate ID or Job ID is missing");
         return;
       }
-  
-      // Update candidate with proof ID fields
-      const candidateData = {
+
+      const basicInfoData = basicInfoForm.getValues();
+      const skillsData = skillsForm.getValues();
+
+      const payload: Partial<CandidateData> = {
+        id: candidateId,
         metadata: {
-          uan: data.uan || undefined, // Include UAN
-          pan: data.pan || undefined, // Include PAN
-          pf: data.pf || undefined, // Include PF
-          esicNumber: data.esicNumber || undefined, // Include ESIC Number
+          ...basicInfoData,
+          ...skillsData,
+          uan: data.uan || undefined,
+          pan: data.pan || undefined,
+          pf: data.pf || undefined,
+          esicNumber: data.esicNumber || undefined,
         },
       };
-  
-      await updateCandidate(candidateId, candidateData);
+
+      await updateCandidate(candidateId, payload);
       toast.success("Proof ID information saved successfully");
       onCandidateAdded();
       handleClose();
@@ -351,15 +366,7 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
 
   return (
     <Sheet open={controlledOpen} onOpenChange={controlledOnOpenChange}>
-      {/* <SheetTrigger asChild>
-        <Button 
-          id={isEditMode ? "edit-candidate-btn" : "add-candidate-btn"} 
-          onClick={() => controlledOnOpenChange(true)}
-        >
-          {isEditMode ? "Edit Candidate" : "Add Candidate"}
-        </Button>
-      </SheetTrigger> */}
-      <SheetContent className="w-full sm:max-w-lg md:max-w-xl  overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg md:max-w-xl overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle>{isEditMode ? "Edit Candidate" : "Add New Candidate"}</SheetTitle>
         </SheetHeader>
@@ -408,5 +415,3 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
 };
 
 export default AddCandidateDrawer;
-
-// 

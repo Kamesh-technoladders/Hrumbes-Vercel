@@ -1,32 +1,18 @@
-
 import { toast } from "@/hooks/use-toast";
 import { DetailedTimesheetEntry } from "@/types/time-tracker-types";
 
 interface ValidationProps {
-  title: string;
   employeeHasProjects: boolean;
   projectEntries: { projectId: string; hours: number; report: string }[];
   detailedEntries: DetailedTimesheetEntry[];
-  totalWorkingHours: number;
 }
 
 export const useTimesheetValidation = () => {
   const validateForm = ({
-    title,
     employeeHasProjects,
     projectEntries,
     detailedEntries,
-    totalWorkingHours
   }: ValidationProps): boolean => {
-    if (!title.trim()) {
-      toast({
-        title: "Missing information",
-        description: "Please enter a timesheet title",
-        variant: "destructive"
-      });
-      return false;
-    }
-
     if (employeeHasProjects) {
       const validProjectEntries = projectEntries.filter(p => p.projectId);
 
@@ -40,33 +26,33 @@ export const useTimesheetValidation = () => {
       }
 
       const invalidProject = validProjectEntries.find(p => 
-        !p.projectId || p.hours <= 0 || !p.report.trim()
+        !p.projectId || (p.hours > 0 && !p.report.trim())
       );
       
       if (invalidProject) {
         toast({
           title: "Invalid project entry",
-          description: "Please complete all project details including hours and project report",
+          description: "Please provide a work summary for projects with non-zero hours",
           variant: "destructive"
         });
         return false;
       }
 
       const totalProjectHours = validProjectEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      if (totalProjectHours > totalWorkingHours) {
+      if (totalProjectHours > 8) {
         toast({
           title: "Hours exceeded",
-          description: "Total project hours cannot exceed total working hours",
+          description: "Total project hours cannot exceed 8 hours",
           variant: "destructive"
         });
         return false;
       }
     } else if (detailedEntries.length > 0) {
       const totalDetailedHours = detailedEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      if (totalDetailedHours > totalWorkingHours) {
+      if (totalDetailedHours > 8) {
         toast({
           title: "Hours exceeded",
-          description: "Total detailed hours cannot exceed total working hours",
+          description: "Total detailed hours cannot exceed 8 hours",
           variant: "destructive"
         });
         return false;

@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, Search, TrendingUp, ChevronLeft, ChevronRight, ArrowUpDown, Eye, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, TrendingUp, ChevronLeft, ChevronRight, ArrowUpDown, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import HiddenContactCell from "@/components/ui/HiddenContactCell";
 import { format } from "date-fns";
@@ -29,13 +29,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/jobs/ui/dropdown-menu";
+import { useSelector } from "react-redux";
 
 // Status IDs for Offered and Joined candidates
 const OFFERED_STATUS_ID = "9d48d0f9-8312-4f60-aaa4-bafdce067417";
 const JOINED_STATUS_ID = "5b4e0b82-0774-4e3b-bb1e-96bc2743f96e";
 
 // Static USD to INR conversion rates
-const USD_TO_INR_RATE_CANDIDATES = 83.5;
+const USD_TO_INR_RATE_CANDIDATES = 84;
 const USD_TO_INR_RATE_EMPLOYEES = 84;
 
 interface Candidate {
@@ -69,13 +70,24 @@ interface Employee {
   project_id: string;
   project_name?: string;
   salary: number;
+  salary_type: string;
+  salary_formatted: string;
   client_billing: number;
   billing_type: string;
+  billing_type_formatted: string;
   currency: string;
-  revenue_inr: number;
-  revenue_usd: number;
-  profit_inr: number;
-  profit_usd: number;
+  actual_revenue_inr: number;
+  actual_profit_inr: number;
+}
+
+interface TimeLog {
+  id: string;
+  employee_id: string;
+  date: string;
+  project_time_data: {
+    projects: { hours: number; report: string; clientId: string; projectId: string }[];
+  };
+  total_working_hours: string;
 }
 
 interface Job {
@@ -106,8 +118,11 @@ interface ClientMetrics {
 }
 
 const ClientCandidatesView = () => {
-  const { clientName } = useParams();
+  const { clientName } = useParams<{ clientName: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
+
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -128,7 +143,6 @@ const ClientCandidatesView = () => {
   const [currentPageEmployees, setCurrentPageEmployees] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [statusUpdateLoading, setStatusUpdateLoading] = useState<string | null>(null);
-  const { toast } = useToast();
 
   const isEmployee = false;
 
@@ -232,32 +246,81 @@ const ClientCandidatesView = () => {
     return 0;
   };
 
-  const convertToLPA = (employee: any, clientCurrency: string) => {
-    let clientBilling = Number(employee.client_billing) || 0;
+  const formatBilling = (amount: number, billingType: string, currency: string): string => {
+    const currencySymbol = currencies.find((c) => c.value === currency)?.symbol || "₹";
+    const formattedAmount = amount.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    switch (billingType) {
+      case "Hourly":
+        return `${currencySymbol}${formattedAmount}/hr`;
+      case "Monthly":
+        return `${currencySymbol}${formattedAmount}/Month`;
+      case "LPA":
+        return `${currencySymbol}${formattedAmount}/year`;
+      default:
+        return `${currencySymbol}${formattedAmount}/year`;
+    }
+  };
 
-    if (clientCurrency === "USD") {
-      clientBilling *= USD_TO_INR_RATE_EMPLOYEES;
+  const calculateEmployeeHours = (employeeId: string, projectId: string, timeLogs: TimeLog[]) =>
+    timeLogs
+      .filter((log) => log.employee_id === employeeId)
+      .reduce((acc, log) => {
+        const projectEntry = log.project_time_data?.projects?.find(
+          (proj) => proj.projectId === projectId
+        );
+        return acc + (projectEntry?.hours || 0);
+      }, 0);
+
+  const convertToHourly = (amount: number, billingType: string, currency: string) => {
+    let hourlyRate = amount;
+
+    if (currency === "USD") {
+      hourlyRate *= USD_TO_INR_RATE_EMPLOYEES;
     }
 
-    switch (employee.billing_type) {
+    switch (billingType) {
       case "Monthly":
-        clientBilling *= 12;
+        hourlyRate = (hourlyRate * 12) / (365 * 8);
         break;
       case "Hourly":
-        clientBilling *= 8 * 22 * 12;
         break;
       case "LPA":
+        hourlyRate = hourlyRate / (365 * 8);
+        break;
       default:
         break;
     }
 
-    return clientBilling;
+    return hourlyRate;
   };
 
-  const calculateEmployeeProfit = (employee: any, clientCurrency: string) => {
-    const clientBillingLPA = convertToLPA(employee, clientCurrency);
-    const salary = Number(employee.salary) || 0;
-    return clientBillingLPA - salary;
+  const calculateRevenue = (employee: Employee, projectId: string, timeLogs: TimeLog[]) => {
+    const hours = calculateEmployeeHours(employee.id, projectId, timeLogs);
+    const hourlyRate = convertToHourly(employee.client_billing, employee.billing_type, employee.currency);
+    return hours * hourlyRate;
+  };
+
+  const calculateProfit = (employee: Employee, projectId: string, timeLogs: TimeLog[]) => {
+    const revenue = calculateRevenue(employee, projectId, timeLogs);
+    const hours = calculateEmployeeHours(employee.id, projectId, timeLogs);
+    let salary = employee.salary;
+
+    if (employee.currency === "USD") {
+      salary *= 1;
+    }
+
+    const salaryType = employee.salary_type;
+    if (salaryType === "LPA") {
+      const hourlySalary = salary / (365 * 8);
+      salary = hours * hourlySalary;
+    } else if (salaryType === "Monthly") {
+      const monthlyToHourly = (salary / 30) / 8;
+      salary = hours * monthlyToHourly;
+    } else if (salaryType === "Hourly") {
+      salary = salary * hours;
+    }
+
+    return revenue - salary;
   };
 
   const fetchCandidatesAndEmployees = async (client: string) => {
@@ -268,6 +331,7 @@ const ClientCandidatesView = () => {
         .from("hr_clients")
         .select("id, client_name, commission_value, commission_type, currency, service_type")
         .eq("client_name", client)
+        .eq("organization_id", organization_id)
         .single();
 
       if (clientError) throw clientError;
@@ -278,7 +342,8 @@ const ClientCandidatesView = () => {
       const { data: jobsData, error: jobsError } = await supabase
         .from("hr_jobs")
         .select("id, title, client_owner, job_type_category, budget, budget_type")
-        .eq("client_owner", client);
+        .eq("client_owner", client)
+        .eq("organization_id", organization_id);
 
       if (jobsError) throw jobsError;
 
@@ -290,7 +355,7 @@ const ClientCandidatesView = () => {
       let employeeCount = 0;
 
       if (jobsData && jobsData.length > 0) {
-        const jobIds = jobsData.map(job => job.id);
+        const jobIds = jobsData.map((job) => job.id);
 
         const { data: candidatesData, error: candidatesError } = await supabase
           .from("hr_job_candidates")
@@ -305,20 +370,24 @@ const ClientCandidatesView = () => {
         if (candidatesError) throw candidatesError;
 
         if (candidatesData && candidatesData.length > 0) {
-          const enhancedCandidates = candidatesData.map(candidate => {
-            const job = jobsData.find(job => job.id === candidate.job_id);
-            const candRevenue = candidate.accrual_ctc ? parseSalary(candidate.accrual_ctc) : 0;
-            const candProfit = job ? calculateCandidateProfit(candidate, job, clientData) : 0;
+          const enhancedCandidates = candidatesData.map((candidate) => {
+          const job = jobsData.find((job) => job.id === candidate.job_id);
+          // Calculate profit first, as it’s needed for both Internal and External revenue
+          const candProfit = job ? calculateCandidateProfit(candidate, job, clientData) : 0;
+          // Modified: Set revenue based on job type
+          const candRevenue = job?.job_type_category === "Internal"
+            ? (candidate.accrual_ctc ? parseSalary(candidate.accrual_ctc) : 0) // Internal: use accrual_ctc
+            : candProfit; // External: revenue equals profit (commission-based)
 
-            candidateRevenue += candRevenue;
-            candidateProfit += candProfit;
+          candidateRevenue += candRevenue;
+          candidateProfit += candProfit;
 
-            return {
-              ...candidate,
-              job_title: job ? job.title : "Unknown",
-              job_type_category: job ? job.job_type_category : "Unknown",
-              profit: candProfit,
-            };
+          return {
+            ...candidate,
+            job_title: job ? job.title : "Unknown",
+            job_type_category: job ? job.job_type_category : "Unknown",
+            profit: candProfit,
+          };
           });
 
           candidateCount = candidatesData.length;
@@ -337,7 +406,8 @@ const ClientCandidatesView = () => {
         const { data: projectsData, error: projectsError } = await supabase
           .from("hr_projects")
           .select("id, client_id, name")
-          .eq("client_id", clientData.id);
+          .eq("client_id", clientData.id)
+          .eq("organization_id", organization_id);
 
         if (projectsError) throw projectsError;
 
@@ -351,37 +421,89 @@ const ClientCandidatesView = () => {
             salary,
             client_billing,
             billing_type,
-            hr_employees:hr_employees!hr_project_employees_assign_employee_fkey(first_name, last_name)
+            hr_employees:hr_employees!hr_project_employees_assign_employee_fkey(first_name, last_name, salary_type)
           `)
-          .eq("client_id", clientData.id);
+          .eq("client_id", clientData.id)
+          .eq("organization_id", organization_id);
 
         if (employeesError) throw employeesError;
 
+        const projectIds = projectsData?.map((p) => p.id) || [];
+
+        const { data: timeLogsData, error: timeLogsError } = await supabase
+          .from("time_logs")
+          .select("id, employee_id, date, project_time_data, total_working_hours")
+          // .eq("organization_id", organization_id);
+
+        if (timeLogsError) throw timeLogsError;
+
+        const relevantTimeLogs = timeLogsData?.filter((log) =>
+          log.project_time_data?.projects?.some((proj) => projectIds.includes(proj.projectId))
+        ) || [];
+
         if (employeesData && employeesData.length > 0) {
-          const enhancedEmployees = employeesData.map(employee => {
-            const project = projectsData?.find(p => p.id === employee.project_id);
-            const revenueINR = convertToLPA(employee, clientData.currency);
-            const profitINR = calculateEmployeeProfit(employee, clientData.currency);
+          const enhancedEmployees = employeesData.map((employee) => {
+            const project = projectsData?.find((p) => p.id === employee.project_id);
             const employeeName = employee.hr_employees
               ? `${employee.hr_employees.first_name} ${employee.hr_employees.last_name}`
               : "Unknown";
+            const salaryType = employee.hr_employees?.salary_type || "LPA";
+            const actualRevenue = calculateRevenue(
+              {
+                id: employee.assign_employee,
+                employee_name: employeeName,
+                project_id: employee.project_id,
+                project_name: project?.name,
+                salary: Number(employee.salary) || 0,
+                salary_type: salaryType,
+                salary_formatted: "",
+                client_billing: Number(employee.client_billing) || 0,
+                billing_type: employee.billing_type || "LPA",
+                billing_type_formatted: "",
+                currency: clientData.currency,
+                actual_revenue_inr: 0,
+                actual_profit_inr: 0,
+              },
+              employee.project_id,
+              relevantTimeLogs
+            );
+            const actualProfit = calculateProfit(
+              {
+                id: employee.assign_employee,
+                employee_name: employeeName,
+                project_id: employee.project_id,
+                project_name: project?.name,
+                salary: Number(employee.salary) || 0,
+                salary_type: salaryType,
+                salary_formatted: "",
+                client_billing: Number(employee.client_billing) || 0,
+                billing_type: employee.billing_type || "LPA",
+                billing_type_formatted: "",
+                currency: clientData.currency,
+                actual_revenue_inr: 0,
+                actual_profit_inr: 0,
+              },
+              employee.project_id,
+              relevantTimeLogs
+            );
 
-            employeeRevenueINR += revenueINR;
-            employeeProfitINR += profitINR;
+            employeeRevenueINR += actualRevenue;
+            employeeProfitINR += actualProfit;
 
             return {
-              id: employee.id,
+              id: employee.assign_employee,
               employee_name: employeeName,
               project_id: employee.project_id,
               project_name: project ? project.name : "Unknown",
               salary: Number(employee.salary) || 0,
+              salary_type: salaryType,
+              salary_formatted: formatBilling(Number(employee.salary) || 0, salaryType),
               client_billing: Number(employee.client_billing) || 0,
               billing_type: employee.billing_type || "LPA",
+              billing_type_formatted: formatBilling(Number(employee.client_billing) || 0, employee.billing_type || "LPA"),
               currency: clientData.currency,
-              revenue_inr: revenueINR,
-              revenue_usd: revenueINR / USD_TO_INR_RATE_EMPLOYEES,
-              profit_inr: profitINR,
-              profit_usd: profitINR / USD_TO_INR_RATE_EMPLOYEES,
+              actual_revenue_inr: actualRevenue,
+              actual_profit_inr: actualProfit,
             };
           });
 
@@ -431,16 +553,16 @@ const ClientCandidatesView = () => {
 
     const searchTermLower = value.toLowerCase();
     const filteredCandidates = candidates.filter(
-      candidate =>
+      (candidate) =>
         candidate.name.toLowerCase().includes(searchTermLower) ||
         candidate.email.toLowerCase().includes(searchTermLower) ||
         candidate.phone?.toLowerCase().includes(searchTermLower) ||
-        candidate.skills?.some(skill => skill.toLowerCase().includes(searchTermLower)) ||
+        candidate.skills?.some((skill) => skill.toLowerCase().includes(searchTermLower)) ||
         candidate.job_title?.toLowerCase().includes(searchTermLower)
     );
 
     const filteredEmployees = employees.filter(
-      employee =>
+      (employee) =>
         employee.employee_name.toLowerCase().includes(searchTermLower) ||
         employee.project_name?.toLowerCase().includes(searchTermLower)
     );
@@ -449,13 +571,12 @@ const ClientCandidatesView = () => {
     setFilteredEmployees(filteredEmployees);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
       maximumFractionDigits: 2,
     }).format(amount);
-  };
 
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return "-";
@@ -704,7 +825,7 @@ const ClientCandidatesView = () => {
   );
 
   const renderEmployeeCard = (employee: Employee) => (
-    <Card key={`${employee.id}`} className="mb-4 p-4">
+    <Card key={employee.id} className="mb-4 p-4">
       <div className="space-y-2">
         <div>
           <strong className="text-sm">Name:</strong>
@@ -715,25 +836,21 @@ const ClientCandidatesView = () => {
           <p className="text-sm">{employee.project_name || "Unknown"}</p>
         </div>
         <div>
-          <strong className="text-sm">Salary (LPA):</strong>
-          <p className="text-sm">{formatCurrency(employee.salary)}</p>
+          <strong className="text-sm">Salary:</strong>
+          <p className="text-sm">{employee.salary_formatted}</p>
         </div>
         <div>
-          <strong className="text-sm">Revenue:</strong>
-          <p className="text-sm">
-            {formatCurrency(employee.revenue_inr)}<br />
-            {/* <span className="text-xs text-gray-500">
-              $ {employee.revenue_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </span> */}
-          </p>
+          <strong className="text-sm">Client Billing:</strong>
+          <p className="text-sm">{employee.billing_type_formatted}</p>
         </div>
         <div>
-          <strong className="text-sm">Profit:</strong>
-          <p className={`text-sm ${employee.profit_inr >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {formatCurrency(employee.profit_inr)}<br />
-            {/* <span className="text-xs text-gray-500">
-              $ {employee.profit_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </span> */}
+          <strong className="text-sm">Actual Revenue:</strong>
+          <p className="text-sm">{formatCurrency(employee.actual_revenue_inr)}</p>
+        </div>
+        <div>
+          <strong className="text-sm">Actual Profit:</strong>
+          <p className={`text-sm ${employee.actual_profit_inr >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {formatCurrency(employee.actual_profit_inr)}
           </p>
         </div>
         <div>
@@ -744,13 +861,14 @@ const ClientCandidatesView = () => {
     </Card>
   );
 
-  console.log("candidates", candidates)
+  console.log("candidatesssssssssss", candidates)
+
   const renderCandidateTable = (candidates: Candidate[], title: string) => (
     <div className="w-full min-w-0">
       <h3 className="text-lg font-semibold mb-2">{title}</h3>
       <div className="md:hidden">
         {candidates.length > 0 ? (
-          candidates.map(candidate => renderCandidateCard(candidate))
+          candidates.map((candidate) => renderCandidateCard(candidate))
         ) : (
           <Card className="p-4 text-center">
             <p className="text-sm">
@@ -795,7 +913,7 @@ const ClientCandidatesView = () => {
                 <tr key={candidate.id} className="hover:bg-gray-50 transition">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex flex-col">
-                      <Link to={`/employee/${candidate.id}/${candidate.job_id}`} className="font-medium text-black-600 hover:underline">
+                      <Link to={`/candidates/${candidate.id}/${candidate.job_id}`} className="font-medium text-blue-600 hover:underline">
                         {candidate.name}
                       </Link>
                       <span className="text-xs text-gray-500">
@@ -803,40 +921,39 @@ const ClientCandidatesView = () => {
                           variant="outline"
                           className="bg-purple-100 text-purple-800 hover:bg-purple-200 rounded-full text-[10px]"
                         >
-                          {candidate?.applied_from ?? 'N/A'}
+                          {candidate?.applied_from ?? "N/A"}
                         </Badge>
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <HiddenContactCell
-                      email={candidate.email ?? 'N/A'}
-                      phone={candidate.phone ?? 'N/A'}
+                      email={candidate.email ?? "N/A"}
+                      phone={candidate.phone ?? "N/A"}
                       candidateId={candidate.id}
                       className="text-xs md:text-sm"
                     />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex flex-col">
-                      <Link to={`/jobs/${candidate.job_id}`} className="font-medium text-black-600 hover:underline">
-                        {candidate.job_title || 'Unknown'}
+                      <Link to={`/jobs/${candidate.job_id}`} className="font-medium text-blue-600 hover:underline">
+                        {candidate.job_title || "Unknown"}
                       </Link>
-                       
                       <span className="text-xs text-gray-500">
                         <Badge
                           variant="outline"
                           className="bg-purple-100 text-purple-800 hover:bg-purple-200 rounded-full text-[10px]"
                         >
-                          {candidate?.hr_jobs?.client_details?.pointOfContact?.trim() ?? 'N/A'}
+                          {candidate?.hr_jobs?.client_details?.pointOfContact?.trim() ?? "N/A"}
                         </Badge>
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden lg:table-cell">
-                    {candidate.experience || '-'}
+                    {candidate.experience || "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {candidate.joining_date ? `${formatDate(candidate.joining_date)} (${moment(candidate.joining_date).fromNow()})` : '-'}
+                    {candidate.joining_date ? `${formatDate(candidate.joining_date)} (${moment(candidate.joining_date).fromNow()})` : "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {isEmployee ? (
@@ -846,7 +963,7 @@ const ClientCandidatesView = () => {
                     ) : (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="transparent" className="h-8 px-2 py-0">
+                          <Button variant="ghost" className="h-8 px-2 py-0">
                             {statusUpdateLoading === candidate.id ? (
                               <Loader2 className="h-4 w-4 animate-spin mr-1" />
                             ) : (
@@ -881,11 +998,11 @@ const ClientCandidatesView = () => {
                       ? formatCurrency(parseSalary(candidate.ctc))
                       : candidate.expected_salary
                       ? formatCurrency(candidate.expected_salary)
-                      : '-'}
+                      : "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium hidden lg:table-cell">
-                    <span className={candidate.profit && candidate.profit > 0 ? 'text-green-600' : 'text-red-600'}>
-                      {candidate.profit ? formatCurrency(candidate.profit) : '-'}
+                    <span className={candidate.profit && candidate.profit > 0 ? "text-green-600" : "text-red-600"}>
+                      {candidate.profit ? formatCurrency(candidate.profit) : "-"}
                     </span>
                   </td>
                 </tr>
@@ -894,8 +1011,8 @@ const ClientCandidatesView = () => {
               <tr>
                 <td colSpan={8} className="px-6 py-8 text-center text-sm text-gray-500">
                   {searchTerm
-                    ? 'No candidates found matching your search.'
-                    : 'No candidates found for this client.'}
+                    ? "No candidates found matching your search."
+                    : "No candidates found for this client."}
                 </td>
               </tr>
             )}
@@ -906,14 +1023,12 @@ const ClientCandidatesView = () => {
     </div>
   );
 
-  console.log("employees", employees)
-
   const renderEmployeeTable = (employees: Employee[], title: string) => (
     <div className="w-full min-w-0">
       <h3 className="text-lg font-semibold mb-2">{title}</h3>
       <div className="md:hidden">
         {employees.length > 0 ? (
-          employees.map(employee => renderEmployeeCard(employee))
+          employees.map((employee) => renderEmployeeCard(employee))
         ) : (
           <Card className="p-4 text-center">
             <p className="text-sm">
@@ -944,50 +1059,48 @@ const ClientCandidatesView = () => {
                   </button>
                 </div>
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary (LPA)</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
-              {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th> */}
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Billing</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actual Revenue</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actual Profit</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {employees.length > 0 ? (
               employees.map((employee) => (
-                <tr key={`${employee.id}`} className="hover:bg-gray-50 transition">
+                <tr key={employee.id} className="hover:bg-gray-50 transition">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {employee.employee_name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {employee.project_name || 'Unknown'}
+                    {employee.project_name || "Unknown"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(employee.salary)}
+                    {employee.salary_formatted}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(employee.revenue_inr)}<br />
-                    {/* <span className="text-xs text-gray-500">
-                      $ {employee.revenue_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </span> */}
+                    {employee.billing_type_formatted}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <span className={employee.profit_inr >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {formatCurrency(employee.profit_inr)}<br />
-                      {/* <span className="text-xs text-gray-500">
-                        $ {employee.profit_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                      </span> */}
+                    {formatCurrency(employee.actual_revenue_inr)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <span className={employee.actual_profit_inr >= 0 ? "text-green-600" : "text-red-600"}>
+                      {formatCurrency(employee.actual_profit_inr)}
                     </span>
                   </td>
-                  {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {employee.currency}
-                  </td> */}
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
+                <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500">
                   {searchTerm
-                    ? 'No employees found matching your search.'
-                    : 'No employees assigned to projects for this client.'}
+                    ? "No employees found matching your search."
+                    : "No employees assigned to projects for this client."}
                 </td>
               </tr>
             )}
@@ -999,10 +1112,10 @@ const ClientCandidatesView = () => {
   );
 
   useEffect(() => {
-    if (clientName) {
+    if (clientName && organization_id) {
       fetchCandidatesAndEmployees(decodeURIComponent(clientName));
     }
-  }, [clientName]);
+  }, [clientName, organization_id]);
 
   return (
     <div className="w-full max-w-[95vw] py-2 sm:py-4 px-2 sm:px-4 lg:px-6">
@@ -1037,18 +1150,6 @@ const ClientCandidatesView = () => {
                 <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                   {formatCurrency(metrics.candidateRevenue + metrics.employeeRevenueINR)}
                 </p>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      {/* <p className="text-xs text-gray-500 mt-1">
-                        $ {((metrics.candidateRevenue + metrics.employeeRevenueINR) / USD_TO_INR_RATE_EMPLOYEES).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
-                      </p> */}
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Converted at 1 USD = ₹ {USD_TO_INR_RATE_EMPLOYEES}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
               </CardContent>
             </Card>
             <Card className="bg-green-50 border-green-200">
@@ -1062,18 +1163,6 @@ const ClientCandidatesView = () => {
                 <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
                   {formatCurrency(metrics.candidateProfit + metrics.employeeProfitINR)}
                 </p>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      {/* <p className="text-xs text-gray-500 mt-1">
-                        $ {((metrics.candidateProfit + metrics.employeeProfitINR) / USD_TO_INR_RATE_EMPLOYEES).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
-                      </p> */}
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Converted at 1 USD = ₹ {USD_TO_INR_RATE_EMPLOYEES}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
               </CardContent>
             </Card>
             <Card className="bg-blue-50 border-blue-200">
@@ -1105,7 +1194,7 @@ const ClientCandidatesView = () => {
           </div>
           {loading ? (
             <div className="flex justify-center py-6 sm:py-8">
-              <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-purple"></div>
+              <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-purple-600"></div>
             </div>
           ) : (
             <div className="flex flex-col md:flex-row gap-4">

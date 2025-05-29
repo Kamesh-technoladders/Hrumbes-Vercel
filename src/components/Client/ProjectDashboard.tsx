@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -43,17 +44,16 @@ import {
   Bar,
   XAxis,
   YAxis,
- 
+  Tooltip as RechartsTooltip,
   Legend,
 } from "recharts";
 import RevenueProfitChart from "../Client/RevenueProfitChart";
-
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +64,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as UICalendar } from "@/components/ui/calendar"; // Assuming available in your UI library
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, isSameDay, isWithinInterval } from "date-fns";
 
 interface AssignEmployee {
   id: string;
@@ -81,6 +85,7 @@ interface AssignEmployee {
   hr_employees?: {
     first_name: string;
     last_name: string;
+    salary_type: string;
   } | null;
 }
 
@@ -136,7 +141,9 @@ const ProjectDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [loading, setLoading] = useState(true);
-  const [calculationMode, setCalculationMode] = useState<"accrual" | "actual">("accrual");
+  const [calculationMode, setCalculationMode] = useState<"accrual" | "actual">("actual");
+ const [timePeriod, setTimePeriod] = useState<"week" | "month" | "year">("week");
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const user = useSelector((state: any) => state.auth.user);
   const organization_id = useSelector((state: any) => state.auth.organization_id);
@@ -195,7 +202,7 @@ const ProjectDashboard = () => {
           status,
           sow,
           billing_type,
-          hr_employees:hr_employees!hr_project_employees_assign_employee_fkey (first_name, last_name)
+          hr_employees:hr_employees!hr_project_employees_assign_employee_fkey (first_name, last_name, salary_type)
         `)
         .eq("project_id", id)
         .eq("organization_id", organization_id);
@@ -264,7 +271,33 @@ const ProjectDashboard = () => {
     loadingTimeLogs,
   ]);
 
-  // Calculate total hours per employee from time logs
+// Calculate total hours per employee from time logs with time filter
+  const calculateEmployeeHoursWithFilter = (employeeId: string, filter: "week" | "month" | "year") => {
+    const now = new Date();
+    let startDate: Date;
+
+    if (filter === "week") {
+      startDate = new Date(now.setDate(now.getDate() - 7));
+    } else if (filter === "month") {
+      startDate = new Date(now.setMonth(now.getMonth() - 1));
+    } else {
+      startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+    }
+
+    return timeLogs
+      .filter((log) => {
+        const logDate = new Date(log.date);
+        return log.employee_id === employeeId && logDate >= startDate;
+      })
+      .reduce((acc, log) => {
+        const projectEntry = log.project_time_data?.projects?.find(
+          (proj) => proj.projectId === id
+        );
+        return acc + (projectEntry?.hours || 0);
+      }, 0);
+  };
+
+  // Existing calculateEmployeeHours for table and other calculations
   const calculateEmployeeHours = (employeeId: string) => {
     return timeLogs
       .filter((log) => log.employee_id === employeeId)
@@ -276,45 +309,105 @@ const ProjectDashboard = () => {
       }, 0);
   };
 
+  // New function to calculate total hours by time interval
+  const calculateTotalHoursByInterval = (period: "week" | "month" | "year", referenceDate: Date) => {
+    let intervalStart: Date;
+    let intervalEnd: Date;
+    let data: { name: string; hours: number }[] = [];
+
+    if (period === "week") {
+      intervalStart = startOfWeek(referenceDate, { weekStartsOn: 1 }); // Monday start
+      intervalEnd = endOfWeek(referenceDate, { weekStartsOn: 1 });
+      const days = eachDayOfInterval({ start: intervalStart, end: intervalEnd });
+      data = days.map((day) => ({
+        name: format(day, "EEE"), // Mon, Tue, etc.
+        hours: timeLogs
+          .filter((log) => isSameDay(new Date(log.date), day))
+          .reduce((acc, log) => {
+            const projectEntry = log.project_time_data?.projects?.find(
+              (proj) => proj.projectId === id
+            );
+            return acc + (projectEntry?.hours || 0);
+          }, 0),
+      }));
+    } else if (period === "month") {
+      intervalStart = startOfMonth(referenceDate);
+      intervalEnd = endOfMonth(referenceDate);
+      const weeks = eachWeekOfInterval({ start: intervalStart, end: intervalEnd }, { weekStartsOn: 1 });
+      data = weeks.map((weekStart, index) => ({
+        name: `Week ${index + 1}`,
+        hours: timeLogs
+          .filter((log) => {
+            const logDate = new Date(log.date);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            return isWithinInterval(logDate, { start: weekStart, end: weekEnd });
+          })
+          .reduce((acc, log) => {
+            const projectEntry = log.project_time_data?.projects?.find(
+              (proj) => proj.projectId === id
+            );
+            return acc + (projectEntry?.hours || 0);
+          }, 0),
+      }));
+    } else {
+      intervalStart = startOfYear(referenceDate);
+      intervalEnd = endOfYear(referenceDate);
+      const months = eachMonthOfInterval({ start: intervalStart, end: intervalEnd });
+      data = months.map((month) => ({
+        name: format(month, "MMM"), // Jan, Feb, etc.
+        hours: timeLogs
+          .filter((log) => {
+            const logDate = new Date(log.date);
+            return logDate.getFullYear() === month.getFullYear() && logDate.getMonth() === month.getMonth();
+          })
+          .reduce((acc, log) => {
+            const projectEntry = log.project_time_data?.projects?.find(
+              (proj) => proj.projectId === id
+            );
+            return acc + (projectEntry?.hours || 0);
+          }, 0),
+      }));
+    }
+
+    return data;
+  };
+
   // Convert client_billing to LPA or per-hour for accrual and actual calculations
   const convertToLPA = (employee: AssignEmployee, mode: "accrual" | "actual") => {
     const client = clients.find((c) => c.id === employee.client_id);
     const currency = client?.currency || "INR";
     let clientBilling = employee.client_billing || 0;
 
-    // Convert USD to INR if necessary
     if (currency === "USD") {
       clientBilling *= EXCHANGE_RATE_USD_TO_INR;
     }
 
-    const durationDays = employee.duration || 1; // Fallback to 1 to avoid division by zero
-    const workingHours = durationDays * 8; // 8 hours per day
+    const durationDays = employee.duration || 1;
+    const workingHours = durationDays * 8;
 
     if (mode === "accrual") {
-      // Accrual calculation based on duration
       switch (employee.billing_type) {
         case "Monthly":
-          clientBilling = (clientBilling * 12 * durationDays) / 365; // Prorate monthly to duration
+          clientBilling = (clientBilling * 12 * durationDays) / 365;
           break;
         case "Hourly":
-          clientBilling *= workingHours; // Convert hourly to total for duration
+          clientBilling *= workingHours;
           break;
         case "LPA":
         default:
-          clientBilling = (clientBilling * durationDays) / 365; // Prorate LPA to duration
+          clientBilling = (clientBilling * durationDays) / 365;
           break;
       }
     } else {
-      // Actual calculation: return per-hour rate
       switch (employee.billing_type) {
         case "Monthly":
-          clientBilling = (clientBilling * 12) / (365 * 8); // Convert monthly to hourly
+          clientBilling = (clientBilling * 12) / (365 * 8);
           break;
         case "Hourly":
-          // Already in hourly rate
           break;
         case "LPA":
-          clientBilling = clientBilling / (365 * 8); // Convert LPA to hourly
+          clientBilling = clientBilling / (365 * 8);
           break;
         default:
           break;
@@ -339,16 +432,31 @@ const ProjectDashboard = () => {
   const calculateProfit = (employee: AssignEmployee, mode: "accrual" | "actual") => {
     const revenue = calculateRevenue(employee, mode);
     let salary = employee.salary || 0;
+    const salaryType = employee.hr_employees?.salary_type || "LPA";
 
     if (mode === "accrual") {
-      // Prorate salary based on duration
       const durationDays = employee.duration || 1;
-      salary = (salary * durationDays) /  365; // Convert yearly salary to duration
+
+      if (salaryType === "LPA") {
+        salary = (salary * durationDays) / 365;
+      } else if (salaryType === "Monthly") {
+        const monthlyToDaily = salary / 30;
+        salary = monthlyToDaily * durationDays;
+      } else if (salaryType === "Hourly") {
+        salary = salary * durationDays * 8;
+      }
     } else {
-      // Prorate salary based on hours worked
       const hours = calculateEmployeeHours(employee.assign_employee);
-      const hourlySalary = salary / ( 365 * 8); // Convert yearly to hourly
-      salary = hours * hourlySalary;
+
+      if (salaryType === "LPA") {
+        const hourlySalary = salary / (365 * 8);
+        salary = hours * hourlySalary;
+      } else if (salaryType === "Monthly") {
+        const monthlyToHourly = (salary / 30) / 8;
+        salary = hours * monthlyToHourly;
+      } else if (salaryType === "Hourly") {
+        salary = hours * salary;
+      }
     }
 
     return revenue - salary;
@@ -531,7 +639,7 @@ const ProjectDashboard = () => {
                   Client Billing
                 </th>
                 <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
-                  Profit
+                  {calculationMode === "accrual" ? "Estimated Profit" : "Actual Profit"}
                 </th>
                 <th scope="col" className="px-4 py-2 text-left text-sm font-medium text-gray-500">
                   Status
@@ -562,28 +670,35 @@ const ProjectDashboard = () => {
                   )}
                   <td className="px-4 py-2">{formatINR(employee.salary)}</td>
                   <td className="px-4 py-2">
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <span className="cursor-pointer">
-        {(() => {
-          const client = clients.find((c) => c.id === employee.client_id);
-          const currency = client?.currency || "INR";
-          const clientBilling = employee.client_billing || 0;
-          const billingType = employee.billing_type || "LPA";
-          
-          // Format currency symbol and billing type
-          const currencySymbol = currency === "USD" ? "$" : "₹";
-          const billingTypeText = billingType === "Hourly" ? "/hr" : billingType === "Monthly" ? "/month" : "/year";
-          
-          return `${currencySymbol}${clientBilling.toLocaleString('en-IN')}${billingTypeText}`;
-        })()}
-      </span>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>{formatINR(calculateRevenue(employee, calculationMode))}</p>
-    </TooltipContent>
-  </Tooltip>
-</td>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-pointer">
+                          {(() => {
+                            const client = clients.find((c) => c.id === employee.client_id);
+                            const currency = client?.currency || "INR";
+                            const clientBilling = employee.client_billing || 0;
+                            const billingType = employee.billing_type || "LPA";
+                            const currencySymbol = currency === "USD" ? "$" : "₹";
+                            const billingTypeText = billingType === "Hourly" ? "/hr" : billingType === "Monthly" ? "/month" : "/year";
+                            return `${currencySymbol}${clientBilling.toLocaleString('en-IN')}${billingTypeText}`;
+                          })()}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>
+                          {(() => {
+                            const client = clients.find((c) => c.id === employee.client_id);
+                            const currency = client?.currency || "INR";
+                            const clientBilling = employee.client_billing || 0;
+                            const billingType = employee.billing_type || "LPA";
+                            const convertedBilling = currency === "USD" ? clientBilling * EXCHANGE_RATE_USD_TO_INR : clientBilling;
+                            const billingTypeText = billingType === "Hourly" ? "/hr" : billingType === "Monthly" ? "/month" : "/year";
+                            return `₹${convertedBilling.toLocaleString('en-IN')}${billingTypeText}`;
+                          })()}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </td>
                   <td className="px-4 py-2">{formatINR(calculateProfit(employee, calculationMode))}</td>
                   <td className="px-4 py-2">
                     <Select
@@ -763,8 +878,8 @@ const ProjectDashboard = () => {
             className="mb-6"
           >
             <TabsList className="grid grid-cols-2 w-[200px]">
-              <TabsTrigger value="accrual">Accrual</TabsTrigger>
               <TabsTrigger value="actual">Actual</TabsTrigger>
+              <TabsTrigger value="accrual">Accrual</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -855,18 +970,67 @@ const ProjectDashboard = () => {
                 >
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(value: number) => formatINR(value)} />
+                  <RechartsTooltip formatter={(value: number) => formatINR(value)} />
                   <Legend />
-                  <Bar dataKey="revenue" fill="#3b82f6" name="Client Billing" radius={[5, 5, 0, 0]} />
+                  <Bar dataKey="revenue" fill="#3b82f6" name="Revenue" radius={[5, 5, 0, 0]} />
                   <Bar dataKey="salary" fill="#10b981" name="Salary" radius={[5, 5, 0, 0]} />
                   <Bar dataKey="profit" fill="#f59e0b" name="Profit" radius={[5, 5, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
-            <Card className="p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center">
-              <h2 className="text-lg sm:text-xl font-semibold mb-4">Revenue vs Profit</h2>
-              <RevenueProfitChart revenue={totalRevenue} profit={totalProfit} />
-            </Card>
+            {calculationMode === "actual" ? (
+              <Card className="p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg sm:text-xl font-semibold">Logged Hours</h2>
+                  <div className="flex items-center gap-2">
+                    <Select value={timePeriod} onValueChange={(value) => setTimePeriod(value as "week" | "month" | "year")}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="week">Week</SelectItem>
+                        <SelectItem value="month">Month</SelectItem>
+                        <SelectItem value="year">Year</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-[170px] justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(selectedDate, timePeriod === "week" ? "'Week of' MMM d, yyyy" : timePeriod === "month" ? "MMM yyyy" : "yyyy")}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <UICalendar
+                          mode={timePeriod === "year" ? "year" : "default"}
+                          selected={selectedDate}
+                          onSelect={(date) => date && setSelectedDate(date)}
+                          initialFocus
+                          disabled={(date) => date > new Date()}
+                          {...(timePeriod === "year" ? { views: ["year"] } : {})}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={calculateTotalHoursByInterval(timePeriod, selectedDate)}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} label={{ value: "Hours", angle: -90, position: "insideLeft" }} />
+                    <RechartsTooltip formatter={(value: number) => `${value.toFixed(2)} hours`} />
+                    <Bar dataKey="hours" fill="#6b7280" name="Logged Hours" radius={[5, 5, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            ) : (
+              <Card className="p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center">
+                <h2 className="text-lg sm:text-xl font-semibold mb-4">Revenue vs Profit</h2>
+                <RevenueProfitChart revenue={totalRevenue} profit={totalProfit} />
+              </Card>
+            )}
           </div>
 
           {/* Table Section */}

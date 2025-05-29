@@ -1,170 +1,170 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Minus } from "lucide-react";
 import { Project } from "@/types/project-types";
-import { ProjectAllocationItem } from "./ProjectAllocationItem";
 import { FormSectionHeader } from "./FormSectionHeader";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface ProjectAllocationFormProps {
-  multipleProjects: { projectId: string; hours: number; clientId?: string }[];
-  setMultipleProjects: React.Dispatch<React.SetStateAction<{ projectId: string; hours: number; clientId?: string }[]>>;
+  date: Date;
+  setDate: (date: Date) => void;
+  projectEntries: { projectId: string; hours: number; report: string }[];
+  setProjectEntries: React.Dispatch<React.SetStateAction<{ projectId: string; hours: number; report: string }[]>>;
   projects: Project[];
-  totalAllocatedHours: number;
-  actualWorkingHours: number;
   updateProjectTimeAllocation?: (projectId: string, hours: number) => void;
-  projectReports?: { [key: string]: string };
   updateProjectReport?: (projectId: string, report: string) => void;
   employeeId: string;
   hrProjectEmployees: any[];
 }
 
 export const ProjectAllocationForm = ({
-  multipleProjects,
-  setMultipleProjects,
+  date,
+  setDate,
+  projectEntries,
+  setProjectEntries,
   projects,
-  totalAllocatedHours,
-  actualWorkingHours,
   updateProjectTimeAllocation,
-  projectReports = {},
   updateProjectReport,
   employeeId,
   hrProjectEmployees,
 }: ProjectAllocationFormProps) => {
+  const [expandedReports, setExpandedReports] = useState<{ [key: string]: boolean }>({});
+
   const filteredProjects = useMemo(() => {
     const assignedProjectIds = hrProjectEmployees
-      .filter((pe) => pe.assign_employee === employeeId)
+      .filter((pe) => pe?.assign_employee === employeeId)
       .map((pe) => pe.project_id);
     return projects.filter((project) => assignedProjectIds.includes(project.id));
   }, [projects, hrProjectEmployees, employeeId]);
 
-  const handleAddProject = () => {
-    if (!multipleProjects.some((p) => !p.projectId)) {
-      setMultipleProjects([...multipleProjects, { projectId: "", hours: 0, clientId: "" }]);
-    }
-  };
-
-  const handleRemoveProject = (index: number) => {
-    const newProjects = [...multipleProjects];
-    const removedProject = newProjects[index];
-
-    if (updateProjectTimeAllocation && removedProject.projectId) {
-      updateProjectTimeAllocation(removedProject.projectId, 0);
-    }
-
-    newProjects.splice(index, 1);
-    setMultipleProjects(newProjects);
-
-    if (newProjects.length === 0) {
-      setMultipleProjects([{ projectId: "", hours: 0, clientId: "" }]);
-    }
-  };
-
-  const handleProjectChange = (index: number, projectId: string) => {
-    const newProjects = [...multipleProjects];
-    if (updateProjectTimeAllocation && newProjects[index].projectId) {
-      updateProjectTimeAllocation(newProjects[index].projectId, 0);
-    }
-
-    const projectEmployee = hrProjectEmployees.find(
-      (pe) => pe.project_id === projectId && pe.assign_employee === employeeId
-    );
-    newProjects[index].projectId = projectId;
-    newProjects[index].clientId = projectEmployee?.client_id || "";
-    setMultipleProjects(newProjects);
-  };
-
-  const handleHoursChange = (index: number, hours: string) => {
-    const numericHours = parseFloat(hours) || 0;
-    const newProjects = [...multipleProjects];
-    newProjects[index].hours = numericHours;
-    setMultipleProjects(newProjects);
-
-    if (updateProjectTimeAllocation && newProjects[index].projectId) {
-      updateProjectTimeAllocation(newProjects[index].projectId, numericHours);
-    }
-  };
-
-  const selectedProjectIds = multipleProjects
-    .filter((p) => p.projectId)
-    .map((p) => p.projectId);
-
+  // Initialize projectEntries with all filtered projects if empty
   React.useEffect(() => {
-    if (multipleProjects.length === 0) {
-      setMultipleProjects([{ projectId: "", hours: 0, clientId: "" }]);
+    if (projectEntries.length === 0 && filteredProjects.length > 0) {
+      const initialEntries = filteredProjects.map((project) => ({
+        projectId: project.id,
+        hours: 0,
+        report: "",
+      }));
+      setProjectEntries(initialEntries);
     }
-  }, []);
+  }, [filteredProjects, projectEntries.length, setProjectEntries]);
+
+  const totalProjectHours = projectEntries.reduce((sum, entry) => sum + entry.hours, 0);
+
+  const handleHoursChange = (projectId: string, hours: string) => {
+    const numericHours = hours === "" ? 0 : parseFloat(hours) || 0;
+    const newEntries = projectEntries.map((entry) =>
+      entry.projectId === projectId ? { ...entry, hours: numericHours } : entry
+    );
+    setProjectEntries(newEntries);
+
+    if (updateProjectTimeAllocation) {
+      updateProjectTimeAllocation(projectId, numericHours);
+    }
+  };
+
+  const handleReportChange = (projectId: string, report: string) => {
+    const newEntries = projectEntries.map((entry) =>
+      entry.projectId === projectId ? { ...entry, report } : entry
+    );
+    setProjectEntries(newEntries);
+
+    if (updateProjectReport) {
+      updateProjectReport(projectId, report);
+    }
+  };
+
+  const toggleReport = (projectId: string) => {
+    setExpandedReports((prev) => ({
+      ...prev,
+      [projectId]: !prev[projectId],
+    }));
+  };
 
   return (
     <div className="space-y-4">
+      <div>
+        <Label htmlFor="date">Date</Label>
+        <Input
+          id="date"
+          type="date"
+          value={date.toISOString().split('T')[0]}
+          onChange={(e) => setDate(new Date(e.target.value))}
+        />
+      </div>
+
       <div className="flex justify-between items-center">
         <FormSectionHeader title="Project Allocation" required={true} />
         <div className="text-sm">
           Total Hours:{" "}
           <span
-            className={totalAllocatedHours > actualWorkingHours ? "text-red-500 font-bold" : "font-medium"}
+            className={totalProjectHours > 8 ? "text-red-500 font-bold" : "font-medium"}
           >
-            {totalAllocatedHours} / {actualWorkingHours}
+            {totalProjectHours} / 8
           </span>
         </div>
       </div>
 
-      {multipleProjects.map((project, index) => (
-        <div key={index} className="border rounded-md p-4 space-y-3">
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="font-medium">Project {index + 1}</h4>
-            {multipleProjects.length > 1 && (
+      {filteredProjects.map((project, index) => {
+        const entry = projectEntries.find((e) => e.projectId === project.id) || {
+          projectId: project.id,
+          hours: 0,
+          report: "",
+        };
+        const isReportExpanded = expandedReports[project.id] || false;
+
+        return (
+          <div key={project.id} className="border rounded-md p-4 space-y-3">
+            <div className="flex items-center gap-4">
+              <h4 className="font-medium flex-1">{project.name || `Project ${index + 1}`}</h4>
+              <div className="w-32">
+                <Input
+                  id={`hours-${project.id}`}
+                  type="number"
+                  min="0"
+                  max="24"
+                  step="0.5"
+                  value={entry.hours === 0 && !entry.hours.toString() ? "" : entry.hours}
+                  onChange={(e) => handleHoursChange(project.id, e.target.value)}
+                  placeholder="Hours"
+                  className="h-8"
+                />
+              </div>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => handleRemoveProject(index)}
-                className="h-8 px-2 text-red-500"
+                onClick={() => toggleReport(project.id)}
+                className="h-8 px-2"
               >
-                <Trash2 className="h-4 w-4" />
+                {isReportExpanded ? (
+                  <Minus className="h-4 w-4" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
               </Button>
+            </div>
+
+            {isReportExpanded && (
+              <div>
+                <Label htmlFor={`project-report-${project.id}`}>Work Summary</Label>
+                <Textarea
+                  id={`project-report-${project.id}`}
+                  value={entry.report}
+                  onChange={(e) => handleReportChange(project.id, e.target.value)}
+                  placeholder="Describe what you worked on for this project"
+                  className="mt-1 min-h-[80px]"
+                />
+              </div>
             )}
           </div>
+        );
+      })}
 
-          <ProjectAllocationItem
-            index={index}
-            project={project}
-            allProjects={filteredProjects}
-            selectedProjectIds={selectedProjectIds}
-            onRemove={() => handleRemoveProject(index)}
-            onProjectChange={(projectId) => handleProjectChange(index, projectId)}
-            onHoursChange={(hours) => handleHoursChange(index, hours)}
-          />
-
-          {project.projectId && updateProjectReport && (
-            <div className="mt-3">
-              <Label htmlFor={`project-report-${index}`}>Project Work Report</Label>
-              <Textarea
-                id={`project-report-${index}`}
-                value={projectReports[project.projectId] || ""}
-                onChange={(e) => updateProjectReport(project.projectId, e.target.value)}
-                placeholder="Describe what you worked on for this project"
-                className="mt-1 min-h-[80px]"
-              />
-            </div>
-          )}
-        </div>
-      ))}
-
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleAddProject}
-        disabled={multipleProjects.some((p) => !p.projectId) || selectedProjectIds.length >= filteredProjects.length}
-        className="w-full"
-      >
-        <Plus className="h-4 w-4 mr-2" />
-        Add Another Project
-      </Button>
-
-      {totalAllocatedHours > actualWorkingHours && (
+      {totalProjectHours > 8 && (
         <p className="text-sm text-red-500">
-          Total allocated time exceeds the actual working hours. Please adjust your allocations.
+          Total hours exceed 8 hours. Please adjust your allocations.
         </p>
       )}
     </div>
