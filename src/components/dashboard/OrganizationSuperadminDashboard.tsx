@@ -213,7 +213,7 @@ function OrganizationSuperadminDashboard() {
         Organization SuperAdmin Dashboard
       </h1>
 
-      <div className="w-full max-w-7xl mx-auto space-y-8">
+      <div className="w-full max-w-9xl mx-auto space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Bar Chart: Resumes Analyzed by Recruiter */}
           <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">

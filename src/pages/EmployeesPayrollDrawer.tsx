@@ -70,8 +70,8 @@ interface EmployeesPayrollDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   selectedEmployee: { id: string; employee_id: string; first_name: string; last_name: string; position?: string; joining_date?: string; payment_id?: string } | null;
-  month?: string; // Add month prop
-  year?: string; // Add year prop
+  month?: string;
+  year?: string;
 }
 
 interface CTCFormData {
@@ -82,6 +82,16 @@ interface CTCFormData {
   conveyanceAllowance: string;
   fixedAllowance: string;
 }
+
+const formatINR = (value: number, options: { decimals?: number; showSymbol?: boolean } = { decimals: 2, showSymbol: true }) => {
+  const { decimals, showSymbol } = options;
+  return value.toLocaleString('en-IN', {
+    style: showSymbol ? 'currency' : undefined,
+    currency: showSymbol ? 'INR' : undefined,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
 
 const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year }: EmployeesPayrollDrawerProps) => {
   const [activeTab, setActiveTab] = useState("details");
@@ -179,7 +189,6 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
 
     setLoading(true);
     try {
-      // Fetch the specific payment record using payment_id
       const { data: paymentData, error: paymentError } = await supabase
         .from("payment_records")
         .select("*")
@@ -218,7 +227,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
           employee_name: paymentData.employee_name,
           designation: paymentData.designation,
           joining_date: paymentData.joining_date,
-          payment_date: paymentData.payment_date,
+          payment_date: new Date(paymentData.payment_date).toISOString().split("T")[0],
           payment_amount: paymentData.payment_amount,
           payslipEnabled: earningsData?.payslipEnabled || false,
           status: paymentData.status,
@@ -255,16 +264,15 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             ? ((earningsData.basic_salary / earningsData.total_earnings) * 100).toFixed(2)
             : '40';
           setCtcFormData({
-            ctc: monthlyCTC.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+            ctc: formatINR(monthlyCTC, { decimals: 0, showSymbol: false }),
             basicPayPercentage: inferredBasicPayPercentage,
-            basicPay: Number(earningsData.basic_salary).toFixed(2),
-            hra: Number(earningsData.house_rent_allowance).toFixed(2),
-            conveyanceAllowance: Number(earningsData.conveyance_allowance).toFixed(2),
-            fixedAllowance: Number(earningsData.fixed_allowance).toFixed(2),
+            basicPay: formatINR(earningsData.basic_salary || 0, { decimals: 2, showSymbol: false }),
+            hra: formatINR(earningsData.house_rent_allowance || 0, { decimals: 2, showSymbol: false }),
+            conveyanceAllowance: formatINR(earningsData.conveyance_allowance || 0, { decimals: 2, showSymbol: false }),
+            fixedAllowance: formatINR(earningsData.fixed_allowance || 0, { decimals: 2, showSymbol: false }),
           });
         }
       } else {
-        // If no record is found for the specific payment_id, reset to defaults
         toast.error("No payment record found for this month.");
         setPaymentRecord({
           employee_id: selectedEmployee.employee_id,
@@ -299,7 +307,6 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
         });
       }
 
-      // Fetch the previous payment record to determine if this is an appraisal
       const { data: previousPaymentData, error: previousPaymentError } = await supabase
         .from("payment_records")
         .select("payment_amount")
@@ -357,10 +364,10 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
     setCtcFormData(prev => ({
       ...prev,
       ctc: value,
-      basicPay: newBasicPay.toFixed(2),
-      hra: hra.toFixed(2),
-      conveyanceAllowance: conveyanceAllowance.toFixed(2),
-      fixedAllowance: fixedAllowance.toFixed(2),
+      basicPay: formatINR(newBasicPay, { decimals: 2, showSymbol: false }),
+      hra: formatINR(hra, { decimals: 2, showSymbol: false }),
+      conveyanceAllowance: formatINR(conveyanceAllowance, { decimals: 2, showSymbol: false }),
+      fixedAllowance: formatINR(fixedAllowance, { decimals: 2, showSymbol: false }),
     }));
 
     setPaymentRecord(prev => {
@@ -388,10 +395,10 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
     setCtcFormData(prev => ({
       ...prev,
       basicPayPercentage: value,
-      basicPay: newBasicPay.toFixed(2),
-      hra: hra.toFixed(2),
-      conveyanceAllowance: conveyanceAllowance.toFixed(2),
-      fixedAllowance: fixedAllowance.toFixed(2),
+      basicPay: formatINR(newBasicPay, { decimals: 2, showSymbol: false }),
+      hra: formatINR(hra, { decimals: 2, showSymbol: false }),
+      conveyanceAllowance: formatINR(conveyanceAllowance, { decimals: 2, showSymbol: false }),
+      fixedAllowance: formatINR(fixedAllowance, { decimals: 2, showSymbol: false }),
     }));
 
     setPaymentRecord(prev => {
@@ -421,11 +428,41 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
       fixedAllowance = Math.max(0, fixedAllowance - 1800);
     }
 
-    const totalEarnings = Number((
+    const totalStandardEarnings = Number((
       (earnings.basic_salary || 0) +
       (earnings.house_rent_allowance || 0) +
       (earnings.conveyance_allowance || 0) +
       fixedAllowance
+    ).toFixed(2));
+
+    const paidDays = deductions.paid_days || 30;
+    const lopDays = deductions.lop_days || 0;
+    let adjustedBasicPay = earnings.basic_salary || 0;
+    let adjustedHra = earnings.house_rent_allowance || 0;
+    let adjustedConveyance = earnings.conveyance_allowance || 0;
+    let adjustedFixedAllowance = fixedAllowance;
+    let lopDeduction = 0;
+
+    if (lopDays > 0 && paidDays > 0 && totalStandardEarnings > 0) {
+      const totalWorkingDays = paidDays + lopDays;
+      const perDaySalary = totalStandardEarnings / totalWorkingDays;
+      lopDeduction = perDaySalary * lopDays;
+      const basicProportion = earnings.basic_salary / totalStandardEarnings;
+      const hraProportion = earnings.house_rent_allowance / totalStandardEarnings;
+      const conveyanceProportion = earnings.conveyance_allowance / totalStandardEarnings;
+      const fixedAllowanceProportion = fixedAllowance / totalStandardEarnings;
+
+      adjustedBasicPay = earnings.basic_salary - (lopDeduction * basicProportion);
+      adjustedHra = earnings.house_rent_allowance - (lopDeduction * hraProportion);
+      adjustedConveyance = earnings.conveyance_allowance - (lopDeduction * conveyanceProportion);
+      adjustedFixedAllowance = fixedAllowance - (lopDeduction * fixedAllowanceProportion);
+    }
+
+    const totalEarnings = Number((
+      adjustedBasicPay +
+      adjustedHra +
+      adjustedConveyance +
+      adjustedFixedAllowance
     ).toFixed(2));
 
     const totalCustomDeductions = Number(currentCustomDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0).toFixed(2));
@@ -445,15 +482,19 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
         payment_amount: netPay,
         earnings: {
           ...earnings,
+          basic_salary: adjustedBasicPay,
+          house_rent_allowance: adjustedHra,
+          conveyance_allowance: adjustedConveyance,
+          fixed_allowance: adjustedFixedAllowance,
           total_earnings: totalEarnings,
           gross_earnings: totalEarnings,
-          fixed_allowance: fixedAllowance,
         },
         deductions: { ...deductions, total_deductions: totalDeductions },
       },
-      formattedGrossEarnings: totalEarnings.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      formattedTotalDeductions: totalDeductions.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      formattedNetPay: netPay.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      formattedGrossEarnings: formatINR(totalEarnings),
+      formattedTotalDeductions: formatINR(totalDeductions),
+      formattedLopDeduction: formatINR(lopDeduction),
+      formattedNetPay: formatINR(netPay),
     };
   };
 
@@ -489,9 +530,9 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
         updatedRecord.payslipEnabled = value;
         setCtcFormData(prevCtc => ({
           ...prevCtc,
-          hra: hra.toFixed(2),
-          conveyanceAllowance: conveyanceAllowance.toFixed(2),
-          fixedAllowance: fixedAllowance.toFixed(2),
+          hra: formatINR(hra, { decimals: 2, showSymbol: false }),
+          conveyanceAllowance: formatINR(conveyanceAllowance, { decimals: 2, showSymbol: false }),
+          fixedAllowance: formatINR(fixedAllowance, { decimals: 2, showSymbol: false }),
         }));
       }
 
@@ -535,10 +576,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
           })
           .eq("id", paymentId);
 
-        if (paymentError) {
-          console.error("Payment Records Update Error:", paymentError);
-          throw new Error(`Failed to update payment_records: ${paymentError.message}`);
-        }
+        if (paymentError) throw new Error(`Failed to update payment_records: ${paymentError.message}`);
 
         const { data: existingEarnings, error: fetchEarningsError } = await supabase
           .from("payment_earnings")
@@ -546,10 +584,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
           .eq("payment_id", paymentId)
           .maybeSingle();
 
-        if (fetchEarningsError) {
-          console.error("Fetch Earnings Error:", fetchEarningsError);
-          throw new Error(`Failed to fetch payment_earnings: ${fetchEarningsError.message}`);
-        }
+        if (fetchEarningsError) throw new Error(`Failed to fetch payment_earnings: ${fetchEarningsError.message}`);
 
         const earningsData = {
           payment_id: paymentId,
@@ -583,19 +618,13 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             })
             .eq("payment_id", paymentId);
 
-          if (earningsError) {
-            console.error("Payment Earnings Update Error:", earningsError);
-            throw new Error(`Failed to update payment_earnings: ${earningsError.message}`);
-          }
+          if (earningsError) throw new Error(`Failed to update payment_earnings: ${earningsError.message}`);
         } else {
           const { error: earningsError } = await supabase
             .from("payment_earnings")
             .insert(earningsData);
 
-          if (earningsError) {
-            console.error("Payment Earnings Insert Error:", earningsError);
-            throw new Error(`Failed to insert payment_earnings: ${earningsError.message}`);
-          }
+          if (earningsError) throw new Error(`Failed to insert payment_earnings: ${earningsError.message}`);
         }
 
         const { data: existingDeductions, error: fetchDeductionsError } = await supabase
@@ -604,10 +633,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
           .eq("payment_id", paymentId)
           .maybeSingle();
 
-        if (fetchDeductionsError) {
-          console.error("Fetch Deductions Error:", fetchDeductionsError);
-          throw new Error(`Failed to fetch payment_deductions: ${fetchDeductionsError.message}`);
-        }
+        if (fetchDeductionsError) throw new Error(`Failed to fetch payment_deductions: ${fetchDeductionsError.message}`);
 
         const deductionsData = {
           payment_id: paymentId,
@@ -637,19 +663,13 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             })
             .eq("payment_id", paymentId);
 
-          if (deductionsError) {
-            console.error("Payment Deductions Update Error:", deductionsError);
-            throw new Error(`Failed to update payment_deductions: ${deductionsError.message}`);
-          }
+          if (deductionsError) throw new Error(`Failed to update payment_deductions: ${deductionsError.message}`);
         } else {
           const { error: deductionsError } = await supabase
             .from("payment_deductions")
             .insert(deductionsData);
 
-          if (deductionsError) {
-            console.error("Payment Deductions Insert Error:", deductionsError);
-            throw new Error(`Failed to insert payment_deductions: ${deductionsError.message}`);
-          }
+          if (deductionsError) throw new Error(`Failed to insert payment_deductions: ${deductionsError.message}`);
         }
 
         const { error: deleteCustomDeductionsError } = await supabase
@@ -657,10 +677,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
           .delete()
           .eq("payment_id", paymentId);
 
-        if (deleteCustomDeductionsError) {
-          console.error("Custom Deductions Delete Error:", deleteCustomDeductionsError);
-          throw new Error(`Failed to delete payment_custom_deductions: ${deleteCustomDeductionsError.message}`);
-        }
+        if (deleteCustomDeductionsError) throw new Error(`Failed to delete payment_custom_deductions: ${deleteCustomDeductionsError.message}`);
 
         if (customDeductions.length > 0) {
           const customDeductionsToInsert = customDeductions.map((ded) => ({
@@ -674,10 +691,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             .from("payment_custom_deductions")
             .insert(customDeductionsToInsert);
 
-          if (customDeductionsError) {
-            console.error("Custom Deductions Insert Error:", customDeductionsError);
-            throw new Error(`Failed to insert payment_custom_deductions: ${customDeductionsError.message}`);
-          }
+          if (customDeductionsError) throw new Error(`Failed to insert payment_custom_deductions: ${customDeductionsError.message}`);
         }
 
         if (isAppraisal && previousPaymentAmount !== null && paymentId) {
@@ -695,10 +709,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
               last_updated_by: "EmployeesPayrollDrawer",
             });
 
-          if (appraisalError) {
-            console.error("Appraisal Records Insert Error:", appraisalError);
-            throw new Error(`Failed to insert appraisal_records: ${appraisalError.message}`);
-          }
+          if (appraisalError) throw new Error(`Failed to insert appraisal_records: ${appraisalError.message}`);
         }
 
         toast.success("Payment record updated successfully");
@@ -721,16 +732,11 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
           .select()
           .single();
 
-        if (paymentError) {
-          console.error("Payment Records Insert Error:", paymentError);
-          throw new Error(`Failed to insert payment_records: ${paymentError.message}`);
-        }
+        if (paymentError) throw new Error(`Failed to insert payment_records: ${paymentError.message}`);
 
-        paymentId = newPayment.id;
+        const paymentId = newPayment.id;
 
-        if (!paymentId) {
-          throw new Error("Failed to retrieve paymentId after inserting payment_records");
-        }
+        if (!paymentId) throw new Error("Failed to retrieve paymentId after inserting payment_records");
 
         const { error: earningsError } = await supabase
           .from("payment_earnings")
@@ -749,10 +755,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             updated_at: currentTimestamp,
           });
 
-        if (earningsError) {
-          console.error("Payment Earnings Insert Error:", earningsError);
-          throw new Error(`Failed to insert payment_earnings: ${earningsError.message}`);
-        }
+        if (earningsError) throw new Error(`Failed to insert payment_earnings: ${earningsError.message}`);
 
         const { error: deductionsError } = await supabase
           .from("payment_deductions")
@@ -769,10 +772,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             updated_at: currentTimestamp,
           });
 
-        if (deductionsError) {
-          console.error("Payment Deductions Insert Error:", deductionsError);
-          throw new Error(`Failed to insert payment_deductions: ${deductionsError.message}`);
-        }
+        if (deductionsError) throw new Error(`Failed to insert payment_deductions: ${deductionsError.message}`);
 
         if (customDeductions.length > 0) {
           const customDeductionsToInsert = customDeductions.map((ded) => ({
@@ -786,10 +786,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             .from("payment_custom_deductions")
             .insert(customDeductionsToInsert);
 
-          if (customDeductionsError) {
-            console.error("Custom Deductions Insert Error:", customDeductionsError);
-            throw new Error(`Failed to insert payment_custom_deductions: ${customDeductionsError.message}`);
-          }
+          if (customDeductionsError) throw new Error(`Failed to insert payment_custom_deductions: ${customDeductionsError.message}`);
         }
 
         if (isAppraisal && previousPaymentAmount !== null && paymentId) {
@@ -807,10 +804,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
               last_updated_by: "EmployeesPayrollDrawer",
             });
 
-          if (appraisalError) {
-            console.error("Appraisal Records Insert Error:", appraisalError);
-            throw new Error(`Failed to insert appraisal_records: ${appraisalError.message}`);
-          }
+          if (appraisalError) throw new Error(`Failed to insert appraisal_records: ${appraisalError.message}`);
         }
 
         toast.success("Payment record created successfully");
@@ -849,7 +843,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
     }
   };
 
-  const { formattedGrossEarnings, formattedTotalDeductions, formattedNetPay } = calculateTotals(paymentRecord, customDeductions);
+  const { formattedGrossEarnings, formattedTotalDeductions, formattedLopDeduction, formattedNetPay } = calculateTotals(paymentRecord, customDeductions);
 
   if (!selectedEmployee) return null;
 
@@ -992,7 +986,6 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="basicSalary">Basic Salary</Label>
                     <Input
                       id="basicSalary"
-                      type="number"
                       value={ctcFormData.basicPay}
                       readOnly
                       className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
@@ -1002,7 +995,6 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="hra">House Rent Allowance</Label>
                     <Input
                       id="hra"
-                      type="number"
                       value={ctcFormData.hra}
                       readOnly
                       className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
@@ -1012,7 +1004,6 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="conveyanceAllowance">Conveyance Allowance</Label>
                     <Input
                       id="conveyanceAllowance"
-                      type="number"
                       value={ctcFormData.conveyanceAllowance}
                       readOnly
                       className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
@@ -1022,7 +1013,6 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="fixedAllowance">Fixed Allowance</Label>
                     <Input
                       id="fixedAllowance"
-                      type="number"
                       value={ctcFormData.fixedAllowance}
                       readOnly
                       className="bg-gray-100 font-mono focus:ring-primary focus:border-primary"
@@ -1046,9 +1036,8 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="providentFund">Provident Fund</Label>
                     <Input
                       id="providentFund"
-                      type="number"
-                      value={Number(paymentRecord.deductions.provident_fund).toFixed(2)}
-                      onChange={(e) => handleInputChange("provident_fund", Number(e.target.value), "deductions")}
+                      value={formatINR(paymentRecord.deductions.provident_fund, { decimals: 2, showSymbol: false })}
+                      onChange={(e) => handleInputChange("provident_fund", parseCurrencyToNumber(e.target.value), "deductions")}
                       className="font-mono focus:ring-primary focus:border-primary"
                     />
                   </div>
@@ -1056,9 +1045,8 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="professionalTax">Professional Tax</Label>
                     <Input
                       id="professionalTax"
-                      type="number"
-                      value={Number(paymentRecord.deductions.professional_tax).toFixed(2)}
-                      onChange={(e) => handleInputChange("professional_tax", Number(e.target.value), "deductions")}
+                      value={formatINR(paymentRecord.deductions.professional_tax, { decimals: 2, showSymbol: false })}
+                      onChange={(e) => handleInputChange("professional_tax", parseCurrencyToNumber(e.target.value), "deductions")}
                       className="font-mono focus:ring-primary focus:border-primary"
                     />
                   </div>
@@ -1066,9 +1054,8 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="incomeTax">Income Tax</Label>
                     <Input
                       id="incomeTax"
-                      type="number"
-                      value={Number(paymentRecord.deductions.income_tax).toFixed(2)}
-                      onChange={(e) => handleInputChange("income_tax", Number(e.target.value), "deductions")}
+                      value={formatINR(paymentRecord.deductions.income_tax, { decimals: 2, showSymbol: false })}
+                      onChange={(e) => handleInputChange("income_tax", parseCurrencyToNumber(e.target.value), "deductions")}
                       className="font-mono focus:ring-primary focus:border-primary"
                     />
                   </div>
@@ -1076,9 +1063,8 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                     <Label htmlFor="loanDeduction">Loan Deduction</Label>
                     <Input
                       id="loanDeduction"
-                      type="number"
-                      value={Number(paymentRecord.deductions.loan_deduction).toFixed(2)}
-                      onChange={(e) => handleInputChange("loan_deduction", Number(e.target.value), "deductions")}
+                      value={formatINR(paymentRecord.deductions.loan_deduction, { decimals: 2, showSymbol: false })}
+                      onChange={(e) => handleInputChange("loan_deduction", parseCurrencyToNumber(e.target.value), "deductions")}
                       className="font-mono focus:ring-primary focus:border-primary"
                     />
                   </div>
@@ -1097,7 +1083,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
                   <div className="mt-4 pt-4 border-t">
                     <div className="flex justify-between items-center text-amber-800">
                       <span className="font-medium">LOP Information ({paymentRecord.deductions.lop_days} days):</span>
-                      <span className="font-mono font-medium">Calculated Internally</span>
+                      <span className="font-mono font-medium">{formattedLopDeduction}</span>
                     </div>
                     <p className="text-xs text-amber-700 mt-1">
                       LOP deduction is proportionally distributed across all earning components
