@@ -15,8 +15,8 @@ const AccountsLayout: React.FC<AccountsLayoutProps> = ({ children, title }) => {
   
   const navItems = [
     { 
-      label: 'FinianceDashboard', 
-      path: '/finance', 
+      label: 'Finance Dashboard', 
+      path: '/accounts/overall', 
       icon: Home 
     },
     { 
@@ -29,11 +29,7 @@ const AccountsLayout: React.FC<AccountsLayoutProps> = ({ children, title }) => {
       path: '/accounts/expenses', 
       icon: Receipt 
     },
-    { 
-      label: 'Overall', 
-      path: '/accounts/overall', 
-      icon: PieChart 
-    },
+   
   ];
   
   return (

@@ -5,6 +5,7 @@ import FinancialStats from './FinancialStats';
 import PayrollTable from './PayrollTable';
 import { PayrollDrawer } from './PayrollDrawer';
 import { Calendar, Grid3x3, Search, Plus } from 'lucide-react';
+import FinanceOverview from '@/pages/finance/accounts/FinanceOverview';
 
 const FinancialDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,7 +62,7 @@ const FinancialDashboard: React.FC = () => {
         </div>
       </div>
 
-      <PayrollTable viewMode={viewMode} searchQuery={searchQuery} />
+      <FinanceOverview />
 
       <PayrollDrawer
         open={payrollDrawerOpen}
