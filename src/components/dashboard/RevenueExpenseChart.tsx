@@ -387,7 +387,7 @@ const RevenueExpenseChart: React.FC = () => {
           '#fbbf24', '#f3f4f6', '#fbbf24', '#f3f4f6', '#fbbf24', '#f3f4f6'
         ],
         borderWidth: 0,
-        borderRadius: 10,
+        borderRadius: 50,
       },
     ],
   };
@@ -397,11 +397,26 @@ const RevenueExpenseChart: React.FC = () => {
     maintainAspectRatio: false,
     scales: {
       x: {
-        display: false,
+      display: true, // <-- Changed from false to true
+    //   title: {
+    //     display: true,
+    //     text: 'Month', 
+    //     color: 'yellow', 
+    //     font: {
+    //       size: 14,
+    //       weight: 'bold',
+    //     },
+    //   },
+      grid: {
+        display: false, 
       },
-      y: {
-        display: false,
+      ticks: {
+        color: '#F1BE0E',
       },
+    },
+    y: {
+      display: false,
+    },
     },
     plugins: {
       legend: {
@@ -430,7 +445,7 @@ const RevenueExpenseChart: React.FC = () => {
           '#1f2937', '#f3f4f6', '#1f2937', '#f3f4f6', '#1f2937', '#f3f4f6'
         ],
         borderWidth: 0,
-        borderRadius: 8,
+        borderRadius: 50,
       },
     ],
   };
@@ -438,14 +453,21 @@ const RevenueExpenseChart: React.FC = () => {
   const expenseChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    scales: {
-      x: {
-        display: false,
-      },
-      y: {
-        display: false,
+   scales: {
+    x: {
+      display: true, // <-- Changed from false to true
+    //   title: {
+    //     display: true,
+    //     text: 'Month', 
+    //   },
+      grid: {
+        display: false, // <-- Hide x-axis grid lines
       },
     },
+    y: {
+      display: false,
+    },
+  },
     plugins: {
       legend: {
         display: false,

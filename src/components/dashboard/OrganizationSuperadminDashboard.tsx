@@ -208,150 +208,143 @@ function OrganizationSuperadminDashboard() {
 
   const hasNoResumeStatsData = resumeStatsData.every(item => item.value === 0);
 
-  return (
-   <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
-      <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 text-center mb-10 tracking-tight">
-        Organization SuperAdmin Dashboard
-      </h1>
+return (
+  <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
+    <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 text-center mb-10 tracking-tight">
+      Organization SuperAdmin Dashboard
+    </h1>
 
-      <div className="w-full max-w-9xl mx-auto space-y-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Bar Chart: Resumes Analyzed by Recruiter */}
-          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
-            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-xl md:text-2xl font-semibold">
-                  Resumes Analyzed by Recruiter
-                </CardTitle>
-                <Select value={timeFilter} onValueChange={setTimeFilter}>
-                  <SelectTrigger className="w-[160px] bg-white text-gray-800 border-gray-300 focus:ring-2 focus:ring-indigo-400 transition-all duration-200">
-                    <SelectValue placeholder="Select time period" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-gray-200 shadow-lg">
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="this_week">This Week</SelectItem>
-                    <SelectItem value="this_month">This Month</SelectItem>
-                    <SelectItem value="year">This Year</SelectItem>
-                    <SelectItem value="all">All</SelectItem>
-                  </SelectContent>
-                </Select>
+    <div className="w-full max-w-9xl mx-auto space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Bar Chart: Resumes Analyzed by Recruiter */}
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-xl md:text-2xl font-semibold">
+                Resumes Analyzed by Recruiter
+              </CardTitle>
+              <Select value={timeFilter} onValueChange={setTimeFilter}>
+                <SelectTrigger className="w-[160px] bg-white text-gray-800 border-gray-300 focus:ring-2 focus:ring-indigo-400 transition-all duration-200">
+                  <SelectValue placeholder="Select time period" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-gray-200 shadow-lg">
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_week">This Week</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
               </div>
-            </CardHeader>
-            <CardContent className="p-6">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-[400px]">
-                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                </div>
-              ) : errorMessage ? (
-                <p className="text-red-500 text-center font-medium">{errorMessage}</p>
-              ) : recruiterData.length === 0 ? (
-                <div className="flex items-center justify-center h-[400px] text-gray-500 font-medium">
-                  <p>No recruiter data available.</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart
-                    data={recruiterData}
-                    margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
-                    className="animate-fade-in"
+            ) : errorMessage ? (
+              <p className="text-red-500 text-center font-medium">{errorMessage}</p>
+            ) : recruiterData.length === 0 ? (
+              <div className="flex items-center justify-center h-[400px] text-gray-500 font-medium">
+                <p>No recruiter data available.</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={recruiterData}
+                  margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
+                  className="animate-fade-in"
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="recruiter"
+                    angle={0}
+                    textAnchor="middle"
+                    interval={0}
+                    height={50}
+                    label={{ value: "Recruiters", position: "insideBottom", offset: -10, fill: "#4b5563" }}
+                    className="text-sm font-medium"
+                  />
+                  <YAxis
+                    label={{ value: "Resumes Analyzed", angle: -90, position: "insideLeft", offset: -10, fill: "#4b5563" }}
+                    className="text-sm font-medium"
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
+                  />
+                  <Legend verticalAlign="top" height={36} />
+                  <Bar
+                    dataKey="total_resumes_analyzed"
+                    fill="#4f46e5"
+                    name="Resumes Analyzed"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Pie Chart: Total Resumes in Database */}
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
+            <CardTitle className="text-xl md:text-2xl font-semibold">
+              Total Resumes in Database
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+              </div>
+            ) : resumeStatsError ? (
+              <p className="text-red-500 text-center font-medium">{resumeStatsError}</p>
+            ) : hasNoResumeStatsData ? (
+              <div className="flex items-center justify-center h-[400px] text-gray-500 font-medium">
+                <p>No data to display</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={400}>
+                <PieChart className="animate-fade-in">
+                  <Pie
+                    data={resumeStatsData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={80}
+                    outerRadius={120}
+                    fill="#8884d8"
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                    className="font-medium"
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                      dataKey="recruiter"
-                      angle={0}
-                      textAnchor="middle"
-                      interval={0}
-                      height={50}
-                      label={{ value: "Recruiters", position: "insideBottom", offset: -10, fill: "#4b5563" }}
-                      className="text-sm font-medium"
-                    />
-                    <YAxis
-                      label={{ value: "Resumes Analyzed", angle: -90, position: "insideLeft", offset: -10, fill: "#4b5563" }}
-                      className="text-sm font-medium"
-                    />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
-                    />
-                    <Legend verticalAlign="top" height={36} />
-                    <Bar
-                      dataKey="total_resumes_analyzed"
-                      fill="#4f46e5"
-                      name="Resumes Analyzed"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
+                    {resumeStatsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
+                    formatter={(value, name) => [
+                      `${value} (${((value as number / resumeStatsData.reduce((sum, entry) => sum + entry.value, 0)) * 100).toFixed(1)}%)`,
+                      name,
+                    ]}
+                  />
+                  <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* Pie Chart: Total Resumes in Database */}
-          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
-            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
-              <CardTitle className="text-xl md:text-2xl font-semibold">
-                Total Resumes in Database
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-[400px]">
-                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                </div>
-              ) : resumeStatsError ? (
-                <p className="text-red-500 text-center font-medium">{resumeStatsError}</p>
-              ) : hasNoResumeStatsData ? (
-                <div className="flex items-center justify-center h-[400px] text-gray-500 font-medium">
-                  <p>No data to display</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={400}>
-                  <PieChart className="animate-fade-in">
-                    <Pie
-                      data={resumeStatsData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={80}
-                      outerRadius={120}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}
-                      className="font-medium"
-                    >
-                      {resumeStatsData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
-                      formatter={(value, name) => [
-                        `${value} (${((value as number / resumeStatsData.reduce((sum, entry) => sum + entry.value, 0)) * 100).toFixed(1)}%)`,
-                        name,
-                      ]}
-                    />
-                    <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Revenue and Expense Chart */}
-          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
-            {/* <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
-              <CardTitle className="text-xl md:text-2xl font-semibold">
-                Revenue vs. Expenses
-              </CardTitle>
-            </CardHeader> */}
-            <CardContent className="p-6">
-              <RevenueExpenseChart />
-            </CardContent>
-          </Card>
-        </div>
+      {/* Revenue and Expense Chart */}
+      <div className="w-full">
+        <RevenueExpenseChart />
       </div>
     </div>
-  );
+  </div>
+);
 }
 
 export default OrganizationSuperadminDashboard;
