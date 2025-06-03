@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react'; // For loading spinner (assuming ShadCN or similar)
+import RevenueExpenseChart from "./RevenueExpenseChart";
 
 interface RecruiterData {
   recruiter: string;
@@ -69,7 +70,7 @@ function OrganizationSuperadminDashboard() {
           throw new Error(`Error fetching candidate data: ${candidateError.message}`);
         }
 
-        console.log("Raw candidate data from Supabase:", candidateData);
+        // console.log("Raw candidate data from Supabase:", candidateData);
 
         const candidateCounts: { [key: string]: number } = candidateData?.reduce((acc: any, record: any) => {
           if (!record.created_by) {
@@ -111,7 +112,7 @@ function OrganizationSuperadminDashboard() {
           throw new Error(`Error fetching resume analysis data: ${analysisError.message}`);
         }
 
-        console.log("Raw analysis data from Supabase:", analysisData);
+        // console.log("Raw analysis data from Supabase:", analysisData);
 
         const seenCandidateIds = new Set<string>();
         const analysisCounts: { [key: string]: number } = analysisData?.reduce((acc: any, record: any) => {
@@ -208,7 +209,7 @@ function OrganizationSuperadminDashboard() {
   const hasNoResumeStatsData = resumeStatsData.every(item => item.value === 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
+   <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
       <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 text-center mb-10 tracking-tight">
         Organization SuperAdmin Dashboard
       </h1>
@@ -333,6 +334,18 @@ function OrganizationSuperadminDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Revenue and Expense Chart */}
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            {/* <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
+              <CardTitle className="text-xl md:text-2xl font-semibold">
+                Revenue vs. Expenses
+              </CardTitle>
+            </CardHeader> */}
+            <CardContent className="p-6">
+              <RevenueExpenseChart />
             </CardContent>
           </Card>
         </div>

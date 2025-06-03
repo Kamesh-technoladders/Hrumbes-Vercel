@@ -113,8 +113,11 @@ const menuItemsByRole = {
     const baseMenu = [
       { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
       { icon: ImProfile, label: "My Profile", path: "/profile" },
-      { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
-      { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization" },
+      { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization",
+        dropdown: [
+                { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
+        ],
+       },
       { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
       { icon: FaRegCalendarCheck, label: "Attendance", path: "/employee/attendance" },
       { icon: IoCalendarNumberOutline, label: "Calendar", path: "/employee/calendar" },
@@ -140,7 +143,7 @@ const menuItemsByRole = {
 };
 
 const extraMenuItems = [
-  { icon: IoDiamondOutline, label: "Try Premium", path: "#" },
+  // { icon: IoDiamondOutline, label: "Try Premium", path: "#" },
   { icon: FiLogOut, label: "Logout", action: "logout" },
 ];
 

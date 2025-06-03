@@ -15,4 +15,6 @@ export interface CalendarDay {
   isToday: boolean;
   isSunday: boolean;
   hasInterview: boolean;
+  hasHoliday: boolean;
+  hasLeave: boolean;
 }

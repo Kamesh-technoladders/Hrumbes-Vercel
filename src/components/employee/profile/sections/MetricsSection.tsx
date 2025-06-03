@@ -25,6 +25,12 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({ employeeId, depa
         <div className="h-full">
           <TimeTracker employeeId={employeeId} />
         </div>
+        {!isHumanResourceEmployee && (
+        
+         <div className="h-full">
+            <CalendarCard employeeId={employeeId} isHumanResourceEmployee={isHumanResourceEmployee} />
+            </div>
+        )}
         {isHumanResourceEmployee && (
           <div className="h-full">
             <CandidateTimelineCard employeeId={employeeId} />
@@ -39,7 +45,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({ employeeId, depa
               <OnboardingTasksCard employeeId={employeeId} />
             </div>
             <div className="h-full">
-              <UpcomingInterviewsCard employeeId={employeeId} />
+            <CalendarCard employeeId={employeeId} isHumanResourceEmployee={isHumanResourceEmployee} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 h-[300px] md:h-[325px] lg:h-[300px]">
@@ -48,13 +54,14 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({ employeeId, depa
               <SubmissionChartCard employeeId={employeeId} />
             </div>
             <div className="h-full">
-              <OnboardingChartCard employeeId={employeeId} />
+              <OnboardingChartCard employeeId={employeeId} role={role} />
             </div>
           </div>
-          <div className="h-[300px] md:h-[325px] lg:h-[300px]">
-            {/* Fourth Row: CalendarCard */}
-            <CalendarCard employeeId={employeeId} />
-          </div>
+          {/* <div className="h-[300px] md:h-[325px] lg:h-[300px]">
+      
+              <UpcomingInterviewsCard employeeId={employeeId} />
+
+          </div> */}
         </>
       )}
     </div>

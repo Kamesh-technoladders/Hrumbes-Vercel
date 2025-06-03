@@ -108,7 +108,7 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
                   key={index}
                   className={cn(
                     "w-full bg-white border p-1.5 rounded-lg hover:border-[#1A73E8]/20 hover:bg-blue-50/30 transition-all duration-200 cursor-pointer",
-                    isSelected ? "border-orange-500 bg-orange-50" : "border-gray-100"
+                    isSelected ? "border-purple-500 bg-purple-100" : "border-gray-100"
                   )}
                 >
                   <div className="space-y-0.5">

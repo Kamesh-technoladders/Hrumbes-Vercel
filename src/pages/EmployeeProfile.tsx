@@ -188,6 +188,8 @@ const EmployeeProfile = () => {
     }
   }, [id]);
 
+  console.log("employee", employee)
+
   const fetchEmployeeDetails = async (employeeId: string) => {
     try {
       setLoading(true);
@@ -1880,3 +1882,4 @@ const EmployeeProfile = () => {
 };
 
 export default EmployeeProfile;
+// Company and employee verify adding

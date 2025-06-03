@@ -1,4 +1,3 @@
-// src/components/ContactPage/ContactEditForm.tsx
 import React, { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,17 +6,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// Assuming you might have a Select component, but will use native select for now
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Contact, ContactUpdate } from '@/types/contact';
+import SingleCompanySelector from './SingleCompanySelector';
 
 interface ContactEditFormProps {
   contact: Contact | null;
   onClose: () => void;
 }
 
-// Define a type for the company data we'll fetch
 interface Company {
   id: number;
   name: string;
@@ -32,7 +29,7 @@ const editContactSchema = z.object({
   contact_owner: z.string().optional().nullable(),
   contact_stage: z.string().optional().nullable(),
   company_id: z.preprocess(
-    (val) => (val === "" || val === null || val === undefined ? undefined : String(val) === "null" ? null : Number(val)), // Handle "null" string from select
+    (val) => (val === "" || val === null || val === undefined ? undefined : String(val) === "null" ? null : Number(val)),
     z.number().int().positive("Company ID must be a positive number").optional().nullable()
   ),
 });
@@ -55,7 +52,7 @@ const ContactEditForm: React.FC<ContactEditFormProps> = ({ contact, onClose }) =
     },
   });
 
-  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<EditContactFormValues>({
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<EditContactFormValues>({
     resolver: zodResolver(editContactSchema),
     defaultValues: {
       name: contact?.name || '',
@@ -65,14 +62,9 @@ const ContactEditForm: React.FC<ContactEditFormProps> = ({ contact, onClose }) =
       linkedin_url: contact?.linkedin_url || '',
       contact_owner: contact?.contact_owner || '',
       contact_stage: contact?.contact_stage || 'Prospect',
-      company_id: contact?.company_id === null ? undefined : contact?.company_id, // Ensure null is treated as undefined for select
+      company_id: contact?.company_id === null ? undefined : contact?.company_id,
     },
   });
-  
-  // Watch company_id for debugging or conditional logic if needed
-  // const watchedCompanyId = watch("company_id");
-  // console.log("Watched company_id:", watchedCompanyId, typeof watchedCompanyId);
-
 
   useEffect(() => {
     if (contact) {
@@ -84,9 +76,6 @@ const ContactEditForm: React.FC<ContactEditFormProps> = ({ contact, onClose }) =
         linkedin_url: contact.linkedin_url || '',
         contact_owner: contact.contact_owner || '',
         contact_stage: contact.contact_stage || 'Prospect',
-        // Ensure company_id is set correctly for the select.
-        // If contact.company_id is null, it should map to the "Select a company" (empty string value) or be undefined.
-        // If it's a number, it should match one of the option values.
         company_id: contact.company_id === null ? undefined : contact.company_id,
       });
     }
@@ -104,7 +93,6 @@ const ContactEditForm: React.FC<ContactEditFormProps> = ({ contact, onClose }) =
         linkedin_url: formData.linkedin_url || null,
         contact_owner: formData.contact_owner || null,
         contact_stage: formData.contact_stage || null,
-        // Ensure company_id is correctly transformed for Supabase (number or null)
         company_id: formData.company_id ? Number(formData.company_id) : null,
       };
       const { error } = await supabase.from('contacts').update(updateData).eq('id', contact.id);
@@ -131,12 +119,10 @@ const ContactEditForm: React.FC<ContactEditFormProps> = ({ contact, onClose }) =
 
   if (!contact) return <div className="p-4 text-center">Loading contact...</div>;
 
-  // Style for the select element to match Input components
   const selectClassName = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
     <form onSubmit={handleSubmit(onValidSubmit)} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto pr-2">
-      
       <div className="form-item">
         <label htmlFor="name-edit">Name*</label>
         <Input id="name-edit" {...register("name")} />
@@ -181,24 +167,12 @@ const ContactEditForm: React.FC<ContactEditFormProps> = ({ contact, onClose }) =
       
       <div className="form-item">
         <label htmlFor="company_id-edit">Company (Optional)</label>
-        <select
-          id="company_id-edit"
-          {...register("company_id")}
-          className={selectClassName} // Apply consistent styling
+        <SingleCompanySelector
+          companies={companies || []}
+          selectedCompanyId={watch("company_id") ?? undefined}
+          onChange={(value) => setValue("company_id", value)}
           disabled={isLoadingCompanies || editContactMutation.isPending}
-          // The value here will be managed by react-hook-form's defaultValues/reset
-        >
-          <option value="">Select a company</option> {/* Represents null or undefined company_id */}
-          {/* Handle case where contact might have a company_id that is no longer in the fetched list */}
-          {contact?.company_id && !isLoadingCompanies && companies && !companies.find(c => c.id === contact.company_id) && contact.company_name && (
-            <option value={String(contact.company_id)}>{contact.company_name} (Current - Not in list)</option>
-          )}
-          {companies?.map((company) => (
-            <option key={company.id} value={String(company.id)}>
-              {company.name}
-            </option>
-          ))}
-        </select>
+        />
         {isLoadingCompanies && <p className="text-sm text-muted-foreground mt-1">Loading companies...</p>}
         {fetchCompaniesError && !isLoadingCompanies && <p className="form-message error mt-1">Could not load companies: {fetchCompaniesError.message}</p>}
         {errors.company_id && <p className="form-message error">{errors.company_id.message}</p>}
@@ -213,4 +187,5 @@ const ContactEditForm: React.FC<ContactEditFormProps> = ({ contact, onClose }) =
     </form>
   );
 };
+
 export default ContactEditForm;

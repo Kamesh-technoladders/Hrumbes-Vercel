@@ -62,7 +62,7 @@ interface AssignEmployeeDialogProps {
   projectId: string;
   clientId: string;
   editEmployee?: AssignEmployee | null;
-  project: string | any; // Update to allow string or object
+  project: string | any;
 }
 
 const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmployee, project }: AssignEmployeeDialogProps) => {
@@ -70,14 +70,10 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
   const user = useSelector((state: any) => state.auth.user);
   const organization_id = useSelector((state: any) => state.auth.organization_id);
 
-  // Parse project data if it's a string
   const projectData = typeof project === "string" ? JSON.parse(project) : project;
-
-  // Extract project start and end dates
   const projectStartDate = projectData?.start_date ? new Date(projectData.start_date) : new Date();
   const projectEndDate = projectData?.end_date ? new Date(projectData.end_date) : null;
 
-  // State for selected employees and form data
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [employees, setEmployees] = useState<any[]>([]);
@@ -95,9 +91,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
     }[]
   >([]);
 
-  console.log("dateproject", projectData);
-
-  // Fetch clients from Supabase
   const { data: clients = [], isLoading: loadingClients, error: clientsError } = useQuery<Client[]>({
     queryKey: ["clients", organization_id],
     queryFn: async () => {
@@ -111,14 +104,10 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
     enabled: !!organization_id,
   });
 
-  // Get client currency
   const client = clients.find((c) => c.id === clientId);
   const currencySymbol = client?.currency === "USD" ? "$" : "₹";
-
-  // Billing type options
   const billingTypeOptions = ["Monthly", "Hourly"];
 
-  // Fetch employees from `hr_employees`
   useEffect(() => {
     const fetchEmployees = async () => {
       const { data, error } = await supabase
@@ -134,7 +123,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
     if (organization_id) fetchEmployees();
   }, [organization_id]);
 
-  // Handle client fetch error
   useEffect(() => {
     if (clientsError) {
       toast.error("Failed to fetch clients");
@@ -142,7 +130,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
     }
   }, [clientsError]);
 
-  // Pre-fill form for editing
   useEffect(() => {
     if (editEmployee) {
       setSelectedEmployeeIds([editEmployee.assign_employee]);
@@ -165,9 +152,17 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
     }
   }, [editEmployee]);
 
-  // Handle employee selection
+  const handleDialogClose = (open: boolean) => {
+    onOpenChange(open);
+    if (!open) {
+      setSelectedEmployeeIds([]);
+      setEmployeeAssignments([]);
+      setSelectedEmployeeId("");
+    }
+  };
+
   const handleEmployeeSelection = (employeeId: string) => {
-    if (editEmployee) return; // Disable selection in edit mode
+    if (editEmployee) return;
     if (!employeeId || selectedEmployeeIds.includes(employeeId)) return;
 
     const employee = employees.find((e) => e.id === employeeId);
@@ -177,28 +172,26 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
         ...prev,
         {
           assign_employee: employeeId,
-          start_date: projectData.start_date || "", // Initialize with project start date
-          end_date: projectData.end_date || "", // Initialize with project end date
+          start_date: projectData.start_date || "",
+          end_date: projectData.end_date || "",
           salary: employee.salary?.toString() || "0",
           client_billing: "",
           billing_type: "Monthly",
           status: "Working",
           sowFile: null,
-          noOfDays: projectData.duration || 0, // Initialize with project duration
+          noOfDays: projectData.duration || 0,
         },
       ]);
     }
     setSelectedEmployeeId("");
   };
 
-  // Handle removing an employee
   const handleRemoveEmployee = (employeeId: string, index: number) => {
-    if (editEmployee) return; // Disable removal in edit mode
+    if (editEmployee) return;
     setSelectedEmployeeIds((prev) => prev.filter((id) => id !== employeeId));
     setEmployeeAssignments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Handle field changes
   const handleFieldChange = (index: number, field: string, value: any) => {
     const updatedList = [...employeeAssignments];
     if (field === "start_date" || field === "end_date") {
@@ -208,7 +201,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
       updatedList[index][field] = value;
     }
 
-    // Calculate duration dynamically
     if (field === "start_date" || field === "end_date") {
       if (updatedList[index].start_date && updatedList[index].end_date) {
         const duration = Math.ceil(
@@ -225,16 +217,15 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
     setEmployeeAssignments(updatedList);
   };
 
-  // Handle file upload
   const handleFileUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFieldChange(index, "sowFile", e.target.files[0]);
     }
   };
 
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent any bubbling of the submit event
 
     try {
       if (!user || !organization_id) {
@@ -247,7 +238,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
         return;
       }
 
-      // Validate required fields and date range
       for (const assignment of employeeAssignments) {
         if (
           !assignment.assign_employee ||
@@ -260,12 +250,11 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           return;
         }
 
-        // Validate dates within project range
         const startDate = new Date(assignment.start_date);
         const endDate = new Date(assignment.end_date);
-        if (startDate < projectStartDate || endDate > projectEndDate) {
+        if (startDate < projectStartDate || (projectEndDate && endDate > projectEndDate)) {
           toast.error(
-            `Assignment dates must be within project range (${format(projectStartDate, "PPP")} to ${format(projectEndDate, "PPP")})`
+            `Assignment dates must be within project range (${format(projectStartDate, "PPP")} to ${projectEndDate ? format(projectEndDate, "PPP") : "ongoing"})`
           );
           return;
         }
@@ -276,7 +265,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
       }
 
       if (editEmployee) {
-        // Update existing employee assignment
         const assignment = employeeAssignments[0];
         const { error } = await supabase
           .from("hr_project_employees")
@@ -295,7 +283,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
 
         if (error) throw error;
 
-        // Handle SOW file update
         let sowUrl: string | null = editEmployee.sow;
         if (assignment.sowFile) {
           const fileName = `assignments/${Date.now()}-${assignment.sowFile.name}`;
@@ -305,7 +292,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           if (uploadError) throw uploadError;
           sowUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/hr_project_files/${fileName}`;
 
-          // Update SOW in the database
           const { error: sowUpdateError } = await supabase
             .from("hr_project_employees")
             .update({ sow: sowUrl })
@@ -316,7 +302,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
 
         toast.success("Employee assignment updated successfully");
       } else {
-        // Insert new employee assignments
         const newAssignments = await Promise.all(
           employeeAssignments.map(async (employee) => {
             let sowUrl: string | null = null;
@@ -357,17 +342,20 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
       }
 
       queryClient.invalidateQueries({ queryKey: ["project-employee", projectId] });
-      onOpenChange(false);
-      setSelectedEmployeeIds([]);
-      setEmployeeAssignments([]);
+      handleDialogClose(false);
     } catch (error) {
       console.error("Error assigning employees:", error);
       toast.error("Failed to assign employees");
     }
   };
 
+  const handleCancel = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault(); // Explicitly prevent form submission
+    handleDialogClose(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogContent className="w-full max-w-[90vw] sm:max-w-3xl max-h-[80vh] overflow-y-auto p-4 sm:p-6 rounded-lg shadow-xl">
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl">
@@ -375,7 +363,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-          {/* Employee Selection */}
           {!editEmployee && (
             <div>
               <Label htmlFor="employee" className="text-sm font-medium">
@@ -426,7 +413,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
             </div>
           )}
 
-          {/* Employee Assignment Details */}
           {employeeAssignments.length > 0 && (
             <div className="space-y-4 border rounded-md p-4">
               {employeeAssignments.map((assignment, index) => {
@@ -439,9 +425,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                     className="border-b last:border-b-0 pb-4 last:pb-0 space-y-4"
                   >
                     <div className="flex items-center justify-between">
-                      <h3
-                        className="text-sm font-semibold"
-                      >
+                      <h3 className="text-sm font-semibold">
                         {employee?.first_name} {employee?.last_name}
                       </h3>
                       {!editEmployee && (
@@ -456,7 +440,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                       )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {/* Start Date */}
                       <div>
                         <Label className="text-sm font-medium block mb-1">Start Date*</Label>
                         <Popover>
@@ -479,13 +462,12 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                               onSelect={(date) => handleFieldChange(index, "start_date", date)}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              fromDate={projectStartDate} // Restrict to project start date
-                              toDate={projectEndDate} // Restrict to project end date
+                              fromDate={projectStartDate}
+                              toDate={projectEndDate}
                             />
                           </PopoverContent>
                         </Popover>
                       </div>
-                      {/* End Date */}
                       <div>
                         <Label className="text-sm font-medium block mb-1">End Date*</Label>
                         <Popover>
@@ -508,13 +490,12 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                               onSelect={(date) => handleFieldChange(index, "end_date", date)}
                               initialFocus
                               className="p-3 pointer-events-auto"
-                              fromDate={startDate || projectStartDate} // Restrict to start date or project start date
-                              toDate={projectEndDate} // Restrict to project end date
+                              fromDate={startDate || projectStartDate}
+                              toDate={projectEndDate}
                             />
                           </PopoverContent>
                         </Popover>
                       </div>
-                      {/* Days */}
                       <div>
                         <Label className="text-sm font-medium block mb-1">Days</Label>
                         <Input
@@ -524,7 +505,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                           className="w-full text-sm bg-gray-100"
                         />
                       </div>
-                      {/* Salary */}
                       <div>
                         <Label className="text-sm font-medium block mb-1">Salary</Label>
                         <Input
@@ -534,7 +514,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                           className="w-full text-sm bg-gray-100"
                         />
                       </div>
-                      {/* Client Billing */}
                       <div>
                         <Label className="text-sm font-medium block mb-1">Client Billing*</Label>
                         <div className="flex items-center gap-2">
@@ -569,7 +548,6 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                           </Select>
                         </div>
                       </div>
-                      {/* SOW */}
                       <div>
                         <Label className="text-sm font-medium block mb-1">SOW</Label>
                         <Input
@@ -589,7 +567,8 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
             <Button
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              type="button" // Explicitly set type to button
+              onClick={handleCancel}
               className="w-full sm:w-auto"
             >
               Cancel

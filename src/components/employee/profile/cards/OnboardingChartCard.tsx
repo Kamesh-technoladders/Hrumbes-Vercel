@@ -8,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 interface OnboardingChartCardProps {
   employeeId: string;
+  role: string;
 }
 
 interface ChartData {
@@ -15,10 +16,14 @@ interface ChartData {
   count: number;
 }
 
-export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employeeId }) => {
+export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employeeId, role }) => {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"week" | "month" | "year">("week");
+  const [activeTab, setActiveTab] = useState<"week" | "month" | "year">("year");
+
+  const isEmployee = role === "employee";
+  const currentYear = new Date().getFullYear().toString();
+  console.log("isEmployee", role);
 
   useEffect(() => {
     const fetchOnboardingCount = async () => {
@@ -35,7 +40,6 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
         let data: ChartData[] = [];
 
         if (activeTab === "week") {
-          // Current week: Monday to Sunday
           const startOfWeek = new Date(now);
           startOfWeek.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
           startOfWeek.setHours(0, 0, 0, 0);
@@ -49,7 +53,6 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
 
           if (error) throw error;
 
-          // Initialize data for each day of the week
           const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
           data = days.map((day, index) => {
             const dayDate = new Date(startOfWeek);
@@ -63,7 +66,6 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
             return { name: day, count: dayCount };
           });
         } else if (activeTab === "month") {
-          // Current month: May 2025
           const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
           const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
@@ -73,7 +75,6 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
 
           if (error) throw error;
 
-          // Group by week (Week 1, Week 2, etc.)
           const weeks: { [key: string]: number } = {};
           counts.forEach((record) => {
             const date = new Date(record.created_at);
@@ -82,13 +83,11 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
             weeks[weekKey] = (weeks[weekKey] || 0) + record.count;
           });
 
-          // Initialize data for 4-5 weeks
           data = Array.from({ length: 5 }, (_, i) => `Week ${i + 1}`).map((week) => ({
             name: week,
             count: weeks[week] || 0,
           }));
         } else if (activeTab === "year") {
-          // Current year: 2025
           const startOfYear = new Date(now.getFullYear(), 0, 1);
           const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
 
@@ -98,7 +97,6 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
 
           if (error) throw error;
 
-          // Group by month
           const months = [
             "Jan", "Feb", "Mar", "Apr", "May", "Jun",
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
@@ -133,11 +131,17 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
             <BarChart2 className="h-5 w-5 text-purple-500 dark:text-purple-400 mr-2" />
             <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Onboarding Count</h3>
           </div>
-          <Tabs defaultValue="week" onValueChange={(value) => setActiveTab(value as "week" | "month" | "year")}>
-            <TabsList className="grid grid-cols-3">
-              <TabsTrigger value="week">Week</TabsTrigger>
-              <TabsTrigger value="month">Month</TabsTrigger>
-              <TabsTrigger value="year">Year</TabsTrigger>
+          <Tabs defaultValue="year" onValueChange={(value) => setActiveTab(value as "week" | "month" | "year")}>
+            <TabsList className={isEmployee ? "grid grid-cols-1" : "grid grid-cols-3"}>
+              {isEmployee ? (
+             <TabsTrigger value="year">{currentYear}</TabsTrigger>
+              ) : (
+                <>
+                  <TabsTrigger value="week">Week</TabsTrigger>
+                  <TabsTrigger value="month">Month</TabsTrigger>
+                  <TabsTrigger value="year">Year</TabsTrigger>
+                </>
+              )}
             </TabsList>
           </Tabs>
         </div>
