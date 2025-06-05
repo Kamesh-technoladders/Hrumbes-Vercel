@@ -12,63 +12,73 @@ interface Interview {
   interview_location: string;
   interview_type: string;
   round: string;
+  employee_name?: string; // Add employee_name for superadmin
 }
 
 interface InterviewsListProps {
   employeeId: string;
   selectedDate: Date;
+  role?: string; // Add role prop
 }
 
-export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, selectedDate }) => {
+export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, selectedDate, role }) => {
   const [interviews, setInterviews] = useState<Interview[]>([]);
 
   useEffect(() => {
     const fetchInterviews = async () => {
       try {
-        // Fetch employee data to get first_name and last_name
-        const { data: employeeData, error: employeeError } = await supabase
-          .from("hr_employees")
-          .select("first_name, last_name")
-          .eq("id", employeeId)
-          .single();
+        let fullName = '';
+        if (role !== 'organization_superadmin') {
+          // Fetch employee data to get first_name and last_name for non-superadmin users
+          const { data: employeeData, error: employeeError } = await supabase
+            .from("hr_employees")
+            .select("first_name, last_name")
+            .eq("id", employeeId)
+            .single();
 
-        if (employeeError) throw employeeError;
+          if (employeeError) throw employeeError;
 
-        if (employeeData) {
-          const fullName = `${employeeData.first_name} ${employeeData.last_name}`;
-
-          // Fetch candidates with main_status_id for interviews
-          const { data: candidatesData, error: candidatesError } = await supabase
-            .from("hr_job_candidates")
-            .select(
-              "name, interview_date, interview_time, interview_location, interview_type, round"
-            )
-            .eq("main_status_id", "f72e13f8-7825-4793-85e0-e31d669f8097")
-            .eq("applied_from", fullName);
-
-          if (candidatesError) throw candidatesError;
-
-          // Filter for upcoming interviews (on or after May 20, 2025, 06:30 PM IST)
-          const currentDate = new Date();
-          const upcomingInterviews = candidatesData
-            .filter((candidate) => {
-              if (!candidate.interview_date) return false;
-              const interviewDateTime = new Date(
-                `${candidate.interview_date}T${candidate.interview_time || "00:00:00"}+05:30`
-              );
-              return interviewDateTime >= currentDate;
-            })
-            .map((candidate) => ({
-              name: candidate.name,
-              interview_date: candidate.interview_date,
-              interview_time: candidate.interview_time,
-              interview_location: candidate.interview_location,
-              interview_type: candidate.interview_type,
-              round: candidate.round,
-            }));
-
-          setInterviews(upcomingInterviews);
+          if (employeeData) {
+            fullName = `${employeeData.first_name} ${employeeData.last_name}`;
+          }
         }
+
+        // Fetch candidates with main_status_id for interviews
+        const query = supabase
+          .from("hr_job_candidates")
+          .select("name, interview_date, interview_time, interview_location, interview_type, round, applied_from");
+
+        if (role !== 'organization_superadmin') {
+          query.eq("applied_from", fullName);
+        }
+
+        const { data: candidatesData, error: candidatesError } = await query
+          .eq("main_status_id", "f72e13f8-7825-4793-85e0-e31d669f8097")
+          .not("interview_date", 'is', null);
+
+        if (candidatesError) throw candidatesError;
+
+        // Filter for upcoming interviews
+        const currentDate = new Date();
+        const upcomingInterviews = candidatesData
+          .filter((candidate) => {
+            if (!candidate.interview_date) return false;
+            const interviewDateTime = new Date(
+              `${candidate.interview_date}T${candidate.interview_time || "00:00:00"}+05:30`
+            );
+            return interviewDateTime >= currentDate;
+          })
+          .map((candidate) => ({
+            name: candidate.name,
+            interview_date: candidate.interview_date,
+            interview_time: candidate.interview_time,
+            interview_location: candidate.interview_location,
+            interview_type: candidate.interview_type,
+            round: candidate.round,
+            employee_name: candidate.applied_from, // Include employee name for superadmin
+          }));
+
+        setInterviews(upcomingInterviews);
       } catch (error) {
         console.error("Error fetching interviews:", error);
         toast.error("Failed to load interviews");
@@ -76,7 +86,7 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
     };
 
     fetchInterviews();
-  }, [employeeId]);
+  }, [employeeId, role]);
 
   // Format interview date as "MMM D"
   const formatInterviewDate = (date: string) => {
@@ -114,6 +124,9 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
                   <div className="space-y-0.5">
                     <div className="font-medium text-sm text-gray-800 truncate">
                       {interview.name}
+                      {role === 'organization_superadmin' && interview.employee_name && (
+                        <span className="text-xs text-gray-500"> ({interview.employee_name})</span>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500">
                       {formatInterviewDate(interview.interview_date)} at{" "}
@@ -137,7 +150,6 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
           )}
         </div>
       </ScrollArea>
-      {/* Subtle gradient to indicate more content */}
       <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none" />
     </div>
   );

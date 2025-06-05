@@ -97,7 +97,8 @@ const RevenueExpenseChart: React.FC = () => {
             salary,
             client_billing,
             billing_type,
-            
+            salary_type,
+            salary_currency,
             hr_employees!hr_project_employees_assign_employee_fkey(first_name, last_name, salary_type),
             hr_projects!hr_project_employees_project_id_fkey(id, client_id)
           `);
@@ -258,7 +259,7 @@ const RevenueExpenseChart: React.FC = () => {
             console.warn("Skipping employee due to missing project_id");
             return;
           }
-
+console.log("employee assign_employee:", employee);
           // Calculate total hours worked
           const calculateEmployeeHours = (employeeId: string, projectId: string) => {
             let totalHours = 0;
@@ -281,7 +282,7 @@ const RevenueExpenseChart: React.FC = () => {
               if (adjustedMonthIndex >= 12 && adjustedMonthIndex < 17) {
                 const displayMonthIndex = adjustedMonthIndex - 12;
                 // Adjust hourly salary based on salary_type
-                const salaryType = employee.hr_employees?.salary_type || "LPA";
+                const salaryType = employee?.salary_type || "LPA";
                 let hourlySalary;
                 if (salaryType === "Monthly") {
                   hourlySalary = (employee.salary || 0) / (30 * 8); // Monthly salary to hourly
@@ -305,7 +306,7 @@ const RevenueExpenseChart: React.FC = () => {
           let hourlyRate = employee.client_billing || 0;
           console.log("Client billing (hourlyRate before conversion):", hourlyRate);
 
-          const currency = employee.currency || "INR";
+          const currency = employee.salary_currency || "INR";
           if (currency === "USD") {
             hourlyRate *= USD_TO_INR_RATE;
             console.log(`Converted hourlyRate from USD to INR: ${hourlyRate}`);

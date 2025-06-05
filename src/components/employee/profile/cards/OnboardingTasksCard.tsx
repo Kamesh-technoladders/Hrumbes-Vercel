@@ -85,7 +85,7 @@ export const OnboardingTasksCard: React.FC<{ employeeId: string }> = ({ employee
         if (instancesError) throw instancesError;
 
         // Group instances by goal type and period type
-        const currentDate = new Date("2025-05-12");
+        const currentDate = new Date();
         const submissionPeriodTypes = ["Daily", "Weekly", "Monthly", "Yearly"];
         const onboardingPeriodTypes = ["Monthly", "Yearly"];
 
@@ -251,3 +251,5 @@ export const OnboardingTasksCard: React.FC<{ employeeId: string }> = ({ employee
     </Card>
   );
 };
+
+// Submission and onboarding date from joining and submission date not from created_at

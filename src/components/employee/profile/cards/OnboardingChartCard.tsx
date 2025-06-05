@@ -22,8 +22,8 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
   const [activeTab, setActiveTab] = useState<"week" | "month" | "year">("year");
 
   const isEmployee = role === "employee";
+  const isSuperAdmin = role === "organization_superadmin";
   const currentYear = new Date().getFullYear().toString();
-  console.log("isEmployee", role);
 
   useEffect(() => {
     const fetchOnboardingCount = async () => {
@@ -32,9 +32,19 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
 
         let query = supabase
           .from("hr_status_change_counts")
-          .select("count, created_at")
-          .eq("candidate_owner", employeeId)
+          .select(`
+            count,
+            created_at,
+            hr_job_candidates (
+              joining_date
+            )
+          `)
           .eq("sub_status_id", "c9716374-3477-4606-877a-dfa5704e7680");
+
+        // Apply candidate_owner filter only if not organization_superadmin
+        if (!isSuperAdmin) {
+          query = query.eq("candidate_owner", employeeId);
+        }
 
         const now = new Date();
         let data: ChartData[] = [];
@@ -59,8 +69,10 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
             dayDate.setDate(startOfWeek.getDate() + index);
             const dayCount = counts
               .filter((record) => {
-                const recordDate = new Date(record.created_at);
-                return recordDate.toDateString() === dayDate.toDateString();
+                const date = record.hr_job_candidates?.joining_date
+                  ? new Date(record.hr_job_candidates.joining_date)
+                  : new Date(record.created_at);
+                return date.toDateString() === dayDate.toDateString();
               })
               .reduce((sum, record) => sum + record.count, 0);
             return { name: day, count: dayCount };
@@ -77,7 +89,9 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
 
           const weeks: { [key: string]: number } = {};
           counts.forEach((record) => {
-            const date = new Date(record.created_at);
+            const date = record.hr_job_candidates?.joining_date
+              ? new Date(record.hr_job_candidates.joining_date)
+              : new Date(record.created_at);
             const weekNumber = Math.floor((date.getDate() - 1) / 7) + 1;
             const weekKey = `Week ${weekNumber}`;
             weeks[weekKey] = (weeks[weekKey] || 0) + record.count;
@@ -103,7 +117,12 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
           ];
           data = months.map((month, index) => {
             const monthCount = counts
-              .filter((record) => new Date(record.created_at).getMonth() === index)
+              .filter((record) => {
+                const date = record.hr_job_candidates?.joining_date
+                  ? new Date(record.hr_job_candidates.joining_date)
+                  : new Date(record.created_at);
+                return date.getMonth() === index;
+              })
               .reduce((sum, record) => sum + record.count, 0);
             return { name: month, count: monthCount };
           });
@@ -118,10 +137,10 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
       }
     };
 
-    if (employeeId) {
+    if (employeeId || isSuperAdmin) {
       fetchOnboardingCount();
     }
-  }, [employeeId, activeTab]);
+  }, [employeeId, role, activeTab]);
 
   return (
     <Card className="shadow-md rounded-xl h-[300px] md:h-[325px] lg:h-[300px] flex flex-col">
@@ -134,7 +153,7 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
           <Tabs defaultValue="year" onValueChange={(value) => setActiveTab(value as "week" | "month" | "year")}>
             <TabsList className={isEmployee ? "grid grid-cols-1" : "grid grid-cols-3"}>
               {isEmployee ? (
-             <TabsTrigger value="year">{currentYear}</TabsTrigger>
+                <TabsTrigger value="year">{currentYear}</TabsTrigger>
               ) : (
                 <>
                   <TabsTrigger value="week">Week</TabsTrigger>

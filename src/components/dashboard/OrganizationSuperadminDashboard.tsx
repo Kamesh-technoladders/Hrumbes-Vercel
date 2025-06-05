@@ -5,6 +5,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react'; // For loading spinner (assuming ShadCN or similar)
 import RevenueExpenseChart from "./RevenueExpenseChart";
+import { useSelector } from "react-redux";
+import { CalendarCard } from "../employee/profile/cards/CalendarCard";
+import { TimelineCard } from "../employee/profile/cards/SuperadminTimeline";
+import { SubmissionChartCard } from "../employee/profile/cards/SubmissionChartCard";
+import {OnboardingChartCard} from "../employee/profile/cards/OnboardingChartCard";
 
 interface RecruiterData {
   recruiter: string;
@@ -24,6 +29,8 @@ function OrganizationSuperadminDashboard() {
   const [resumeStatsError, setResumeStatsError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<boolean>(true); // Loading state
+    const { role, user } = useSelector((state) => state.auth);
+    const id = user?.id; // Ensure the user ID is available
 
   useEffect(() => {
     const fetchData = async (filter: string) => {
@@ -215,6 +222,9 @@ return (
     </h1>
 
     <div className="w-full max-w-9xl mx-auto space-y-8">
+      <div className="w-full">
+        <RevenueExpenseChart />
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Bar Chart: Resumes Analyzed by Recruiter */}
         <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
@@ -336,12 +346,24 @@ return (
             )}
           </CardContent>
         </Card>
+        
+       <div className="h-full">
+                  <CalendarCard employeeId={user.id} isHumanResourceEmployee={false} role={role} />
+                  </div>
+          <div className="h-full">
+                  <TimelineCard />
+                  </div>
+
+                   <div className="h-full">
+                                <SubmissionChartCard employeeId={user.id} role={role} />
+                              </div>
+                              <div className="h-full">
+                                <OnboardingChartCard employeeId={user.id} role={role} />
+                              </div>
       </div>
 
       {/* Revenue and Expense Chart */}
-      <div className="w-full">
-        <RevenueExpenseChart />
-      </div>
+      
     </div>
   </div>
 );

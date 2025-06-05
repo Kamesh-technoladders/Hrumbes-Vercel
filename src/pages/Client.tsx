@@ -4,13 +4,13 @@ import supabase from "../config/supabaseClient";
 import ClientTable from "../components/Client/ClientTable";
 import AddClientDialog from "../components/Client/AddClientDialog";
 import { Button } from "../components/ui/button";
-import { Plus, Briefcase, Calendar, Clock, DollarSign, TrendingUp } from "lucide-react";
-import { Card } from "../components/ui/card";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
+import { Plus, Briefcase, Calendar, Clock, DollarSign, TrendingUp, UserRoundCheck, UserRoundX, ReceiptIndianRupee } from "lucide-react";
+import { Card, CardHeader, CardContent } from "../components/ui/card";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie } from "recharts";
 import RevenueProfitChart from "../components/Client/RevenueProfitChart";
 import Loader from "@/components/ui/Loader";
 import { useSelector } from "react-redux";
-import { Tooltip , TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
+import { Tooltip as ReactTooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 
 const EXCHANGE_RATE_USD_TO_INR = 84;
 
@@ -32,6 +32,7 @@ interface ProjectEmployee {
   hr_employees?: {
     salary_type: string;
   } | null;
+  salary_currency: string;
 }
 
 interface TimeLog {
@@ -76,6 +77,8 @@ const ClientManagement = () => {
           salary,
           client_billing,
           billing_type,
+          salary_type,
+          salary_currency
           hr_employees:hr_employees!hr_project_employees_assign_employee_fkey (salary_type)
         `)
         .eq("organization_id", organization_id);
@@ -91,8 +94,7 @@ const ClientManagement = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("time_logs")
-        .select("id, employee_id, date, project_time_data, total_working_hours")
-        // .eq("organization_id", organization_id);
+        .select("id, employee_id, date, project_time_data, total_working_hours");
       if (error) throw error;
       return data || [];
     },
@@ -151,8 +153,14 @@ const ClientManagement = () => {
   // Calculate profit for an employee
   const calculateProfit = (employee: ProjectEmployee, projectId: string, clientCurrency: string) => {
     const revenue = calculateRevenue(employee, projectId, clientCurrency);
-    let salary = Number(employee.salary) || 0;
-    const salaryType = employee.hr_employees?.salary_type || "LPA";
+    
+    let salary = employee.salary || 0;
+    const salaryType = employee?.salary_type || "LPA";
+
+    if (employee.salary_currency === "USD") {
+      salary *= EXCHANGE_RATE_USD_TO_INR;
+    }
+
     const hours = calculateEmployeeHours(employee.assign_employee, projectId);
 
     if (salaryType === "LPA") {
@@ -202,151 +210,249 @@ const ClientManagement = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
-        <Loader size={60} className="border-[6px]" />
+        <Loader size={60} className="border-[6px] animate-spin text-indigo-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="container mx-auto px-4 sm:px-6 lg:px-0 py-8">
-        <div className="mb-8 space-y-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold mb-2">Project Management</h1>
-              <p className="text-gray-500 text-sm sm:text-base">Manage and track all project activities</p>
-            </div>
-            {/* <Button
-              onClick={() => setAddClientOpen(true)}
-              className="flex items-center gap-2"
-            >
-              <Plus size={16} />
-              <span>Create New Client</span>
-            </Button> */}
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
+      <main className="w-full max-w-8xl mx-auto space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 tracking-tight">
+              Project Management
+            </h1>
+            <p className="text-gray-500 text-sm md:text-base mt-2">
+              Manage and track all project activities
+            </p>
           </div>
+          {/* <Button
+            onClick={() => setAddClientOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-all duration-200"
+          >
+            <Plus size={16} />
+            <span>Create New Client</span>
+          </Button> */}
+        </div>
 
-          {/* Stats Overview */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Total Clients</p>
-                <h3 className="text-2xl font-bold">{totalClients}</h3>
+                <h3 className="text-2xl font-bold text-gray-800">{totalClients}</h3>
                 <p className="text-xs text-gray-500 mt-1">All clients</p>
               </div>
-              <div className="stat-icon bg-blue-100 p-3 rounded-full">
-                <Briefcase size={24} className="text-blue-800" />
+              <div className="bg-gradient-to-br from-fuchsia-400 to-fuchsia-600 p-3 rounded-full">
+                <Briefcase size={24} className="text-white" />
               </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Active Clients</p>
-                <h3 className="text-2xl font-bold">{activeClients}</h3>
+                <h3 className="text-2xl font-bold text-gray-800">{activeClients}</h3>
                 <p className="text-xs text-gray-500 mt-1">
                   {totalClients ? Math.round((activeClients / totalClients) * 100) : 0}% of total
                 </p>
               </div>
-              <div className="stat-icon bg-green-100 p-3 rounded-full">
-                <Calendar size={24} className="text-green-800" />
+              <div className="bg-gradient-to-br from-green-400 to-green-600 p-3 rounded-full">
+                <UserRoundCheck size={24} className="text-white" />
               </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Inactive Clients</p>
-                <h3 className="text-2xl font-bold">{inactiveClients}</h3>
+                <h3 className="text-2xl font-bold text-gray-800">{inactiveClients}</h3>
                 <p className="text-xs text-gray-500 mt-1">
                   {totalClients ? Math.round((inactiveClients / totalClients) * 100) : 0}% of total
                 </p>
               </div>
-              <div className="stat-icon bg-yellow-100 p-3 rounded-full">
-                <Clock size={24} className="text-yellow-800" />
+              <div className="bg-gradient-to-br from-red-400 to-red-600 p-3 rounded-full">
+                <UserRoundX size={24} className="text-white" />
               </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Total Projects</p>
-                <h3 className="text-2xl font-bold">{totalProjects}</h3>
+                <h3 className="text-2xl font-bold text-gray-800">{totalProjects}</h3>
                 <p className="text-xs text-gray-500 mt-1">Across all clients</p>
               </div>
-              <div className="stat-icon bg-purple-100 p-3 rounded-full">
-                <Briefcase size={24} className="text-purple-800" />
+              <div className="bg-gradient-to-br from-purple-400 to-purple-600 p-3 rounded-full">
+                <Briefcase size={24} className="text-white" />
               </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Total Revenue</p>
-                <h3 className="text-2xl font-bold">₹ {totalRevenueINR.toLocaleString()}</h3>
+                <h3 className="text-2xl font-bold text-gray-800">₹ {totalRevenueINR.toLocaleString()}</h3>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger>
-                      {/* <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-1">
                         ${totalRevenueUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
-                      </p> */}
+                      </p>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent className="bg-white border-gray-200 shadow-lg rounded-lg p-2">
                       <p>Converted at 1 USD = ₹ {EXCHANGE_RATE_USD_TO_INR}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div className="stat-icon bg-blue-100 p-3 rounded-full">
-                <DollarSign size={24} className="text-blue-800" />
+              <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-3 rounded-full">
+                <ReceiptIndianRupee size={24} className="text-white" />
               </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Total Profit</p>
-                <h3 className="text-2xl font-bold">₹ {totalProfitINR.toLocaleString()}</h3>
+                <h3 className="text-2xl font-bold text-gray-800">₹ {totalProfitINR.toLocaleString()}</h3>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger>
-                      {/* <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-1">
                         ${totalProfitUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
-                      </p> */}
+                      </p>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent className="bg-white border-gray-200 shadow-lg rounded-lg p-2">
                       <p>Converted at 1 USD = ₹ {EXCHANGE_RATE_USD_TO_INR}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div className="stat-icon bg-green-100 p-3 rounded-full">
-                <TrendingUp size={24} className="text-green-800" />
+              <div className="bg-gradient-to-br from-green-400 to-green-600 p-3 rounded-full">
+                <TrendingUp size={24} className="text-white" />
               </div>
-            </Card>
-          </div>
-
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <Card className="p-6 rounded-xl shadow-sm border border-gray-200">
-              <h2 className="text-lg sm:text-xl font-semibold mb-4">Projects & Revenue per Client</h2>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={clientFinancials}>
-                  <XAxis dataKey="display_name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    formatter={(value, name) => {
-                      const val = Number(value);
-                      const usd = val / EXCHANGE_RATE_USD_TO_INR;
-                      return [`₹ ${val.toLocaleString()} `, name];
-                    }}
-                  />
-                  <Bar dataKey="total_projects" fill="#8b5cf6" name="Projects" radius={[10, 10, 0, 0]} />
-                  <Bar dataKey="revenue_inr" fill="#3b82f6" name="Revenue" radius={[10, 10, 0, 0]} />
-                  <Bar dataKey="profit_inr" fill="#10b981" name="Profit" radius={[10, 10, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-            <Card className="p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center">
-              <h2 className="text-lg sm:text-xl font-semibold mb-4">Revenue vs Profit</h2>
-              <RevenueProfitChart revenue={totalRevenueINR} profit={totalProfitINR} exchangeRate={EXCHANGE_RATE_USD_TO_INR} />
-            </Card>
-          </div>
-
-          {/* Table Section */}
-          <Card className="rounded-2xl p-4 sm:p-6">
-            <ClientTable clientFinancials={clientFinancials} setAddClientOpen={setAddClientOpen} />
+            </CardContent>
           </Card>
         </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+ <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+  <CardHeader className="purple-gradient text-white p-6">
+    <h2 className="text-xl md:text-2xl font-semibold">Projects & Revenue per Client</h2>
+  </CardHeader>
+  <CardContent className="p-6 overflow-x-auto">
+    <div style={{ minWidth: `${clientFinancials.length * 100}px` }}>
+      <ResponsiveContainer width="100%" height={400}>
+        <BarChart
+          data={clientFinancials}
+          margin={{ top: 20, right: 20, left: 0, bottom: 10 }}
+          className="animate-fade-in"
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis
+            dataKey="display_name"
+            angle={0}
+            textAnchor="middle"
+            interval={0}
+            height={50}
+            label={{ value: "Clients", position: "insideBottom", offset: -10, fill: "#4b5563" }}
+            className="text-sm font-medium purple-text-color"
+            tick={{ fontSize: 12, fill: "#4b5563" }}
+            tickFormatter={(value) => (value.length > 7 ? `${value.slice(0, 7)}...` : value)}
+          />
+          <YAxis
+            label={{ value: "Value", angle: -90, position: "insideLeft", offset: -10, fill: "#4b5563" }}
+            className="text-sm font-medium purple-text-color"
+            tick={{ fontSize: 12, fill: "#4b5563" }}
+          />
+          <Tooltip
+  contentStyle={{
+    backgroundColor: "#fff",
+    border: "1px solid oklch(62.7% 0.265 303.9)",
+    borderRadius: "8px",
+    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+  }}
+  formatter={(value, name) => {
+    const val = Number(value);
+    if (name === "Revenue" || name === "Profit") {
+      const usd = val / EXCHANGE_RATE_USD_TO_INR;
+      return [
+        `₹${val.toLocaleString()} ($${usd.toLocaleString(undefined, {
+          maximumFractionDigits: 0,
+        })})`,
+        name,
+      ];
+    }
+    // For Projects
+    return [val.toLocaleString(), name];
+  }}
+  itemStyle={{ color: "#4b5563" }}
+  cursor={{ fill: "#f3e8ff" }}
+/>
+
+          <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
+          <Bar dataKey="total_projects" fill="#7B43F1" name="Projects" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="revenue_inr" fill="#A74BC8" name="Revenue" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="profit_inr" fill="#B343B5" name="Profit" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </CardContent>
+</Card>
+   <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+  <CardHeader className="purple-gradient text-white p-6">
+    <h2 className="text-xl md:text-2xl font-semibold">Revenue vs Profit</h2>
+  </CardHeader>
+  <CardContent className="p-6 flex flex-col items-center">
+    <ResponsiveContainer width="100%" height={400}>
+      <PieChart className="animate-fade-in">
+        <Pie
+          data={[
+            { name: "Revenue", value: totalRevenueINR, fill: "#7B43F1" },
+            { name: "Profit", value: totalProfitINR, fill: "#A74BC8" },
+          ]}
+          cx="50%"
+          cy="50%"
+          innerRadius={100}
+          outerRadius={140}
+          cornerRadius={50}
+          paddingAngle={5}
+          dataKey="value"
+          label={({ name, value }) => `${name}: ₹${value.toLocaleString()}`}
+          labelLine={false}
+          className="font-medium purple-text-color"
+        />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: "#fff",
+            border: "1px solid oklch(62.7% 0.265 303.9)",
+            borderRadius: "8px",
+            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+          }}
+          formatter={(value, name) => {
+            const val = Number(value);
+            const usd = val / EXCHANGE_RATE_USD_TO_INR;
+            return [`₹${val.toLocaleString()} ($${usd.toLocaleString(undefined, { maximumFractionDigits: 0 })})`, name];
+          }}
+          itemStyle={{ color: "#4b5563" }}
+        />
+        <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
+      </PieChart>
+    </ResponsiveContainer>
+  </CardContent>
+</Card>
+        </div>
+
+        {/* Table Section */}
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl rounded-2xl">
+          <CardContent className="p-6">
+            <ClientTable clientFinancials={clientFinancials} setAddClientOpen={setAddClientOpen} />
+          </CardContent>
+        </Card>
       </main>
 
       {/* Add Client Dialog */}

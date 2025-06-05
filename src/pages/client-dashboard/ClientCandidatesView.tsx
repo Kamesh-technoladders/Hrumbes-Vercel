@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, Search, TrendingUp, ChevronLeft, ChevronRight, ArrowUpDown, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, TrendingUp, ChevronLeft, ChevronRight, ArrowUpDown, Loader2, Plus, Briefcase, Calendar, Clock, DollarSign, UserRoundCheck, UserRoundX, ReceiptIndianRupee } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import HiddenContactCell from "@/components/ui/HiddenContactCell";
 import { format } from "date-fns";
@@ -30,6 +30,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/jobs/ui/dropdown-menu";
 import { useSelector } from "react-redux";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, PieChart, Pie } from "recharts";
+
 
 // Status IDs for Offered and Joined candidates
 const OFFERED_STATUS_ID = "9d48d0f9-8312-4f60-aaa4-bafdce067417";
@@ -78,6 +80,7 @@ interface Employee {
   currency: string;
   actual_revenue_inr: number;
   actual_profit_inr: number;
+  salary_currency: string;
 }
 
 interface TimeLog {
@@ -150,6 +153,7 @@ const ClientCandidatesView = () => {
     { value: "INR", symbol: "₹" },
     { value: "USD", symbol: "$" },
   ];
+  
 
   const parseSalary = (salary: string | undefined): number => {
     if (!salary) return 0;
@@ -245,6 +249,7 @@ const ClientCandidatesView = () => {
 
     return 0;
   };
+  
 
   const formatBilling = (amount: number, billingType: string, currency: string): string => {
     const currencySymbol = currencies.find((c) => c.value === currency)?.symbol || "₹";
@@ -304,10 +309,15 @@ const ClientCandidatesView = () => {
     const revenue = calculateRevenue(employee, projectId, timeLogs);
     const hours = calculateEmployeeHours(employee.id, projectId, timeLogs);
     let salary = employee.salary;
+    
 
-    if (employee.currency === "USD") {
-      salary *= 1;
-    }
+console.log("employee", employee)
+  
+
+  if (employee.salary_currency === "USD") {
+    salary *= USD_TO_INR_RATE_EMPLOYEES;
+  }
+
 
     const salaryType = employee.salary_type;
     if (salaryType === "LPA") {
@@ -323,61 +333,60 @@ const ClientCandidatesView = () => {
     return revenue - salary;
   };
 
-  const fetchCandidatesAndEmployees = async (client: string) => {
-    try {
-      setLoading(true);
+ 
+const fetchCandidatesAndEmployees = async (client: string) => {
+  try {
+    setLoading(true);
 
-      const { data: clientData, error: clientError } = await supabase
-        .from("hr_clients")
-        .select("id, client_name, commission_value, commission_type, currency, service_type")
-        .eq("client_name", client)
-        .eq("organization_id", organization_id)
-        .single();
+    const { data: clientData, error: clientError } = await supabase
+      .from("hr_clients")
+      .select("id, client_name, commission_value, commission_type, currency, service_type")
+      .eq("client_name", client)
+      .eq("organization_id", organization_id)
+      .single();
 
-      if (clientError) throw clientError;
+    if (clientError) throw clientError;
 
-      setServiceType(clientData.service_type || []);
-      setClientCurrency(clientData.currency || "INR");
+    setServiceType(clientData.service_type || []);
+    setClientCurrency(clientData.currency || "INR");
 
-      const { data: jobsData, error: jobsError } = await supabase
-        .from("hr_jobs")
-        .select("id, title, client_owner, job_type_category, budget, budget_type")
-        .eq("client_owner", client)
-        .eq("organization_id", organization_id);
+    const { data: jobsData, error: jobsError } = await supabase
+      .from("hr_jobs")
+      .select("id, title, client_owner, job_type_category, budget, budget_type")
+      .eq("client_owner", client)
+      .eq("organization_id", organization_id);
 
-      if (jobsError) throw jobsError;
+    if (jobsError) throw jobsError;
 
-      let candidateRevenue = 0;
-      let candidateProfit = 0;
-      let candidateCount = 0;
-      let employeeRevenueINR = 0;
-      let employeeProfitINR = 0;
-      let employeeCount = 0;
+    let candidateRevenue = 0;
+    let candidateProfit = 0;
+    let candidateCount = 0;
+    let employeeRevenueINR = 0;
+    let employeeProfitINR = 0;
+    let employeeCount = 0;
 
-      if (jobsData && jobsData.length > 0) {
-        const jobIds = jobsData.map((job) => job.id);
+    if (jobsData && jobsData.length > 0) {
+      const jobIds = jobsData.map((job) => job.id);
 
-        const { data: candidatesData, error: candidatesError } = await supabase
-          .from("hr_job_candidates")
-          .select(`
-            id, name, email, phone, experience, skills, status, job_id,
-            main_status_id, sub_status_id, ctc, accrual_ctc, expected_salary, joining_date, applied_from,
-            hr_jobs!hr_job_candidates_job_id_fkey(id, title, job_type_category, client_details)
-          `)
-          .in("job_id", jobIds)
-          .in("main_status_id", [OFFERED_STATUS_ID, JOINED_STATUS_ID]);
+      const { data: candidatesData, error: candidatesError } = await supabase
+        .from("hr_job_candidates")
+        .select(`
+          id, name, email, phone, experience, skills, status, job_id,
+          main_status_id, sub_status_id, ctc, accrual_ctc, expected_salary, joining_date, applied_from,
+          hr_jobs!hr_job_candidates_job_id_fkey(id, title, job_type_category, client_details)
+        `)
+        .in("job_id", jobIds)
+        .in("main_status_id", [OFFERED_STATUS_ID, JOINED_STATUS_ID]);
 
-        if (candidatesError) throw candidatesError;
+      if (candidatesError) throw candidatesError;
 
-        if (candidatesData && candidatesData.length > 0) {
-          const enhancedCandidates = candidatesData.map((candidate) => {
+      if (candidatesData && candidatesData.length > 0) {
+        const enhancedCandidates = candidatesData.map((candidate) => {
           const job = jobsData.find((job) => job.id === candidate.job_id);
-          // Calculate profit first, as it’s needed for both Internal and External revenue
           const candProfit = job ? calculateCandidateProfit(candidate, job, clientData) : 0;
-          // Modified: Set revenue based on job type
           const candRevenue = job?.job_type_category === "Internal"
-            ? (candidate.accrual_ctc ? parseSalary(candidate.accrual_ctc) : 0) // Internal: use accrual_ctc
-            : candProfit; // External: revenue equals profit (commission-based)
+            ? (candidate.accrual_ctc ? parseSalary(candidate.accrual_ctc) : 0)
+            : candProfit;
 
           candidateRevenue += candRevenue;
           candidateProfit += candProfit;
@@ -388,156 +397,162 @@ const ClientCandidatesView = () => {
             job_type_category: job ? job.job_type_category : "Unknown",
             profit: candProfit,
           };
-          });
+        });
 
-          candidateCount = candidatesData.length;
-          setCandidates(enhancedCandidates);
-          setFilteredCandidates(enhancedCandidates);
-        } else {
-          setCandidates([]);
-          setFilteredCandidates([]);
-        }
+        candidateCount = candidatesData.length;
+        setCandidates(enhancedCandidates);
+        setFilteredCandidates(enhancedCandidates);
       } else {
         setCandidates([]);
         setFilteredCandidates([]);
       }
+    } else {
+      setCandidates([]);
+      setFilteredCandidates([]);
+    }
 
-      if (clientData.service_type.includes("contractual")) {
-        const { data: projectsData, error: projectsError } = await supabase
-          .from("hr_projects")
-          .select("id, client_id, name")
-          .eq("client_id", clientData.id)
-          .eq("organization_id", organization_id);
+    if (clientData.service_type.includes("contractual")) {
+      const { data: projectsData, error: projectsError } = await supabase
+        .from("hr_projects")
+        .select("id, client_id, name")
+        .eq("client_id", clientData.id)
+        .eq("organization_id", organization_id);
 
-        if (projectsError) throw projectsError;
+      if (projectsError) throw projectsError;
 
-        const { data: employeesData, error: employeesError } = await supabase
-          .from("hr_project_employees")
-          .select(`
-            id,
-            assign_employee,
-            project_id,
-            client_id,
-            salary,
-            client_billing,
-            billing_type,
-            hr_employees:hr_employees!hr_project_employees_assign_employee_fkey(first_name, last_name, salary_type)
-          `)
-          .eq("client_id", clientData.id)
-          .eq("organization_id", organization_id);
+      const { data: employeesData, error: employeesError } = await supabase
+        .from("hr_project_employees")
+        .select(`
+          id,
+          assign_employee,
+          project_id,
+          client_id,
+          salary,
+          salary_currency,
+          salary_type,
+          client_billing,
+          billing_type,
+          hr_employees:hr_employees!hr_project_employees_assign_employee_fkey(first_name, last_name)
+        `)
+        .eq("client_id", clientData.id)
+        .eq("organization_id", organization_id);
 
-        if (employeesError) throw employeesError;
+      if (employeesError) throw employeesError;
 
-        const projectIds = projectsData?.map((p) => p.id) || [];
+      const projectIds = projectsData?.map((p) => p.id) || [];
 
-        const { data: timeLogsData, error: timeLogsError } = await supabase
-          .from("time_logs")
-          .select("id, employee_id, date, project_time_data, total_working_hours")
-          // .eq("organization_id", organization_id);
+      const { data: timeLogsData, error: timeLogsError } = await supabase
+        .from("time_logs")
+        .select("id, employee_id, date, project_time_data, total_working_hours");
 
-        if (timeLogsError) throw timeLogsError;
+      if (timeLogsError) throw timeLogsError;
 
-        const relevantTimeLogs = timeLogsData?.filter((log) =>
-          log.project_time_data?.projects?.some((proj) => projectIds.includes(proj.projectId))
-        ) || [];
+      const relevantTimeLogs = timeLogsData?.filter((log) =>
+        log.project_time_data?.projects?.some((proj) => projectIds.includes(proj.projectId))
+      ) || [];
 
-        if (employeesData && employeesData.length > 0) {
-          const enhancedEmployees = employeesData.map((employee) => {
-            const project = projectsData?.find((p) => p.id === employee.project_id);
-            const employeeName = employee.hr_employees
-              ? `${employee.hr_employees.first_name} ${employee.hr_employees.last_name}`
-              : "Unknown";
-            const salaryType = employee.hr_employees?.salary_type || "LPA";
-            const actualRevenue = calculateRevenue(
-              {
-                id: employee.assign_employee,
-                employee_name: employeeName,
-                project_id: employee.project_id,
-                project_name: project?.name,
-                salary: Number(employee.salary) || 0,
-                salary_type: salaryType,
-                salary_formatted: "",
-                client_billing: Number(employee.client_billing) || 0,
-                billing_type: employee.billing_type || "LPA",
-                billing_type_formatted: "",
-                currency: clientData.currency,
-                actual_revenue_inr: 0,
-                actual_profit_inr: 0,
-              },
-              employee.project_id,
-              relevantTimeLogs
-            );
-            const actualProfit = calculateProfit(
-              {
-                id: employee.assign_employee,
-                employee_name: employeeName,
-                project_id: employee.project_id,
-                project_name: project?.name,
-                salary: Number(employee.salary) || 0,
-                salary_type: salaryType,
-                salary_formatted: "",
-                client_billing: Number(employee.client_billing) || 0,
-                billing_type: employee.billing_type || "LPA",
-                billing_type_formatted: "",
-                currency: clientData.currency,
-                actual_revenue_inr: 0,
-                actual_profit_inr: 0,
-              },
-              employee.project_id,
-              relevantTimeLogs
-            );
-
-            employeeRevenueINR += actualRevenue;
-            employeeProfitINR += actualProfit;
-
-            return {
+      if (employeesData && employeesData.length > 0) {
+        const enhancedEmployees = employeesData.map((employee) => {
+          const project = projectsData?.find((p) => p.id === employee.project_id);
+          const employeeName = employee.hr_employees
+            ? `${employee.hr_employees.first_name} ${employee.hr_employees.last_name}`
+            : "Unknown";
+          const salaryType = employee.salary_type || "LPA";
+          const salaryCurrency = employee.salary_currency || "INR";
+          const actualRevenue = calculateRevenue(
+            {
               id: employee.assign_employee,
               employee_name: employeeName,
               project_id: employee.project_id,
-              project_name: project ? project.name : "Unknown",
+              project_name: project?.name,
               salary: Number(employee.salary) || 0,
               salary_type: salaryType,
-              salary_formatted: formatBilling(Number(employee.salary) || 0, salaryType),
+              salary_currency: salaryCurrency,
+              salary_formatted: "",
               client_billing: Number(employee.client_billing) || 0,
               billing_type: employee.billing_type || "LPA",
-              billing_type_formatted: formatBilling(Number(employee.client_billing) || 0, employee.billing_type || "LPA"),
+              billing_type_formatted: "",
               currency: clientData.currency,
-              actual_revenue_inr: actualRevenue,
-              actual_profit_inr: actualProfit,
-            };
-          });
+              actual_revenue_inr: 0,
+              actual_profit_inr: 0,
+            },
+            employee.project_id,
+            relevantTimeLogs
+          );
+          const actualProfit = calculateProfit(
+            {
+              id: employee.assign_employee,
+              employee_name: employeeName,
+              project_id: employee.project_id,
+              project_name: project?.name,
+              salary: Number(employee.salary) || 0,
+              salary_type: salaryType,
+              salary_currency: salaryCurrency,
+              salary_formatted: "",
+              client_billing: Number(employee.client_billing) || 0,
+              billing_type: employee.billing_type || "LPA",
+              billing_type_formatted: "",
+              currency: clientData.currency,
+              actual_revenue_inr: 0,
+              actual_profit_inr: 0,
+            },
+            employee.project_id,
+            relevantTimeLogs
+          );
 
-          employeeCount = employeesData.length;
-          setEmployees(enhancedEmployees);
-          setFilteredEmployees(enhancedEmployees);
-        } else {
-          setEmployees([]);
-          setFilteredEmployees([]);
-        }
+          employeeRevenueINR += actualRevenue;
+          employeeProfitINR += actualProfit;
+
+          return {
+            id: employee.assign_employee,
+            employee_name: employeeName,
+            project_id: employee.project_id,
+            project_name: project ? project.name : "Unknown",
+            salary: Number(employee.salary) || 0,
+            salary_type: salaryType,
+            salary_currency: salaryCurrency,
+            salary_formatted: formatBilling(Number(employee.salary) || 0, salaryType),
+            client_billing: Number(employee.client_billing) || 0,
+            billing_type: employee.billing_type || "LPA",
+            billing_type_formatted: formatBilling(Number(employee.client_billing) || 0, employee.billing_type || "LPA"),
+            currency: clientData.currency,
+            actual_revenue_inr: actualRevenue,
+            actual_profit_inr: actualProfit,
+          };
+        });
+
+        employeeCount = employeesData.length;
+        setEmployees(enhancedEmployees);
+        setFilteredEmployees(enhancedEmployees);
       } else {
         setEmployees([]);
         setFilteredEmployees([]);
       }
-
-      setMetrics({
-        candidateRevenue,
-        candidateProfit,
-        candidateCount,
-        employeeRevenueINR,
-        employeeProfitINR,
-        employeeCount,
-      });
-    } catch (error) {
-      toast({
-        title: "Error fetching data",
-        description: "An error occurred while fetching candidate or employee data.",
-        variant: "destructive",
-      });
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
+    } else {
+      setEmployees([]);
+      setFilteredEmployees([]);
     }
-  };
+
+    setMetrics({
+      candidateRevenue,
+      candidateProfit,
+      candidateCount,
+      employeeRevenueINR,
+      employeeProfitINR,
+      employeeCount,
+    });
+  } catch (error) {
+    toast({
+      title: "Error fetching data",
+      description: "An error occurred while fetching candidate or employee data.",
+      variant: "destructive",
+    });
+    console.error("Error fetching data:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -691,6 +706,30 @@ const ClientCandidatesView = () => {
     setCurrentPageCandidates(1);
     setCurrentPageEmployees(1);
   };
+
+  // Chart data
+  const financialData = [
+    ...candidates.map((c) => ({
+      name: c.name,
+      revenue: c.job_type_category === "Internal" ? (c.accrual_ctc ? parseSalary(c.accrual_ctc) : 0) : (c.profit || 0),
+      profit: c.profit || 0,
+      type: "Candidate",
+    })),
+    ...employees.map((e) => ({
+      name: e.employee_name,
+      revenue: e.actual_revenue_inr,
+      profit: e.actual_profit_inr,
+      type: "Employee",
+    })),
+  ].slice(0, 10); // Limit to top 10 for display
+
+  const pieChartData = [
+    { name: "Candidate Revenue", value: metrics.candidateRevenue, fill: "#7B43F1" },
+    { name: "Employee Revenue", value: metrics.employeeRevenueINR, fill: "#A74BC8" },
+    { name: "Candidate Profit", value: metrics.candidateProfit, fill: "#B343B5" },
+    { name: "Employee Profit", value: metrics.employeeProfitINR, fill: "#D946EF" },
+  ];
+
 
   const renderPagination = (totalPages: number, isCandidates: boolean) => {
     const currentPage = isCandidates ? currentPageCandidates : currentPageEmployees;
@@ -1076,9 +1115,34 @@ const ClientCandidatesView = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {employee.project_name || "Unknown"}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {employee.salary_formatted}
-                  </td>
+                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span className="cursor-pointer">
+        {(() => {
+          const currency = employee.salary_currency || "INR";
+          const salary = employee.salary || 0;
+          const salaryType = employee.salary_type || "LPA";
+          const currencySymbol = currency === "USD" ? "$" : "₹";
+          const salaryTypeText = salaryType === "Hourly" ? "hr" : salaryType === "Monthly" ? "month" : "year";
+          return `${currencySymbol}${salary.toLocaleString('en-IN')}/${salaryTypeText}`;
+        })()}
+      </span>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>
+        {(() => {
+          const currency = employee.salary_currency || "INR";
+          const salary = employee.salary || 0;
+          const salaryType = employee.salary_type || "LPA";
+          const convertedSalary = currency === "USD" ? salary * 84 : salary;
+          const salaryTypeText = salaryType === "Hourly" ? "hr" : salaryType === "Monthly" ? "month" : "year";
+          return `₹${convertedSalary.toLocaleString('en-IN')}/${salaryTypeText}`;
+        })()}
+      </p>
+    </TooltipContent>
+  </Tooltip>
+</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {employee.billing_type_formatted}
                   </td>
@@ -1118,96 +1182,218 @@ const ClientCandidatesView = () => {
   }, [clientName, organization_id]);
 
   return (
-    <div className="w-full max-w-[95vw] py-2 sm:py-4 px-2 sm:px-4 lg:px-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={goBack}
-                className="h-8 w-8"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <CardTitle className="text-lg sm:text-xl lg:text-2xl">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
+     <main className="w-full max-w-8xl md:max-w-7xl lg:max-w-8xl mx-auto space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={goBack}
+              className="h-8 w-8 bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 tracking-tight">
                 {clientName} - Candidates and Employees
-              </CardTitle>
+              </h1>
+              <p className="text-gray-500 text-sm md:text-base mt-2">
+                Manage and track candidate and employee activities
+              </p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
-            <Card className="bg-green-50 border-green-200">
-              <CardHeader className="p-3 sm:p-4">
-                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-                  Total Revenue
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4">
-                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
-                  {formatCurrency(metrics.candidateRevenue + metrics.employeeRevenueINR)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-green-50 border-green-200">
-              <CardHeader className="p-3 sm:p-4">
-                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-                  Total Profit
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4">
-                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-800">
-                  {formatCurrency(metrics.candidateProfit + metrics.employeeProfitINR)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-blue-50 border-blue-200">
-              <CardHeader className="p-3 sm:p-4">
-                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-                  Total Count
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4">
-                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-800">
-                  {metrics.candidateCount + metrics.employeeCount}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {metrics.candidateCount} Candidates, {metrics.employeeCount} Employees
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          <div className="flex items-center mb-4 sm:mb-6 relative">
-            <Search className="absolute left-2.5 top-2.5 h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
-            <Input
-              type="search"
-              placeholder="Search candidates and employees..."
-              className="pl-8 w-full text-xs sm:text-sm"
-              value={searchTerm}
-              onChange={handleSearch}
-            />
-          </div>
-          {loading ? (
-            <div className="flex justify-center py-6 sm:py-8">
-              <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-purple-600"></div>
+        </div>
+
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-2">Total Count</p>
+                <h3 className="text-2xl font-bold text-gray-800">{metrics.candidateCount + metrics.employeeCount}</h3>
+                <p className="text-xs text-gray-500 mt-1">{metrics.candidateCount} Candidates, {metrics.employeeCount} Employees</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-400 to-purple-600 p-3 rounded-full">
+                <Briefcase size={24} className="text-white" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-2">Total Revenue</p>
+                <h3 className="text-2xl font-bold text-gray-800">{formatCurrency(metrics.candidateRevenue + metrics.employeeRevenueINR)}</h3>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <p className="text-xs text-gray-500 mt-1">
+                        ${(metrics.candidateRevenue + metrics.employeeRevenueINR).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-white border-gray-200 shadow-lg rounded-lg p-2">
+                      <p>Converted at 1 USD = ₹ {USD_TO_INR_RATE_CANDIDATES}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-3 rounded-full">
+                <DollarSign size={24} className="text-white" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-2">Total Profit</p>
+                <h3 className="text-2xl font-bold text-gray-800">{formatCurrency(metrics.candidateProfit + metrics.employeeProfitINR)}</h3>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <p className="text-xs text-gray-500 mt-1">
+                        ${(metrics.candidateProfit + metrics.employeeProfitINR).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-white border-gray-200 shadow-lg rounded-lg p-2">
+                      <p>Converted at 1 USD = ₹ {USD_TO_INR_RATE_CANDIDATES}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="bg-gradient-to-br from-green-400 to-green-600 p-3 rounded-full">
+                <TrendingUp size={24} className="text-white" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardHeader className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white p-6">
+              <h2 className="text-xl md:text-2xl font-semibold">Revenue & Profit by Individual</h2>
+            </CardHeader>
+            <CardContent className="p-6 overflow-x-auto">
+              <div style={{ minWidth: `${financialData.length * 100}px` }}>
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart
+                    data={financialData}
+                    margin={{ top: 20, right: 20, left: 0, bottom: 10 }}
+                    className="animate-fade-in"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="name"
+                      angle={0}
+                      textAnchor="middle"
+                      interval={0}
+                      height={50}
+                      label={{ value: "Individuals", position: "insideBottom", offset: -10, fill: "#4b5563" }}
+                      tick={{ fontSize: 12, fill: "#4b5563" }}
+                      tickFormatter={(value) => (value.length > 7 ? `${value.slice(0, 7)}...` : value)}
+                    />
+                    <YAxis
+                      label={{ value: "Value (INR)", angle: -90, position: "insideLeft", offset: -10, fill: "#4b5563" }}
+                      tick={{ fontSize: 12, fill: "#4b5563" }}
+                    />
+                    <RechartsTooltip
+                      contentStyle={{
+                        backgroundColor: "#fff",
+                        border: "1px solid oklch(62.7% 0.265 303.9)",
+                        borderRadius: "8px",
+                        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                      }}
+                      formatter={(value, name) => {
+                        const val = Number(value);
+                        const usd = val / USD_TO_INR_RATE_CANDIDATES;
+                        return [
+                          `₹${val.toLocaleString()} ($${usd.toLocaleString(undefined, { maximumFractionDigits: 0 })})`,
+                          name,
+                        ];
+                      }}
+                      itemStyle={{ color: "#4b5563" }}
+                      cursor={{ fill: "#f3e8ff" }}
+                    />
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
+                    <Bar dataKey="revenue" fill="#7B43F1" name="Revenue" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="profit" fill="#A74BC8" name="Profit" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardHeader className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white p-6">
+              <h2 className="text-xl md:text-2xl font-semibold">Revenue vs Profit Distribution</h2>
+            </CardHeader>
+            <CardContent className="p-6 flex flex-col items-center">
+              <ResponsiveContainer width="100%" height={400}>
+                <PieChart className="animate-fade-in">
+                  <Pie
+                    data={pieChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={100}
+                    outerRadius={140}
+                    cornerRadius={50}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({ name, value }) => `${name}: ₹${value.toLocaleString()}`}
+                    labelLine={false}
+                    className="font-medium"
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid oklch(62.7% 0.265 303.9)",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                    }}
+                    formatter={(value, name) => {
+                      const val = Number(value);
+                      const usd = val / USD_TO_INR_RATE_CANDIDATES;
+                      return [`₹${val.toLocaleString()} ($${usd.toLocaleString(undefined, { maximumFractionDigits: 0 })})`, name];
+                    }}
+                    itemStyle={{ color: "#4b5563" }}
+                  />
+                  <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tables Section */}
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl rounded-2xl">
+          <CardContent className="p-6">
+            <div className="flex items-center mb-6 relative">
+              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+              <Input
+                type="search"
+                placeholder="Search candidates and employees..."
+                className="pl-8 w-full text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                value={searchTerm}
+                onChange={handleSearch}
+              />
             </div>
-          ) : (
-            <div className="flex flex-col md:flex-row gap-4">
-              {renderCandidateTable(paginatedCandidates, "All Candidates")}
-              {serviceType.length === 1 && serviceType[0] === "permanent" ? null : (
-                renderEmployeeTable(paginatedEmployees, "Assigned Employees in Projects")
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            {loading ? (
+              <div className="flex items-center justify-center h-[80vh]">
+                <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
+              </div>
+            ) : (
+              <div className="flex flex-col md:flex-row gap-6">
+                {renderCandidateTable(paginatedCandidates, "All Candidates")}
+                {serviceType.length === 1 && serviceType[0] === "permanent" ? null : (
+                  renderEmployeeTable(paginatedEmployees, "Assigned Employees in Projects")
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 };
 
 export default ClientCandidatesView;
+// UI changes

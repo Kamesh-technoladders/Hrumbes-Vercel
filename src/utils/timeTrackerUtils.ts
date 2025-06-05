@@ -5,8 +5,8 @@ import { TimeTrackerSettings } from "@/types/time-tracker-types";
  * Default time tracker settings
  */
 export const DEFAULT_SETTINGS: TimeTrackerSettings = {
-workingHoursPerDay: 9 , //  in hours
-  gracePeriodHours: 0.5  // 
+workingHoursPerDay: 9 , 
+  gracePeriodHours: 1  
 };
 
 /**

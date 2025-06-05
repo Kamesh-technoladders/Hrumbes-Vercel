@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 interface CalendarCardProps {
   employeeId: string;
   isHumanResourceEmployee: boolean;
+  role?: string; // Add role prop
 }
 
 interface Holiday {
@@ -27,6 +28,7 @@ interface LeaveRequest {
   end_date: string;
   status: 'approved' | 'pending' | 'rejected' | 'cancelled';
   notes: string | null;
+  employee_id?: string; // Include employee_id for superadmin
 }
 
 const mockHolidays: Holiday[] = [
@@ -35,43 +37,12 @@ const mockHolidays: Holiday[] = [
   { date: '2025-08-15', localName: 'Independence Day', name: 'Independence Day' },
   { date: '2025-10-02', localName: 'Gandhi Jayanti', name: 'Gandhi Jayanti' },
   { date: '2025-12-25', localName: 'Christmas Day', name: 'Christmas Day' },
-  // Added for scrolling test
   { date: '2025-06-01', localName: 'Test Holiday 1', name: 'Test 1' },
   { date: '2025-06-02', localName: 'Test Holiday 2', name: 'Test 2' },
   { date: '2025-06-03', localName: 'Test Holiday 3', name: 'Test 3' }
 ];
 
-const mockLeaves: LeaveRequest[] = [
-  // {
-  //   id: '9d5cf7a7-01d5-4f87-809d-e6bf2417aeae',
-  //   start_date: '2025-05-05',
-  //   end_date: '2025-05-05',
-  //   status: 'approved',
-  //   notes: 'Personal reason'
-  // },
-  // {
-  //   id: 'a2b3c4d5-e6f7-8g9h-0i1j-2k3l4m5n6o7',
-  //   start_date: '2025-06-10',
-  //   end_date: '2025-06-10',
-  //   status: 'pending',
-  //   notes: 'Medical appointment'
-  // },
-
-  // {
-  //   id: 'b3c4d5e6-f7g8-h9i0-j1k2-l3m4n5o6p7',
-  //   start_date: '2025-06-11',
-  //   end_date: '2025-06-11',
-  //   status: 'approved',
-  //   notes: 'Vacation'
-  // },
-  // {
-  //   id: 'c4d5e6f7-g8h9-i0j1-k2l3-m4n5o6p7q8',
-  //   start_date: '2025-06-12',
-  //   end_date: '2025-06-12',
-  //   status: 'pending',
-  //   notes: 'Personal'
-  // }
-];
+const mockLeaves: LeaveRequest[] = [];
 
 const HolidaysList: React.FC<{ holidays: Holiday[], leaves: LeaveRequest[], selectedDate: Date }> = ({ holidays, leaves, selectedDate }) => {
   const selectedDateString = format(selectedDate, 'yyyy-MM-dd');
@@ -177,7 +148,7 @@ const AllEventsList: React.FC<{ interviewDates: string[], holidays: Holiday[], l
       const holidayDate = new Date(holiday.date);
       return holidayDate >= today && holidayDate <= next30Days && holiday.date !== selectedDateString;
     })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b).getTime());
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const upcomingLeaves = leaves
     .filter(leave => {
       const start = new Date(leave.start_date);
@@ -187,7 +158,7 @@ const AllEventsList: React.FC<{ interviewDates: string[], holidays: Holiday[], l
     .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
 
   return (
-    <div className="overflow-y-auto max-h-[250px] pr-2 overflow-x-hidden">
+    <div className="overflow-y-auto max-h-[320px] pr-2 overflow-x-hidden">
       <h4 className="text-sm font-semibold mb-2">Events for {format(selectedDate, 'MMMM d, yyyy')}</h4>
       {hasInterviews || filteredHolidays.length > 0 || filteredLeaves.length > 0 ? (
         <>
@@ -252,7 +223,7 @@ const AllEventsList: React.FC<{ interviewDates: string[], holidays: Holiday[], l
   );
 };
 
-export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanResourceEmployee }) => {
+export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanResourceEmployee, role }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [interviewDates, setInterviewDates] = useState<string[]>([]);
@@ -265,30 +236,38 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        console.log('Fetching data for employeeId:', employeeId, 'isHumanResourceEmployee:', isHumanResourceEmployee);
+        console.log('Fetching data for employeeId:', employeeId, 'isHumanResourceEmployee:', isHumanResourceEmployee, 'role:', role);
 
-        // Fetch employee data
-        const { data: employeeData, error: employeeError } = await supabase
-          .from('hr_employees')
-          .select('first_name, last_name')
-          .eq('id', employeeId)
-          .single();
+        let fullName = '';
+        if (role !== 'organization_superadmin') {
+          // Fetch employee data for non-superadmin users
+          const { data: employeeData, error: employeeError } = await supabase
+            .from('hr_employees')
+            .select('first_name, last_name')
+            .eq('id', employeeId)
+            .single();
 
-        if (employeeError || !employeeData) {
-          throw new Error(`Employee fetch failed: ${employeeError?.message || 'No employee found'}`);
+          if (employeeError || !employeeData) {
+            throw new Error(`Employee fetch failed: ${employeeError?.message || 'No employee found'}`);
+          }
+
+          fullName = `${employeeData.first_name} ${employeeData.last_name}`;
+          console.log('Employee Full Name:', fullName);
         }
 
-        const fullName = `${employeeData.first_name} ${employeeData.last_name}`;
-        console.log('Employee Full Name:', fullName);
-
-        // Fetch interview dates only for HR employees
-        if (isHumanResourceEmployee) {
-          const { data: candidatesData, error: candidatesError } = await supabase
+        // Fetch interview dates
+        if (isHumanResourceEmployee || role === 'organization_superadmin') {
+          const query = supabase
             .from('hr_job_candidates')
             .select('interview_date')
             .eq('main_status_id', 'f72e13f8-7825-4793-85e0-e31d669f8097')
-            .eq('applied_from', fullName)
             .not('interview_date', 'is', null);
+
+          if (role !== 'organization_superadmin') {
+            query.eq('applied_from', fullName);
+          }
+
+          const { data: candidatesData, error: candidatesError } = await query;
 
           if (candidatesError) {
             throw new Error(`Candidates fetch failed: ${candidatesError.message}`);
@@ -334,12 +313,17 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
         }
 
         // Fetch leave requests
-        console.log('Fetching leave requests for employeeId:', employeeId);
-        const { data: leaveData, error: leaveError } = await supabase
+        console.log('Fetching leave requests for:', role === 'organization_superadmin' ? 'all employees' : `employeeId: ${employeeId}`);
+        const leaveQuery = supabase
           .from('leave_requests')
-          .select('id, start_date, end_date, status, notes')
-          .eq('employee_id', employeeId)
+          .select('id, start_date, end_date, status, notes, employee_id')
           .in('status', ['approved', 'pending']);
+
+        if (role !== 'organization_superadmin') {
+          leaveQuery.eq('employee_id', employeeId);
+        }
+
+        const { data: leaveData, error: leaveError } = await leaveQuery;
 
         if (leaveError) {
           throw new Error(`Leave requests fetch failed: ${leaveError.message}`);
@@ -359,7 +343,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
     };
 
     fetchData();
-  }, [employeeId, isHumanResourceEmployee]);
+  }, [employeeId, isHumanResourceEmployee, role]);
 
   const generateMonth = (date: Date): CalendarDay[] => {
     const start = startOfWeek(startOfMonth(date));
@@ -371,7 +355,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
       isCurrentMonth: isSameMonth(day, date),
       isToday: isSameDay(day, new Date()),
       isSunday: day.getDay() === 0,
-      hasInterview: isHumanResourceEmployee && isInterviewDay(day),
+      hasInterview: (isHumanResourceEmployee || role === 'organization_superadmin') && isInterviewDay(day),
       hasHoliday: isHolidayDay(day),
       hasLeave: isLeaveDay(day),
       leaveStatus: getLeaveStatus(day),
@@ -412,7 +396,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
 
   const handleDateSelect = (date: Date, hasInterview: boolean, hasHoliday: boolean, hasLeave: boolean) => {
     setSelectedDate(date);
-    if (isHumanResourceEmployee && hasInterview) {
+    if ((isHumanResourceEmployee || role === 'organization_superadmin') && hasInterview) {
       setActiveTab('interviews');
     } else if (hasHoliday || hasLeave) {
       setActiveTab('holidays');
@@ -428,7 +412,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
   }
 
   return (
-    <Card className="p-4 hover:shadow-md transition-shadow bg-white/80 backdrop-blur-sm h-[300px] overflow-hidden">
+    <Card className="p-4 hover:shadow-md transition-shadow bg-white/80 backdrop-blur-sm h-[400px] overflow-hidden">
       <div className="grid grid-cols-[2fr_3fr] gap-4 h-full">
         <div className="flex flex-col space-y-2 min-w-0">
           <CalendarHeader 
@@ -445,7 +429,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
         
         <div className="flex flex-col h-full min-w-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-            <TabsList className={`grid ${isHumanResourceEmployee ? 'grid-cols-3' : 'grid-cols-2'} mb-1.5`}>
+            <TabsList className={`grid ${isHumanResourceEmployee || role === 'organization_superadmin' ? 'grid-cols-3' : 'grid-cols-2'} mb-1.5`}>
               <TabsTrigger value="events" className="flex items-center gap-1 text-xs">
                 <Calendar className="w-3 h-3 flex-shrink-0" />
                 <span className="truncate">All Events</span>
@@ -454,7 +438,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
                 <Sun className="w-3 h-3 flex-shrink-0" />
                 <span className="truncate">Holidays</span>
               </TabsTrigger>
-              {isHumanResourceEmployee && (
+              {(isHumanResourceEmployee || role === 'organization_superadmin') && (
                 <TabsTrigger value="interviews" className="flex items-center gap-1 text-xs">
                   <Users className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate">Interviews</span>
@@ -468,15 +452,15 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
                 holidays={holidays}
                 leaves={leaves}
                 selectedDate={selectedDate}
-                isHumanResourceEmployee={isHumanResourceEmployee}
+                isHumanResourceEmployee={isHumanResourceEmployee || role === 'organization_superadmin'}
               />
             </TabsContent>
             <TabsContent value="holidays" className="flex-1">
               <HolidaysList holidays={holidays} leaves={leaves} selectedDate={selectedDate} />
             </TabsContent>
-            {isHumanResourceEmployee && (
+            {(isHumanResourceEmployee || role === 'organization_superadmin') && (
               <TabsContent value="interviews" className="flex-1">
-                <InterviewsList employeeId={employeeId} selectedDate={selectedDate} />
+                <InterviewsList employeeId={employeeId} selectedDate={selectedDate} role={role} />
               </TabsContent>
             )}
           </Tabs>

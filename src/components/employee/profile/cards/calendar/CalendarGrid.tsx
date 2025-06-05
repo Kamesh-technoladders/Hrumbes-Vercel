@@ -30,19 +30,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
         {weekDays.map((day) => (
           <div
             key={day.name}
-            className="h-5 flex items-center justify-center text-xs font-medium text-gray-400"
+            className="h-14 flex items-center justify-center text-xs font-medium text-gray-400"
           >
             {day.label}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-5">
+      <div className="grid grid-cols-7 gap-6">
         {days.map((day, index) => (
           <div
             key={index}
             className={cn(
-              "h-6 w-6 flex items-center justify-center text-xs relative",
+              "h-7 w-7 flex items-center justify-center text-xs relative",
               "rounded-full transition-colors cursor-pointer mx-auto",
               !day.isCurrentMonth && "text-gray-300",
               day.isToday && !day.hasInterview && !day.hasHoliday && !day.hasLeave && !isSameDay(day.date, selectedDate) && "bg-blue-50 text-blue-600 font-medium",

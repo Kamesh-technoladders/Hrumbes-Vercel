@@ -8,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 interface SubmissionChartCardProps {
   employeeId: string;
+  role: string;
 }
 
 interface ChartData {
@@ -15,10 +16,12 @@ interface ChartData {
   count: number;
 }
 
-export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employeeId }) => {
+export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employeeId, role }) => {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"week" | "month" | "year">("week");
+
+  const isSuperAdmin = role === "organization_superadmin";
 
   useEffect(() => {
     const fetchCandidateData = async () => {
@@ -27,17 +30,26 @@ export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employ
 
         let query = supabase
           .from("hr_status_change_counts")
-          .select("count, created_at")
-          .eq("candidate_owner", employeeId)
+          .select(`
+            count,
+            created_at,
+            hr_job_candidates (
+              submission_date
+            )
+          `)
           .eq("sub_status_id", "71706ff4-1bab-4065-9692-2a1237629dda");
+
+        // Apply candidate_owner filter only if not organization_superadmin
+        if (!isSuperAdmin) {
+          query = query.eq("candidate_owner", employeeId);
+        }
 
         const now = new Date();
         let data: ChartData[] = [];
 
         if (activeTab === "week") {
-          // Current week: Monday to Sunday (May 26–June 1, 2025)
           const startOfWeek = new Date(now);
-          startOfWeek.setDate(now.getDate() - now.getDay() + (now.getDay() === 6 ? 1 : -6));
+          startOfWeek.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
           startOfWeek.setHours(0, 0, 0, 0);
           const endOfWeek = new Date(startOfWeek);
           endOfWeek.setDate(startOfWeek.getDate() + 6);
@@ -49,22 +61,21 @@ export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employ
 
           if (error) throw error;
 
-          // Initialize data for each day of the week
-          const days = ["Mon", "Tue", "Wed", "Fri", "Sat", "Sun"];
+          const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
           data = days.map((day, index) => {
             const dayDate = new Date(startOfWeek);
             dayDate.setDate(startOfWeek.getDate() + index);
             const dayCount = counts
               .filter((record) => {
-               
-                  const recordDate = new Date(record.created_at);
-                return recordDate.toDateString() === dayDate.toDateString();
+                const date = record.hr_job_candidates?.submission_date
+                  ? new Date(record.hr_job_candidates.submission_date)
+                  : new Date(record.created_at);
+                return date.toDateString() === dayDate.toDateString();
               })
               .reduce((sum, record) => sum + record.count, 0);
             return { name: day, count: dayCount };
           });
         } else if (activeTab === "month") {
-          // Current month: May 2025
           const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
           const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
@@ -74,22 +85,21 @@ export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employ
 
           if (error) throw error;
 
-          // Group by week (Week 1 to Week 5)
           const weeks: { [key: string]: number } = {};
           counts.forEach((record) => {
-            const date = new Date(record.created_at);
+            const date = record.hr_job_candidates?.submission_date
+              ? new Date(record.hr_job_candidates.submission_date)
+              : new Date(record.created_at);
             const weekNumber = Math.floor((date.getDate() - 1) / 7) + 1;
             const weekKey = `Week ${weekNumber}`;
             weeks[weekKey] = (weeks[weekKey] || 0) + record.count;
           });
 
-          // Initialize data for up to 5 weeks
           data = Array.from({ length: 5 }, (_, i) => `Week ${i + 1}`).map((week) => ({
             name: week,
             count: weeks[week] || 0,
           }));
         } else if (activeTab === "year") {
-          // Current year: 2025
           const startOfYear = new Date(now.getFullYear(), 0, 1);
           const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
 
@@ -99,14 +109,18 @@ export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employ
 
           if (error) throw error;
 
-          // Group by month
           const months = [
-            "Jan", "February", "Mar", "Apr", "May", "June",
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
           ];
           data = months.map((month, index) => {
             const monthCount = counts
-              .filter((record) => new Date(record.created_at).getMonth() === index)
+              .filter((record) => {
+                const date = record.hr_job_candidates?.submission_date
+                  ? new Date(record.hr_job_candidates.submission_date)
+                  : new Date(record.created_at);
+                return date.getMonth() === index;
+              })
               .reduce((sum, record) => sum + record.count, 0);
             return { name: month, count: monthCount };
           });
@@ -121,10 +135,10 @@ export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employ
       }
     };
 
-    if (employeeId) {
+    if (employeeId || isSuperAdmin) {
       fetchCandidateData();
     }
-  }, [employeeId, activeTab]);
+  }, [employeeId, role, activeTab]);
 
   return (
     <Card className="shadow-md rounded-xl h-[300px] md:h-[325px] lg:h-[300px] flex flex-col">

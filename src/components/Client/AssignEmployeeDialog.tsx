@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "../../lib/utils";
+import { Switch } from "../../components/ui/switch";
 
 interface Client {
   id: string;
@@ -45,6 +46,8 @@ interface AssignEmployee {
   start_date: string;
   end_date: string;
   salary: number;
+  salary_currency: string;
+  salary_type: string;
   client_billing: number;
   status: string;
   sow: string | null;
@@ -83,11 +86,14 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
       start_date: string;
       end_date: string;
       salary: string;
+      salary_currency: string;
+      salary_type: string;
       client_billing: string;
       billing_type: string;
       status: string;
       sowFile: File | null;
       noOfDays: number;
+      isSalaryEditable: boolean;
     }[]
   >([]);
 
@@ -107,12 +113,14 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
   const client = clients.find((c) => c.id === clientId);
   const currencySymbol = client?.currency === "USD" ? "$" : "₹";
   const billingTypeOptions = ["Monthly", "Hourly"];
+  const salaryCurrencyOptions = ["INR", "USD"];
+  const salaryTypeOptions = ["LPA", "Monthly", "Hourly"];
 
   useEffect(() => {
     const fetchEmployees = async () => {
       const { data, error } = await supabase
         .from("hr_employees")
-        .select("id, first_name, last_name, salary")
+        .select("id, first_name, last_name, salary, salary_type")
         .eq("organization_id", organization_id);
       if (!error && data) {
         setEmployees(data);
@@ -139,11 +147,14 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           start_date: editEmployee.start_date,
           end_date: editEmployee.end_date,
           salary: editEmployee.salary.toString(),
+          salary_currency: editEmployee.salary_currency || "INR",
+          salary_type: editEmployee.salary_type || "Monthly",
           client_billing: editEmployee.client_billing.toString(),
           billing_type: editEmployee.billing_type || "Monthly",
           status: editEmployee.status,
           sowFile: null,
           noOfDays: editEmployee.duration,
+          isSalaryEditable: false,
         },
       ]);
     } else {
@@ -175,11 +186,14 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           start_date: projectData.start_date || "",
           end_date: projectData.end_date || "",
           salary: employee.salary?.toString() || "0",
+          salary_currency: employee.salary_currency || "INR",
+          salary_type: employee.salary_type || "Monthly",
           client_billing: "",
           billing_type: "Monthly",
           status: "Working",
           sowFile: null,
           noOfDays: projectData.duration || 0,
+          isSalaryEditable: false,
         },
       ]);
     }
@@ -217,6 +231,12 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
     setEmployeeAssignments(updatedList);
   };
 
+  const toggleSalaryEditable = (index: number) => {
+    const updatedList = [...employeeAssignments];
+    updatedList[index].isSalaryEditable = !updatedList[index].isSalaryEditable;
+    setEmployeeAssignments(updatedList);
+  };
+
   const handleFileUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFieldChange(index, "sowFile", e.target.files[0]);
@@ -225,7 +245,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    e.stopPropagation(); // Prevent any bubbling of the submit event
+    e.stopPropagation();
 
     try {
       if (!user || !organization_id) {
@@ -244,9 +264,11 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           !assignment.start_date ||
           !assignment.end_date ||
           !assignment.client_billing ||
-          !assignment.billing_type
+          !assignment.billing_type ||
+          !assignment.salary_currency ||
+          !assignment.salary_type
         ) {
-          toast.error("Please fill in all required fields (Employee, Start Date, End Date, Client Billing, Billing Type)");
+          toast.error("Please fill in all required fields (Employee, Start Date, End Date, Client Billing, Billing Type, Salary Currency, Salary Type)");
           return;
         }
 
@@ -272,6 +294,8 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
             start_date: assignment.start_date,
             end_date: assignment.end_date,
             salary: parseFloat(assignment.salary) || 0,
+            salary_currency: assignment.salary_currency,
+            salary_type: assignment.salary_type,
             client_billing: parseFloat(assignment.client_billing) || 0,
             billing_type: assignment.billing_type,
             status: assignment.status,
@@ -322,6 +346,8 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
               start_date: employee.start_date,
               end_date: employee.end_date,
               salary: parseFloat(employee.salary) || 0,
+              salary_currency: employee.salary_currency,
+              salary_type: employee.salary_type,
               client_billing: parseFloat(employee.client_billing) || 0,
               billing_type: employee.billing_type,
               status: employee.status,
@@ -350,13 +376,13 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
   };
 
   const handleCancel = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault(); // Explicitly prevent form submission
+    e.preventDefault();
     handleDialogClose(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleDialogClose}>
-      <DialogContent className="w-full max-w-[90vw] sm:max-w-3xl max-h-[80vh] overflow-y-auto p-4 sm:p-6 rounded-lg shadow-xl">
+     <DialogContent className="w-full max-w-[90vw] sm:max-w-5xl max-h-[80vh] overflow-y-auto p-4 sm:p-6 rounded-lg shadow-xl">
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl">
             {editEmployee ? "Edit Employee Assignment" : "Assign Employees to Project"}
@@ -419,6 +445,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                 const employee = employees.find((e) => e.id === assignment.assign_employee);
                 const startDate = assignment.start_date ? new Date(assignment.start_date) : null;
                 const endDate = assignment.end_date ? new Date(assignment.end_date) : null;
+                const salaryCurrencySymbol = assignment.salary_currency === "USD" ? "$" : "₹";
                 return (
                   <div
                     key={index}
@@ -506,14 +533,78 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                         />
                       </div>
                       <div>
-                        <Label className="text-sm font-medium block mb-1">Salary</Label>
-                        <Input
-                          type="number"
-                          value={assignment.salary}
-                          disabled
-                          className="w-full text-sm bg-gray-100"
-                        />
-                      </div>
+<div className="flex items-center justify-between mb-1">
+  <Label className="text-sm font-medium">Salary</Label>
+  <div className="flex items-center gap-2">
+    <Label className="text-sm">Editable</Label>
+    <Switch
+      checked={assignment.isSalaryEditable}
+      onCheckedChange={() => toggleSalaryEditable(index)}
+    />
+  </div>
+</div>
+
+<div className="flex items-center gap-0">
+  {/* Currency Selector */}
+  <Select
+    value={assignment.salary_currency}
+    onValueChange={(value) => handleFieldChange(index, "salary_currency", value)}
+    disabled={!assignment.isSalaryEditable}
+    required
+  >
+    <SelectTrigger
+      className={cn(
+        "w-[60px] text-sm",
+        !assignment.isSalaryEditable && "bg-gray-100 cursor-not-allowed"
+      )}
+    >
+      <SelectValue placeholder="INR" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="INR" className="text-sm">₹</SelectItem>
+      <SelectItem value="USD" className="text-sm">$</SelectItem>
+    </SelectContent>
+  </Select>
+
+  {/* Salary Input Field */}
+  <Input
+    type="number"
+    value={assignment.salary}
+    onChange={(e) => handleFieldChange(index, "salary", e.target.value)}
+    disabled={!assignment.isSalaryEditable}
+    className={cn(
+      "w-full pl-6 text-sm",
+      !assignment.isSalaryEditable && "bg-gray-100 cursor-not-allowed"
+    )}
+  />
+
+  {/* Salary Type Selector */}
+  <Select
+    value={assignment.salary_type}
+    onValueChange={(value) => handleFieldChange(index, "salary_type", value)}
+    disabled={!assignment.isSalaryEditable}
+    required
+  >
+    <SelectTrigger
+      className={cn(
+        "w-[80px] text-sm",
+        !assignment.isSalaryEditable && "bg-gray-100 cursor-not-allowed"
+      )}
+    >
+      <SelectValue placeholder="Type" />
+    </SelectTrigger>
+    <SelectContent>
+      {salaryTypeOptions.map((type) => (
+        <SelectItem key={type} value={type} className="text-sm">
+          {type}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
+
+</div>
+
                       <div>
                         <Label className="text-sm font-medium block mb-1">Client Billing*</Label>
                         <div className="flex items-center gap-2">
@@ -567,7 +658,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
             <Button
               variant="outline"
-              type="button" // Explicitly set type to button
+              type="button"
               onClick={handleCancel}
               className="w-full sm:w-auto"
             >
@@ -583,7 +674,9 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                     !a.start_date ||
                     !a.end_date ||
                     !a.client_billing ||
-                    !a.billing_type
+                    !a.billing_type ||
+                    !a.salary_currency ||
+                    !a.salary_type
                 )
               }
               className="w-full sm:w-auto"

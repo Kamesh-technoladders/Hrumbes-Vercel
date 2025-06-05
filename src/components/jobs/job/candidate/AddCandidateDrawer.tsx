@@ -378,4 +378,4 @@ const fetchCandidateById = async (id: string) => {
 
 export default AddCandidateDrawer;
 
-// 
+// Resume parse details

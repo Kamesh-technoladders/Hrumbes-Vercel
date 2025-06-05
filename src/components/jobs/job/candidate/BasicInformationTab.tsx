@@ -662,3 +662,4 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 };
 
 export default BasicInformationTab;
+// Resume parser logic

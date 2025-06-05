@@ -29,7 +29,7 @@ import {
   TrendingUp,
   FileText,
 } from "lucide-react";
-import { Card } from "../ui/card";
+import { Card, CardContent, CardHeader } from "../ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Input } from "../ui/input";
 import { toast } from "sonner";
@@ -39,13 +39,7 @@ import "jspdf-autotable";
 import AssignEmployeeDialog from "./AssignEmployeeDialog";
 import Loader from "@/components/ui/Loader";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip as RechartsTooltip,
-  Legend,
+ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, PieChart, Pie
 } from "recharts";
 import RevenueProfitChart from "../Client/RevenueProfitChart";
 import {
@@ -64,7 +58,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon,UserRoundCheck, UserRoundX, ReceiptIndianRupee  } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as UICalendar } from "@/components/ui/calendar"; // Assuming available in your UI library
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, isSameDay, isWithinInterval } from "date-fns";
@@ -156,6 +150,23 @@ const ProjectDashboard = () => {
     );
   }
 
+  // Fetch client details
+  const { data: client, isLoading: loadingClient, error: clientError } = useQuery<Client>({
+    queryKey: ["client", clientId],
+    queryFn: async () => {
+      if (!clientId) throw new Error("Client ID is missing");
+      const { data, error } = await supabase
+        .from("hr_clients")
+        .select("id, client_name, currency")
+        .eq("id", clientId)
+        .eq("organization_id", organization_id)
+        .single();
+      if (error) throw error;
+      return data as Client;
+    },
+    enabled: !!clientId,
+  });
+
   // Fetch project details
   const { data: project, isLoading: loadingProject, error: projectError } = useQuery<Project>({
     queryKey: ["project", id],
@@ -202,6 +213,8 @@ const ProjectDashboard = () => {
           status,
           sow,
           billing_type,
+          salary_type,
+          salary_currency,
           hr_employees:hr_employees!hr_project_employees_assign_employee_fkey (first_name, last_name, salary_type)
         `)
         .eq("project_id", id)
@@ -428,11 +441,16 @@ const ProjectDashboard = () => {
     }
   };
 
+  console.log("employee", assignEmployee)
   // Calculate profit for an employee
   const calculateProfit = (employee: AssignEmployee, mode: "accrual" | "actual") => {
     const revenue = calculateRevenue(employee, mode);
-    let salary = employee.salary || 0;
-    const salaryType = employee.hr_employees?.salary_type || "LPA";
+      let salary = employee.salary || 0;
+  const salaryType = employee?.salary_type || "LPA";
+
+  if (employee.salary_currency === "USD") {
+    salary *= EXCHANGE_RATE_USD_TO_INR;
+  }
 
     if (mode === "accrual") {
       const durationDays = employee.duration || 1;
@@ -610,6 +628,31 @@ const ProjectDashboard = () => {
       );
     }
 
+    // Helper function to calculate salary (extracted from calculateProfit)
+const calculateSalary = (employee: AssignEmployee, mode: "accrual" | "actual") => {
+  let salary = employee.salary || 0;
+  const salaryType = employee?.salary_type || "LPA";
+
+  if (employee.salary_currency === "USD") {
+    salary *= EXCHANGE_RATE_USD_TO_INR;
+  }
+
+
+    const durationDays = employee.duration || 1;
+
+    if (salaryType === "LPA") {
+      salary = (salary * durationDays) / 365;
+    } else if (salaryType === "Monthly") {
+      const monthlyToDaily = salary / 30;
+      salary = monthlyToDaily * durationDays;
+    } else if (salaryType === "Hourly") {
+      salary = salary * durationDays * 8;
+    }
+  
+
+  return salary;
+};
+
     return (
       <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm animate-scale-in">
         <div className="overflow-x-auto">
@@ -668,7 +711,34 @@ const ProjectDashboard = () => {
                       <td className="px-4 py-2">{new Date(employee.end_date).toLocaleDateString()}</td>
                     </>
                   )}
-                  <td className="px-4 py-2">{formatINR(employee.salary)}</td>
+                 <td className="px-4 py-2">
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span className="cursor-pointer">
+        {(() => {
+          const currency = employee.salary_currency || "INR";
+          const salary = employee.salary || 0;
+          const salaryType = employee.salary_type || "LPA";
+          const currencySymbol = currency === "USD" ? "$" : "₹";
+          const salaryTypeText = salaryType === "Hourly" ? "/hr" : salaryType === "Monthly" ? "/month" : "/year";
+          return `${currencySymbol}${salary.toLocaleString('en-IN')}${salaryTypeText}`;
+        })()}
+      </span>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>
+        {(() => {
+          const currency = employee.salary_currency || "INR";
+          const salary = employee.salary || 0;
+          const salaryType = employee.salary_type || "LPA";
+          const convertedSalary = currency === "USD" ? salary * 84 : salary;
+          const salaryTypeText = salaryType === "Hourly" ? "/hr" : salaryType === "Monthly" ? "/month" : "/year";
+          return `₹${convertedSalary.toLocaleString('en-IN')}${salaryTypeText}`;
+        })()}
+      </p>
+    </TooltipContent>
+  </Tooltip>
+</td>
                   <td className="px-4 py-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -842,37 +912,59 @@ const ProjectDashboard = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8 space-y-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate(-1)}
-                className="flex items-center gap-2"
+return (
+  <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
+    <main className="w-full max-w-8xl mx-auto space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-gray-600 hover:text-indigo-600 transition-all duration-200"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </Button>
+           <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span
+                className="cursor-pointer hover:text-indigo-600 transition-colors"
+                onClick={() => navigate("/projects")} // Adjust route as needed
               >
-                <ArrowLeft size={16} />
-                <span>Back</span>
-              </Button>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-semibold mb-2">{project?.name} Dashboard</h1>
-                <p className="text-gray-500 text-sm sm:text-base">Manage and track all employees for this project</p>
-              </div>
+                Projects
+              </span>
+              <span>/</span>
+              <span
+                className="cursor-pointer hover:text-indigo-600 transition-colors"
+                onClick={() =>
+                  navigate(`/client/${clientId}`) // Adjust route as needed
+                }
+              >
+                {client?.client_name || "Loading..."}
+              </span>
+              {/* <span>/</span>
+              <span className="font-medium text-gray-800">{project?.name || "Project"}</span> */}
             </div>
-            <Button
+          <div>
+            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800 tracking-tight">
+              {project?.name} Dashboard
+            </h1>
+            <p className="text-gray-500 text-sm md:text-base mt-2">
+              Manage and track all employees for this project
+            </p>
+          </div>
+        </div>
+         <Button
               onClick={() => setAddProjectOpen(true)}
               className="flex items-center gap-2"
             >
               <Plus size={16} />
               <span>Assign New Employee</span>
             </Button>
-          </div>
+      </div>
 
-          {/* Calculation Mode Tabs */}
-          <Tabs
+      {/* Calculation Mode Tabs */}
+ <Tabs
             value={calculationMode}
             onValueChange={(value) => setCalculationMode(value as "accrual" | "actual")}
             className="mb-6"
@@ -883,81 +975,119 @@ const ProjectDashboard = () => {
             </TabsList>
           </Tabs>
 
-          {/* Stats Overview */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Total Employees</p>
-                <h3 className="text-2xl font-bold">{totalEmployees}</h3>
-                <p className="text-xs text-gray-500 mt-1">All assigned employees</p>
-              </div>
-              <div className="stat-icon bg-blue-100 p-3 rounded-full">
-                <Briefcase size={24} className="text-blue-800" />
-              </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Working Employees</p>
-                <h3 className="text-2xl font-bold">{workingCount}</h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalEmployees ? Math.round((workingCount / totalEmployees) * 100) : 0}% of total
-                </p>
-              </div>
-              <div className="stat-icon bg-green-100 p-3 rounded-full">
-                <Calendar size={24} className="text-green-800" />
-              </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Relieved Employees</p>
-                <h3 className="text-2xl font-bold">{relievedCount}</h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalEmployees ? Math.round((relievedCount / totalEmployees) * 100) : 0}% of total
-                </p>
-              </div>
-              <div className="stat-icon bg-yellow-100 p-3 rounded-full">
-                <Clock size={24} className="text-yellow-800" />
-              </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Terminated Employees</p>
-                <h3 className="text-2xl font-bold">{terminatedCount}</h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalEmployees ? Math.round((terminatedCount / totalEmployees) * 100) : 0}% of total
-                </p>
-              </div>
-              <div className="stat-icon bg-red-100 p-3 rounded-full">
-                <Briefcase size={24} className="text-red-800" />
-              </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Total Revenue</p>
-                <h3 className="text-2xl font-bold">{formatINR(totalRevenue)}</h3>
-                <p className="text-xs text-gray-500 mt-1">From all employees</p>
-              </div>
-              <div className="stat-icon bg-blue-100 p-3 rounded-full">
-                <DollarSign size={24} className="text-blue-800" />
-              </div>
-            </Card>
-            <Card className="stat-card p-6 rounded-xl flex items-center justify-between bg-white shadow-sm border border-gray-200 transition-transform hover:scale-[1.02]">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-2">Total Profit</p>
-                <h3 className="text-2xl font-bold">{formatINR(totalProfit)}</h3>
-                <p className="text-xs text-gray-500 mt-1">From all employees</p>
-              </div>
-              <div className="stat-icon bg-green-100 p-3 rounded-full">
-                <TrendingUp size={24} className="text-green-800" />
-              </div>
-            </Card>
-          </div>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-2">Total Employees</p>
+              <h3 className="text-2xl font-bold text-gray-800">{totalEmployees}</h3>
+              <p className="text-xs text-gray-500 mt-1">All assigned employees</p>
+            </div>
+            <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-3 rounded-full">
+              <Briefcase size={24} className="text-white" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-2">Working Employees</p>
+              <h3 className="text-2xl font-bold text-gray-800">{workingCount}</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {totalEmployees ? Math.round((workingCount / totalEmployees) * 100) : 0}% of total
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-green-400 to-green-600 p-3 rounded-full">
+              <Calendar size={24} className="text-white" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-2">Relieved Employees</p>
+              <h3 className="text-2xl font-bold text-gray-800">{relievedCount}</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {totalEmployees ? Math.round((relievedCount / totalEmployees) * 100) : 0}% of total
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-yellow-400 to-yellow-600 p-3 rounded-full">
+              <Clock size={24} className="text-white" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-2">Terminated Employees</p>
+              <h3 className="text-2xl font-bold text-gray-800">{terminatedCount}</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {totalEmployees ? Math.round((terminatedCount / totalEmployees) * 100) : 0}% of total
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-red-400 to-red-600 p-3 rounded-full">
+              <Briefcase size={24} className="text-white" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-2">Total Revenue</p>
+              <h3 className="text-2xl font-bold text-gray-800">₹ {formatINR(totalRevenue)}</h3>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <p className="text-xs text-gray-500 mt-1">
+                      ${(totalRevenue / EXCHANGE_RATE_USD_TO_INR).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-white border-gray-200 shadow-lg rounded-lg p-2">
+                    <p>Converted at 1 USD = ₹ {EXCHANGE_RATE_USD_TO_INR}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-3 rounded-full">
+              <ReceiptIndianRupee size={24} className="text-white" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-2">Total Profit</p>
+              <h3 className="text-2xl font-bold text-gray-800">₹ {formatINR(totalProfit)}</h3>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <p className="text-xs text-gray-500 mt-1">
+                      ${(totalProfit / EXCHANGE_RATE_USD_TO_INR).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-white border-gray-200 shadow-lg rounded-lg p-2">
+                    <p>Converted at 1 USD = ₹ {EXCHANGE_RATE_USD_TO_INR}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="bg-gradient-to-br from-green-400 to-green-600 p-3 rounded-full">
+              <TrendingUp size={24} className="text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <Card className="p-6 rounded-xl shadow-sm border border-gray-200">
-              <h2 className="text-lg sm:text-xl font-semibold mb-4">Employee Financials</h2>
-              <ResponsiveContainer width="100%" height={250}>
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          <CardHeader className="purple-gradient text-white p-6">
+            <h2 className="text-xl md:text-2xl font-semibold">Employee Financials</h2>
+          </CardHeader>
+          <CardContent className="p-6 overflow-x-auto">
+            <div style={{ minWidth: `${assignEmployee.length * 100}px` }}>
+              <ResponsiveContainer width="100%" height={400}>
                 <BarChart
                   data={assignEmployee.map((employee) => ({
                     name: employee.hr_employees
@@ -967,76 +1097,185 @@ const ProjectDashboard = () => {
                     salary: employee.salary,
                     profit: calculateProfit(employee, calculationMode),
                   }))}
+                  margin={{ top: 20, right: 20, left: 0, bottom: 10 }}
+                  className="animate-fade-in"
                 >
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <RechartsTooltip formatter={(value: number) => formatINR(value)} />
-                  <Legend />
-                  <Bar dataKey="revenue" fill="#3b82f6" name="Revenue" radius={[5, 5, 0, 0]} />
-                  <Bar dataKey="salary" fill="#10b981" name="Salary" radius={[5, 5, 0, 0]} />
-                  <Bar dataKey="profit" fill="#f59e0b" name="Profit" radius={[5, 5, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="name"
+                    angle={0}
+                    textAnchor="middle"
+                    interval={0}
+                    height={50}
+                    label={{ value: "Employees", position: "insideBottom", offset: -10, fill: "#4b5563" }}
+                    className="text-sm font-medium purple-text-color"
+                    tick={{ fontSize: 12, fill: "#4b5563" }}
+                    tickFormatter={(value) => (value.length > 7 ? `${value.slice(0, 7)}...` : value)}
+                  />
+                  <YAxis
+                    label={{ value: "Value (INR)", angle: -90, position: "insideLeft", offset: -10, fill: "#4b5563" }}
+                    className="text-sm font-medium purple-text-color"
+                    tick={{ fontSize: 12, fill: "#4b5563" }}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid oklch(62.7% 0.265 303.9)",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                    }}
+                    formatter={(value: number, name) => {
+                      const usd = value / EXCHANGE_RATE_USD_TO_INR;
+                      return [
+                        `₹${formatINR(value)} ($${usd.toLocaleString(undefined, { maximumFractionDigits: 0 })})`,
+                        name,
+                      ];
+                    }}
+                    itemStyle={{ color: "#4b5563" }}
+                    cursor={{ fill: "#f3e8ff" }}
+                  />
+                  <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
+                  <Bar dataKey="revenue" fill="#7B43F1" name="Revenue" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="salary" fill="#A74BC8" name="Salary" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="profit" fill="#B343B5" name="Profit" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </Card>
-            {calculationMode === "actual" ? (
-              <Card className="p-6 rounded-xl shadow-sm border border-gray-200">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg sm:text-xl font-semibold">Logged Hours</h2>
-                  <div className="flex items-center gap-2">
-                    <Select value={timePeriod} onValueChange={(value) => setTimePeriod(value as "week" | "month" | "year")}>
-                      <SelectTrigger className="w-[100px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="week">Week</SelectItem>
-                        <SelectItem value="month">Month</SelectItem>
-                        <SelectItem value="year">Year</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-[170px] justify-start text-left font-normal"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {format(selectedDate, timePeriod === "week" ? "'Week of' MMM d, yyyy" : timePeriod === "month" ? "MMM yyyy" : "yyyy")}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <UICalendar
-                          mode={timePeriod === "year" ? "year" : "default"}
-                          selected={selectedDate}
-                          onSelect={(date) => date && setSelectedDate(date)}
-                          initialFocus
-                          disabled={(date) => date > new Date()}
-                          {...(timePeriod === "year" ? { views: ["year"] } : {})}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+            </div>
+          </CardContent>
+        </Card>
+        {calculationMode === "actual" ? (
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardHeader className="purple-gradient text-white p-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl md:text-2xl font-semibold">Logged Hours</h2>
+                <div className="flex items-center gap-2">
+                  <Select value={timePeriod} onValueChange={(value) => setTimePeriod(value as "week" | "month" | "year")}>
+                    <SelectTrigger className="w-[100px] bg-white text-gray-800">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="week">Week</SelectItem>
+                      <SelectItem value="month">Month</SelectItem>
+                      <SelectItem value="year">Year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-[170px] justify-start text-left font-normal text-black bg-white border-gray-200"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(selectedDate, timePeriod === "week" ? "'Week of' MMM d, yyyy" : timePeriod === "month" ? "MMM yyyy" : "yyyy")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <UICalendar
+                        mode={timePeriod === "year" ? "year" : "default"}
+                        selected={selectedDate}
+                        onSelect={(date) => date && setSelectedDate(date)}
+                        initialFocus
+                        disabled={(date) => date > new Date()}
+                        {...(timePeriod === "year" ? { views: ["year"] } : {})}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={calculateTotalHoursByInterval(timePeriod, selectedDate)}>
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} label={{ value: "Hours", angle: -90, position: "insideLeft" }} />
-                    <RechartsTooltip formatter={(value: number) => `${value.toFixed(2)} hours`} />
-                    <Bar dataKey="hours" fill="#6b7280" name="Logged Hours" radius={[5, 5, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-            ) : (
-              <Card className="p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center">
-                <h2 className="text-lg sm:text-xl font-semibold mb-4">Revenue vs Profit</h2>
-                <RevenueProfitChart revenue={totalRevenue} profit={totalProfit} />
-              </Card>
-            )}
-          </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={calculateTotalHoursByInterval(timePeriod, selectedDate)}
+                  margin={{ top: 20, right: 20, left: 0, bottom: 10 }}
+                  className="animate-fade-in"
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="name"
+                    angle={0}
+                    textAnchor="middle"
+                    interval={0}
+                    height={50}
+                    label={{ value: "Time Intervals", position: "insideBottom", offset: -10, fill: "#4b5563" }}
+                    className="text-sm font-medium purple-text-color"
+                    tick={{ fontSize: 12, fill: "#4b5563" }}
+                    tickFormatter={(value) => (value.length > 7 ? `${value.slice(0, 7)}...` : value)}
+                  />
+                  <YAxis
+                    label={{ value: "Hours", angle: -90, position: "insideLeft", offset: -10, fill: "#4b5563" }}
+                    className="text-sm font-medium purple-text-color"
+                    tick={{ fontSize: 12, fill: "#4b5563" }}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid oklch(62.7% 0.265 303.9)",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                    }}
+                    formatter={(value: number) => `${value.toFixed(2)} hours`}
+                    itemStyle={{ color: "#4b5563" }}
+                    cursor={{ fill: "#f3e8ff" }}
+                  />
+                  <Bar dataKey="hours" fill="#7B43F1" name="Logged Hours" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            <CardHeader className="purple-gradient text-white p-6">
+              <h2 className="text-xl md:text-2xl font-semibold">Revenue vs Profit</h2>
+            </CardHeader>
+            <CardContent className="p-6 flex flex-col items-center">
+              <ResponsiveContainer width="100%" height={400}>
+                <PieChart className="animate-fade-in">
+                  <Pie
+                    data={[
+                      { name: "Revenue", value: totalRevenue, fill: "#7B43F1" },
+                      { name: "Profit", value: totalProfit, fill: "#A74BC8" },
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={100}
+                    outerRadius={140}
+                    cornerRadius={50}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({ name, value }) => `${name}: ₹${formatINR(value)}`}
+                    labelLine={false}
+                    className="font-medium purple-text-color"
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid oklch(62.7% 0.265 303.9)",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                    }}
+                    formatter={(value: number, name) => {
+                      const usd = value / EXCHANGE_RATE_USD_TO_INR;
+                      return [
+                        `₹${formatINR(value)} ($${usd.toLocaleString(undefined, { maximumFractionDigits: 0 })})`,
+                        name,
+                      ];
+                    }}
+                    itemStyle={{ color: "#4b5563" }}
+                  />
+                  <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "14px", color: "#4b5563" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
-          {/* Table Section */}
-          <Card className="rounded-2xl p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-              <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+      {/* Table Section */}
+      <Card className="shadow-xl border-none bg-white overflow-hidden transition-all duration-300 hover:shadow-2xl rounded-2xl">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+           <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid grid-cols-4 w-full sm:w-[400px]">
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="working" className="flex items-center gap-1">
@@ -1053,50 +1292,50 @@ const ProjectDashboard = () => {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-              <div className="relative flex-grow">
-                <Search
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
-                <Input
-                  placeholder="Search for employees..."
-                  className="pl-10 h-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={exportToCSV}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export CSV
-                </Button>
-                <Button variant="outline" size="sm" onClick={exportToPDF}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export PDF
-                </Button>
-              </div>
+            <div className="relative flex-grow">
+              <Search
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={18}
+              />
+              <Input
+                placeholder="Search for employees..."
+                className="pl-10 h-10 rounded-lg border-gray-200"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-              <TabsContent value="all" className="space-y-6">
-                {renderTable(paginatedEmployees)}
-                {filteredEmployees.length > 0 && renderPagination()}
-              </TabsContent>
-              <TabsContent value="working" className="space-y-6">
-                {renderTable(paginatedEmployees.filter((employee) => employee.status === "Working"))}
-                {filteredEmployees.length > 0 && renderPagination()}
-              </TabsContent>
-              <TabsContent value="relieved" className="space-y-6">
-                {renderTable(paginatedEmployees.filter((employee) => employee.status === "Relieved"))}
-                {filteredEmployees.length > 0 && renderPagination()}
-              </TabsContent>
-              <TabsContent value="terminated" className="space-y-6">
-                {renderTable(paginatedEmployees.filter((employee) => employee.status === "Terminated"))}
-                {filteredEmployees.length > 0 && renderPagination()}
-              </TabsContent>
-            </Tabs>
-          </Card>
-        </div>
-      </main>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={exportToCSV} className="border-gray-200 hover:bg-gray-50">
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportToPDF} className="border-gray-200 hover:bg-gray-50">
+                <Download className="w-4 h-4 mr-2" />
+                Export PDF
+              </Button>
+            </div>
+          </div>
+          <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+            <TabsContent value="all" className="space-y-6">
+              {renderTable(paginatedEmployees)}
+              {filteredEmployees.length > 0 && renderPagination()}
+            </TabsContent>
+            <TabsContent value="working" className="space-y-6">
+              {renderTable(paginatedEmployees.filter((employee) => employee.status === "Working"))}
+              {filteredEmployees.length > 0 && renderPagination()}
+            </TabsContent>
+            <TabsContent value="relieved" className="space-y-6">
+              {renderTable(paginatedEmployees.filter((employee) => employee.status === "Relieved"))}
+              {filteredEmployees.length > 0 && renderPagination()}
+            </TabsContent>
+            <TabsContent value="terminated" className="space-y-6">
+              {renderTable(paginatedEmployees.filter((employee) => employee.status === "Terminated"))}
+              {filteredEmployees.length > 0 && renderPagination()}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
       {clientId && id && (
         <>
           <AssignEmployeeDialog
@@ -1131,8 +1370,10 @@ const ProjectDashboard = () => {
           </AlertDialog>
         </>
       )}
-    </div>
-  );
+    </main>
+  </div>
+);
 };
 
 export default ProjectDashboard;
+// 

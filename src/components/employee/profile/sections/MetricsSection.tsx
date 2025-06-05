@@ -39,7 +39,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({ employeeId, depa
       </div>
       {isHumanResourceEmployee && (
         <>
-          <div className="grid grid-cols-2 gap-4 h-[300px] md:h-[325px] lg:h-[300px]">
+          <div className="grid grid-cols-2 gap-4 h-full">
             {/* Second Row: OnboardingTasksCard and UpcomingInterviewsCard */}
             <div className="h-full">
               <OnboardingTasksCard employeeId={employeeId} />

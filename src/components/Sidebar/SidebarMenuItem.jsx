@@ -38,7 +38,7 @@ const menuItemsByRole = {
         { icon: FaFileInvoiceDollar, label: "Invoices", path: "/accounts/invoices" },
         { icon: FaSackDollar, label: "Expenses", path: "/accounts/expenses" },
         { icon: FiBriefcase , label:"Payroll", path: "/payroll"},
-        { icon: TbDatabaseDollar, label: "Overall", path: "/accounts/overall" },
+        // { icon: TbDatabaseDollar, label: "Overall", path: "/accounts/overall" },
       ],
     },
     {
@@ -113,9 +113,9 @@ const menuItemsByRole = {
     const baseMenu = [
       { icon: MdDashboardCustomize, label: "Dashboard", path: "/dashboard" },
       { icon: ImProfile, label: "My Profile", path: "/profile" },
-      { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization",
+      { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet",
         dropdown: [
-                { icon: GrDocumentTime, label: "Time Sheet", path: "/employee/timesheet" },
+                { icon: MdMoreTime, label: "Regularization", path: "/employee/regularization",},
         ],
        },
       { icon: LuCalendarPlus, label: "Leave", path: "/employee/leave" },
