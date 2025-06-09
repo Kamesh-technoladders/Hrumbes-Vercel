@@ -30,7 +30,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
         {weekDays.map((day) => (
           <div
             key={day.name}
-            className="h-14 flex items-center justify-center text-xs font-medium text-gray-400"
+            className="h-14 flex items-center justify-center text-xs font-medium text-white"
           >
             {day.label}
           </div>
@@ -39,12 +39,12 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
       <div className="grid grid-cols-7 gap-6">
         {days.map((day, index) => (
-          <div
+          <div 
             key={index}
             className={cn(
               "h-7 w-7 flex items-center justify-center text-xs relative",
               "rounded-full transition-colors cursor-pointer mx-auto",
-              !day.isCurrentMonth && "text-gray-300",
+              !day.isCurrentMonth && "text-gray-900",
               day.isToday && !day.hasInterview && !day.hasHoliday && !day.hasLeave && !isSameDay(day.date, selectedDate) && "bg-blue-50 text-blue-600 font-medium",
               day.hasInterview && !isSameDay(day.date, selectedDate) && "bg-purple-200 text-purple-600 font-medium",
               day.hasHoliday && !day.hasInterview && !isSameDay(day.date, selectedDate) && "bg-blue-200 text-blue-600 font-medium",
@@ -53,7 +53,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               ),
               day.isToday && (day.hasInterview || day.hasHoliday || day.hasLeave) && !isSameDay(day.date, selectedDate) && "border border-blue-200",
               day.isSunday && !day.hasInterview && !day.hasHoliday && !day.hasLeave && !isSameDay(day.date, selectedDate) && "text-[#F59E0B]",
-              !day.isSunday && day.isCurrentMonth && !day.isToday && !day.hasInterview && !day.hasHoliday && !day.hasLeave && !isSameDay(day.date, selectedDate) && "text-gray-900 hover:bg-gray-100",
+              !day.isSunday && day.isCurrentMonth && !day.isToday && !day.hasInterview && !day.hasHoliday && !day.hasLeave && !isSameDay(day.date, selectedDate) && "text-white hover:bg-gray-100 hover:text-gray-900",
               isSameDay(day.date, selectedDate) && "bg-[#1A73E8] text-white hover:bg-[#1A73E8]/90"
             )}
             onClick={() => onSelectDate(day.date, day.hasInterview, day.hasHoliday, day.hasLeave)}

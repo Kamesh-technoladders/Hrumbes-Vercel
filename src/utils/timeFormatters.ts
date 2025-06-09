@@ -29,7 +29,7 @@ export const formatTime = (value: string | number | null | undefined): string =>
     
     // Handle case when value is a date string - use parseISO to preserve the exact time
     const date = typeof value === 'string' ? parseISO(value) : new Date(value);
-    return format(date, 'HH:mm:ss');
+    return format(date, 'h:mm a');
   } catch (error) {
     console.error('Error formatting time:', error);
     return typeof value === 'string' ? value : value.toString();

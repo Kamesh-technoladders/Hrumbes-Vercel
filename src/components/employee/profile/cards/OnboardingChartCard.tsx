@@ -170,11 +170,17 @@ export const OnboardingChartCard: React.FC<OnboardingChartCardProps> = ({ employ
           ) : chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+      <linearGradient id="colorCount1" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stopColor="#facc15" stopOpacity={0.8} /> {/* yellow-400 */}
+        <stop offset="100%" stopColor="#3C6300" stopOpacity={0.8} /> {/* yellow-500 */}
+      </linearGradient>
+    </defs>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Area type="monotone" dataKey="count" stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.3} />
+                <Area type="monotone" dataKey="count" stroke="#f59e0b" fill="url(#colorCount1)" fillOpacity={0.3} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (

@@ -23,6 +23,8 @@ const buttonVariants = cva(
         " text-secondary-foreground hover:bg-secondary hover:purple-text-color",
         resume:
         "purple-gradient text-white cursor-default",
+        resume1:
+        "purple-gradient text-white cursor-default hover:purple-gradient-viceversa hover:text-neutral-600",
         outline1:
           "bg-gray-600 text-primary-foreground hover:bg-transparent hover:text-gray-600",
       },

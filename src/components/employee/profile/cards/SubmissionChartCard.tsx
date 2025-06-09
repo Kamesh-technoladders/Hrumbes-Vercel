@@ -141,7 +141,7 @@ export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employ
   }, [employeeId, role, activeTab]);
 
   return (
-    <Card className="shadow-md rounded-xl h-[300px] md:h-[325px] lg:h-[300px] flex flex-col">
+    <Card className="shadow-md rounded-xl h-[300px] md:h-[325px] lg:h-[300px] flex flex-col ">
       <CardContent className="pt-6 flex flex-col h-full">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
@@ -161,14 +161,29 @@ export const SubmissionChartCard: React.FC<SubmissionChartCardProps> = ({ employ
             <div className="text-gray-500 dark:text-gray-400 italic">Loading chart...</div>
           ) : chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Area type="monotone" dataKey="count" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
-              </AreaChart>
-            </ResponsiveContainer>
+              <AreaChart
+    data={chartData}
+    margin={{ top: 10, right: 0, left: 0, bottom: 0 }}
+  >
+    <defs>
+      <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.8} /> {/* indigo-600 */}
+        <stop offset="100%" stopColor="#7e22ce" stopOpacity={0.8} /> {/* purple-700 */}
+      </linearGradient>
+    </defs>
+
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="name" />
+    <YAxis />
+    <Tooltip />
+    <Area
+      type="monotone"
+      dataKey="count"
+      stroke="#7e22ce"
+      fill="url(#colorCount)"
+    />
+  </AreaChart>
+</ResponsiveContainer>
           ) : (
             <div className="text-gray-500 dark:text-gray-400 italic">No submission data available</div>
           )}

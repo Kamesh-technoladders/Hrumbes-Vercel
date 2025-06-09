@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, CheckSquare, RefreshCw } from "lucide-react";
+import { Search, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TimesheetList from "./components/TimesheetList";
 import TimesheetDialog from "./components/TimesheetDialog";
 import { useTimesheetApproval } from "./hooks/useTimesheetApproval";
@@ -15,7 +14,8 @@ const TimesheetApproval = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("pending");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+  const [statusFilter, setStatusFilter] = useState("all"); // New state for status filter
+
   const {
     pendingTimesheets,
     clarificationTimesheets,
@@ -29,14 +29,12 @@ const TimesheetApproval = () => {
     fetchTimesheets,
     getPendingCount,
     openDialog,
-    refreshData
   } = useTimesheetApproval();
 
   // Initial load and periodic refresh
   useEffect(() => {
     fetchTimesheets();
     
-    // Set up interval for periodic refreshes
     const intervalId = setInterval(() => {
       fetchTimesheets();
     }, 60000); // Refresh every minute
@@ -51,7 +49,12 @@ const TimesheetApproval = () => {
     toast("Timesheet data refreshed");
   };
 
-  console.log("pendingTimesheets", pendingTimesheets);
+  // Filter pending timesheets based on status
+  const filteredPendingTimesheets = pendingTimesheets.filter((timesheet) => {
+    if (statusFilter === "all") return true;
+    return timesheet.status === statusFilter;
+  });
+
   return (
     <div className="content-area">
       <div className="mb-8">
@@ -66,18 +69,19 @@ const TimesheetApproval = () => {
           <TabsTrigger value="pending" className="relative">
             Pending Approvals
             {getPendingCount() > 0 && (
-              <Badge className="ml-2 bg-primary absolute -top-2 -right-2" variant="default">
+              <span className="ml-2 bg-primary absolute -top-2 -right-2 rounded-full px-2 py-1 text-xs text-white">
                 {getPendingCount()}
-              </Badge>
+              </span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="clarification">Clarifications</TabsTrigger>
           <TabsTrigger value="history">Approval History</TabsTrigger>
         </TabsList>
         
         <TabsContent value="pending">
           <div className="grid gap-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">New Submissions</h2>
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <h2 className="text-xl font-semibold">Pending Approvals</h2>
               <div className="flex gap-2 items-center">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -89,6 +93,16 @@ const TimesheetApproval = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="auto_terminated">Auto Terminated</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -104,35 +118,34 @@ const TimesheetApproval = () => {
             <Card>
               <CardContent className="p-0">
                 <TimesheetList
-                  timesheets={pendingTimesheets}
+                  timesheets={filteredPendingTimesheets}
                   loading={loading}
                   searchTerm={searchTerm}
-                  badgeColor="pending"
-                  badgeText="Pending"
+                  type="pending"
+                  onViewTimesheet={openDialog}
                   emptyMessage="No pending timesheet approvals"
-                  openDialog={openDialog}
                 />
               </CardContent>
             </Card>
-
-            {clarificationTimesheets.length > 0 && (
-              <>
-                <h2 className="text-xl font-semibold mt-6">Clarifications Submitted</h2>
-                <Card>
-                  <CardContent className="p-0">
-                    <TimesheetList
-                      timesheets={clarificationTimesheets}
-                      loading={loading}
-                      searchTerm={searchTerm}
-                      badgeColor="clarification"
-                      badgeText="Clarified"
-                      emptyMessage="No clarifications submitted"
-                      openDialog={openDialog}
-                    />
-                  </CardContent>
-                </Card>
-              </>
-            )}
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="clarification">
+          <div className="grid gap-6">
+            <h2 className="text-xl font-semibold">Clarifications Needed</h2>
+            <Card>
+              <CardContent className="p-0">
+                <TimesheetList
+                  timesheets={clarificationTimesheets}
+                  loading={loading}
+                  searchTerm={searchTerm}
+                  type="clarification"
+                  onViewTimesheet={openDialog}
+                  onRespondToClarification={openDialog}
+                  emptyMessage="No clarifications needed"
+                />
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
         
@@ -140,27 +153,21 @@ const TimesheetApproval = () => {
           <Card>
             <CardHeader>
               <CardTitle>Approval History</CardTitle>
-              <CardDescription>
-                Recently approved timesheets
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <TimesheetList
                 timesheets={approvedTimesheets}
                 loading={loading}
                 searchTerm={searchTerm}
-                badgeColor="approved"
-                badgeText="Approved"
+                type="approved"
+                onViewTimesheet={openDialog}
                 emptyMessage="No approval history found"
-                showActions={false}
-                openDialog={openDialog}
               />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Dialog for reviewing timesheets */}
       {dialogTimesheet && (
         <TimesheetDialog
           dialogTimesheet={dialogTimesheet}

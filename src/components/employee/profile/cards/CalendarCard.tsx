@@ -73,7 +73,9 @@ const HolidaysList: React.FC<{ holidays: Holiday[], leaves: LeaveRequest[], sele
     <div className="overflow-y-auto max-h-[250px] pr-2 overflow-x-hidden">
       <h4 className="text-sm font-semibold mb-2">Holidays & Leaves for {format(selectedDate, 'MMMM d, yyyy')}</h4>
       {filteredHolidays.length === 0 && filteredLeaves.length === 0 ? (
-        <div className="text-gray-500 italic mb-4">No holidays or leaves on this date</div>
+       <div className="mb-10 p-3 bg-red-50 rounded-lg">
+              <p className="text-sm italic text-gray-600">No holidays or leaves on this date</p>
+            </div>
       ) : (
         <>
           {filteredHolidays.map((holiday, index) => (
@@ -187,7 +189,9 @@ const AllEventsList: React.FC<{ interviewDates: string[], holidays: Holiday[], l
           ))}
         </>
       ) : (
-        <div className="text-gray-500 italic mb-4">No events on this date</div>
+         <div className="mb-12 p-3 bg-red-50 rounded-lg">
+              <p className="text-sm italic text-gray-600">No events on this date</p>
+            </div>
       )}
       <h4 className="text-sm font-semibold mb-2">Upcoming Events (Next 30 Days)</h4>
       {upcomingInterviews.length > 0 || upcomingHolidays.length > 0 || upcomingLeaves.length > 0 ? (
@@ -412,9 +416,9 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
   }
 
   return (
-    <Card className="p-4 hover:shadow-md transition-shadow bg-white/80 backdrop-blur-sm h-[400px] overflow-hidden">
+    <Card className="p-4 hover:shadow-md transition-shadow h-[400px] overflow-hidden ">
       <div className="grid grid-cols-[2fr_3fr] gap-4 h-full">
-        <div className="flex flex-col space-y-2 min-w-0">
+        <div className="bg-gradient-to-b from-indigo-600 to-purple-700 rounded-lg p-5 flex flex-col space-y-2 min-w-0">
           <CalendarHeader 
             currentDate={currentDate}
             onPrevMonth={prevMonth}
@@ -427,7 +431,7 @@ export const CalendarCard: React.FC<CalendarCardProps> = ({ employeeId, isHumanR
           />
         </div>
         
-        <div className="flex flex-col h-full min-w-0">
+        <div className="bg-white/80 backdrop-blur-sm rounded-lg p-2 flex flex-col h-full min-w-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
             <TabsList className={`grid ${isHumanResourceEmployee || role === 'organization_superadmin' ? 'grid-cols-3' : 'grid-cols-2'} mb-1.5`}>
               <TabsTrigger value="events" className="flex items-center gap-1 text-xs">

@@ -36,7 +36,7 @@ export const TimeLogDetailsDialog: React.FC<TimeLogDetailsDialogProps> = ({
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[500px] max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-full sm:max-w-6xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Time Log Details</DialogTitle>
         </DialogHeader>

@@ -561,7 +561,7 @@ export const useStatusReport = () => {
         interviews_end_client: Object.fromEntries(interviewsEndClientByRecruiter),
         interviews_end_client_reject: Object.fromEntries(interviewsEndClientRejectByRecruiter),
         offers_made: Object.fromEntries(offersMadeByRecruiter),
-        offers_accepted: Object.fromEntries(offersAcceptedByRecruiter),
+        offers_accepted: Object.fromEntries(joiningJoinedByRecruiter),
         offers_rejected: Object.fromEntries(offersRejectedByRecruiter),
         joining_joined: Object.fromEntries(joiningJoinedByRecruiter),
         joining_no_show: Object.fromEntries(joiningNoShowByRecruiter)
@@ -610,7 +610,7 @@ export const useStatusReport = () => {
           },
           offers: {
             made: offersMadeByRecruiter.get(recruiterName) || 0,
-            accepted: offersAcceptedByRecruiter.get(recruiterName) || 0,
+            accepted: joiningJoinedByRecruiter.get(recruiterName) || 0,
             rejected: offersRejectedByRecruiter.get(recruiterName) || 0
           },
           joining: {

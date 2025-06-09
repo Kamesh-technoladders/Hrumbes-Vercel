@@ -71,7 +71,7 @@ export const useContacts = () => {
       // --- 2. Fetch base data from 'employee_associations' ---
       const { data: newAssociations, error: newAssocError } = await supabase
         .from('employee_associations')
-        .select('id, candidate_id, company_id, job_id, designation, contact_owner, contact_stage, created_at, start_date, end_date, is_current, companies(name)') as { data: EmployeeAssociationBaseFromDB[] | null; error: any }; // Corrected type assertion placement
+        .select('id, candidate_id, company_id, job_id, designation, contact_owner, contact_stage, created_at, start_date, end_date, is_current, companies(name)') as { data: EmployeeAssociationBaseFromDB[] | null; error: any };
 
       if (newAssocError) { 
         console.error('useContacts: Error fetching employee_associations:', newAssocError); 
@@ -81,7 +81,7 @@ export const useContacts = () => {
       // --- 3. Fetch base data from 'candidate_companies' ---
       const { data: legacyLinks, error: legacyError } = await supabase
         .from('candidate_companies')
-        .select('candidate_id, job_id, company_id, designation, contact_owner, contact_stage, years, companies(name)') as { data: CandidateCompanyBaseFromDB[] | null; error: any }; // Corrected type assertion placement
+        .select('candidate_id, job_id, company_id, designation, contact_owner, contact_stage, years, companies(name)') as { data: CandidateCompanyBaseFromDB[] | null; error: any };
 
       if (legacyError) { 
         console.error('useContacts: Error fetching legacy candidate_companies:', legacyError); 
@@ -121,33 +121,57 @@ export const useContacts = () => {
       let candidateResumeAnalysisMap = new Map<string, CandidateResumeAnalysisData>();
       let resumeAnalysisMap = new Map<string, ResumeAnalysisData>();
 
-      if (uniqueLookupsInput.length > 0) {
-        const craLookups = uniqueLookupsInput.filter(l => l.candidate_id && l.job_id && /^[0-9a-fA-F-]{36}$/.test(l.job_id)); 
-        if (craLookups.length > 0) {
-            const craFilterConditions = craLookups.map(l => `and(candidate_id.eq.${l.candidate_id},job_id.eq.${l.job_id})`).join(',');
-            console.log(`useContacts: Querying candidate_resume_analysis for:`, craFilterConditions);
-            const { data: craData, error: craError } = await supabase.from('candidate_resume_analysis')
-                .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin').or(craFilterConditions);
-            if (craError) console.error('useContacts: Error fetching candidate_resume_analysis:', craError);
-            else (craData || []).forEach(r => candidateResumeAnalysisMap.set(`${String(r.candidate_id)}|${String(r.job_id)}`, r as CandidateResumeAnalysisData));
-        }
-        
-        const allCandidateIdsForRA = [...new Set(uniqueLookupsInput.filter(l => l.candidate_id).map(l => l.candidate_id))];
-        if (allCandidateIdsForRA.length > 0) {
-            const { data: raData, error: raError } = await supabase.from('resume_analysis')
-                .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
-                .in('candidate_id', allCandidateIdsForRA);
-            if (raError) console.error('useContacts: Error fetching resume_analysis:', raError);
-            else (raData || []).forEach(r => {
-                if (r.candidate_id && r.job_id) { 
-                    resumeAnalysisMap.set(`${String(r.candidate_id)}|${String(r.job_id)}`, r as ResumeAnalysisData);
-                } else if (r.candidate_id) { 
-                    resumeAnalysisMap.set(`${String(r.candidate_id)}|NULL_JOB_RA`, r as ResumeAnalysisData);
-                }
+      // --- Fetch candidate_resume_analysis in batches ---
+      const craLookups = uniqueLookupsInput.filter(l => l.candidate_id && l.job_id && /^[0-9a-fA-F-]{36}$/.test(l.job_id)); 
+      if (craLookups.length > 0) {
+        const chunkSize = 10;
+        const craDataAll: CandidateResumeAnalysisData[] = [];
+
+        for (let i = 0; i < craLookups.length; i += chunkSize) {
+          const chunk = craLookups.slice(i, i + chunkSize);
+          const craFilterConditions = chunk.map(l => `and(candidate_id.eq.${l.candidate_id},job_id.eq.${l.job_id})`).join(',');
+          console.log(`useContacts: Querying candidate_resume_analysis for chunk:`, craFilterConditions);
+
+          const { data: craData, error: craError } = await supabase
+            .from('candidate_resume_analysis')
+            .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
+            .or(craFilterConditions);
+
+          if (craError) {
+            console.error('useContacts: Error fetching candidate_resume_analysis for chunk:', {
+              message: craError.message,
+              details: craError.details,
+              hint: craError.hint,
+              code: craError.code,
             });
+            throw craError;
+          }
+
+          if (craData) {
+            craDataAll.push(...craData);
+          }
         }
+
+        craDataAll.forEach(r => candidateResumeAnalysisMap.set(`${String(r.candidate_id)}|${String(r.job?.job_id)}`, r as CandidateResumeAnalysisData));
       }
-      
+
+      // --- Fetch resume_analysis ---
+      const allCandidateIdsForRA = [...new Set(uniqueLookupsInput.filter(l => l.candidate_id).map(l => l.candidate_id))];
+      if (allCandidateIdsForRA.length > 0) {
+        const { data: raData, error: raError } = await supabase.from('resume_analysis')
+          .select('candidate_id, job_id, candidate_name, email, phone_number, linkedin')
+          .in('candidate_id', allCandidateIdsForRA);
+        if (raError) console.error('useContacts: Error fetching resume_analysis:', raError);
+        else (raData || []).forEach(r => {
+          if (r.candidate_id && r.job_id) { 
+            resumeAnalysisMap.set(`${String(r.candidate_id)}|${String(r.job_id)}`, r as ResumeAnalysisData);
+          } else if (r.candidate_id) { 
+            resumeAnalysisMap.set(`${String(r.candidate_id)}|NULL_JOB_RA`, r as ResumeAnalysisData);
+          }
+        });
+      }
+
+      // --- Process analysis lookups ---
       analysisLookups.forEach(lookup => {
         const item = lookup.original_source_item;
         const candIdStr = String(lookup.candidate_id); 
@@ -157,62 +181,62 @@ export const useContacts = () => {
         let name = null, email = null, mobile = null, linkedin = null;
 
         if (mapKey) {
-            const craDetail = (jobIdStr && /^[0-9a-fA-F-]{36}$/.test(jobIdStr)) ? candidateResumeAnalysisMap.get(mapKey) : null;
-            if (craDetail && craDetail.candidate_name && craDetail.candidate_name.trim() !== '' && craDetail.candidate_name !== 'Unknown') name = craDetail.candidate_name;
-            if (craDetail?.email && craDetail.email.trim() !== '') email = craDetail.email;
-            if (craDetail?.phone_number && craDetail.phone_number.trim() !== '') mobile = craDetail.phone_number;
-            if (craDetail?.linkedin && craDetail.linkedin.trim() !== '') linkedin = craDetail.linkedin;
+          const craDetail = (jobIdStr && /^[0-9a-fA-F-]{36}$/.test(jobIdStr)) ? candidateResumeAnalysisMap.get(mapKey) : null;
+          if (craDetail && craDetail.candidate_name && craDetail.candidate_name.trim() !== '' && craDetail.candidate_name !== 'Unknown') name = craDetail.candidate_name;
+          if (craDetail?.email && craDetail.email.trim() !== '') email = craDetail.email;
+          if (craDetail?.phone_number && craDetail.phone_number.trim() !== '') mobile = craDetail.phone_number;
+          if (craDetail?.linkedin && craDetail.linkedin.trim() !== '') linkedin = craDetail.linkedin;
 
-            const raDetail = resumeAnalysisMap.get(mapKey);
-            if ((!name || name === 'Unknown') && raDetail?.candidate_name && raDetail.candidate_name.trim() !== '' && raDetail.candidate_name !== 'Unknown') name = raDetail.candidate_name;
-            if ((!email || email.trim() === '') && raDetail?.email && raDetail.email.trim() !== '') email = raDetail.email;
-            if ((!mobile || mobile.trim() === '') && raDetail?.phone_number && raDetail.phone_number.trim() !== '') mobile = raDetail.phone_number;
-            if ((!linkedin || linkedin.trim() === '') && raDetail?.linkedin && raDetail.linkedin.trim() !== '') linkedin = raDetail.linkedin;
+          const raDetail = resumeAnalysisMap.get(mapKey);
+          if ((!name || name === 'Unknown') && raDetail?.candidate_name && raDetail.candidate_name.trim() !== '' && raDetail.candidate_name !== 'Unknown') name = raDetail.candidate_name;
+          if ((!email || email.trim() === '') && raDetail?.email && raDetail.email.trim() !== '') email = raDetail.email;
+          if ((!mobile || mobile.trim() === '') && raDetail?.phone_number && raDetail.phone_number.trim() !== '') mobile = raDetail.phone_number;
+          if ((!linkedin || linkedin.trim() === '') && raDetail?.linkedin && raDetail.linkedin.trim() !== '') linkedin = raDetail.linkedin;
         }
         
         const baseNameFallback = lookup.source_type === 'employee_associations' 
-            ? `Assoc: ${candIdStr.substring(0,8)}` 
-            : `Legacy: ${candIdStr.substring(0,8)}`;
+          ? `Assoc: ${candIdStr.substring(0,8)}` 
+          : `Legacy: ${candIdStr.substring(0,8)}`;
         name = (name && name.trim() !== '' && name !== 'Unknown') ? name : baseNameFallback;
 
         const commonUnifiedFields = {
-            name: name,
-            email: email,
-            mobile: mobile,
-            linkedin_url: linkedin,
-            contact_owner: item.contact_owner,
-            contact_stage: item.contact_stage,
-            company_id: item.company_id,
-            company_name: (item.companies as any)?.name || null,
-            candidate_job_id: jobIdStr,
-            job_title: item.designation || null, 
-            created_at: lookup.source_type === 'employee_associations' ? item.created_at : null,
-            updated_at: null, 
+          name: name,
+          email: email,
+          mobile: mobile,
+          linkedin_url: linkedin,
+          contact_owner: item.contact_owner,
+          contact_stage: item.contact_stage,
+          company_id: item.company_id,
+          company_name: (item.companies as any)?.name || null,
+          candidate_job_id: jobIdStr,
+          job_title: item.designation || null, 
+          created_at: lookup.source_type === 'employee_associations' ? item.created_at : null,
+          updated_at: null, 
         };
 
         if (lookup.source_type === 'employee_associations') {
-            processedItems.push({
-                ...commonUnifiedFields,
-                id: `assoc-${item.id}`,
-                association_id: String(item.id),
-                original_candidate_id: candIdStr,
-                source_table: 'employee_associations',
-                association_start_date: item.start_date,
-                association_end_date: item.end_date,
-                association_is_current: item.is_current,
-            });
+          processedItems.push({
+            ...commonUnifiedFields,
+            id: `assoc-${item.id}`,
+            association_id: String(item.id),
+            original_candidate_id: candIdStr,
+            source_table: 'employee_associations',
+            association_start_date: item.start_date,
+            association_end_date: item.end_date,
+            association_is_current: item.is_current,
+          });
         } else if (lookup.source_type === 'candidate_companies') {
-            processedItems.push({
-                ...commonUnifiedFields,
-                id: `candcomp-${item.candidate_id}-${item.job_id}-${item.company_id}`,
-                original_candidate_id: candIdStr,
-                source_table: 'candidate_companies',
-                candidate_years: item.years || null,
-                association_id: null,
-                association_start_date: null,
-                association_end_date: null,
-                association_is_current: null,
-            });
+          processedItems.push({
+            ...commonUnifiedFields,
+            id: `candcomp-${item.candidate_id}-${item.job_id}-${item.company_id}`,
+            original_candidate_id: candIdStr,
+            source_table: 'candidate_companies',
+            candidate_years: item.years || null,
+            association_id: null,
+            association_start_date: null,
+            association_end_date: null,
+            association_is_current: null,
+          });
         }
       });
       

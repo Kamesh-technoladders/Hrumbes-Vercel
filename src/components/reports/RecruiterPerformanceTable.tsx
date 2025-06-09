@@ -64,6 +64,8 @@ const RecruiterPerformanceTable: React.FC<RecruiterPerformanceTableProps> = ({ d
   const rowsPerPage = 5
   const totalPages = Math.ceil(data.length / rowsPerPage)
 
+  console.log("datatat", data)
+
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc")
@@ -114,7 +116,7 @@ const RecruiterPerformanceTable: React.FC<RecruiterPerformanceTableProps> = ({ d
         formula: "(Interviews + Offers + Joins) / Sent to Client",
         value:
           recruiter.sent_to_client > 0
-            ? (totalInterviews + recruiter.offers.made + recruiter.joining.joined) / recruiter.sent_to_client
+            ? (recruiter.interviews.l1) / recruiter.sent_to_client
             : 0,
         description: "Percentage of client-submitted profiles that move forward",
       },
@@ -508,7 +510,7 @@ const RecruiterPerformanceTable: React.FC<RecruiterPerformanceTableProps> = ({ d
                     </Tooltip>
                   </TooltipProvider>
                 </TableHead>
-                <TableHead className="text-right text-indigo-900 font-semibold py-4">
+                {/* <TableHead className="text-right text-indigo-900 font-semibold py-4">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -519,7 +521,7 @@ const RecruiterPerformanceTable: React.FC<RecruiterPerformanceTableProps> = ({ d
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                </TableHead>
+                </TableHead> */}
                 <TableHead className="text-right text-indigo-900 font-semibold py-4">
                   <TooltipProvider>
                     <Tooltip>
@@ -651,12 +653,12 @@ const RecruiterPerformanceTable: React.FC<RecruiterPerformanceTableProps> = ({ d
                     <TableCell className={`text-right ${getPercentageColor(metrics[1].value)}`}>
                       {formatPercentage(metrics[1].value)}
                     </TableCell>
-                    <TableCell className={`text-right ${getPercentageColor(1 - metrics[10].value)}`}>
+                    <TableCell className={`text-right text-rose-600`}>
                       {formatPercentage(metrics[10].value)}
                     </TableCell>
-                    <TableCell className={`text-right ${getPercentageColor(metrics[3].value)}`}>
+                    {/* <TableCell className={`text-right ${getPercentageColor(metrics[3].value)}`}>
                       {formatPercentage(metrics[3].value)}
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell className={`text-right ${getPercentageColor(metrics[7].value)}`}>
                       {formatPercentage(metrics[7].value)}
                     </TableCell>

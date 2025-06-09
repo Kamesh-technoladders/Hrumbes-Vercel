@@ -167,7 +167,7 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {timesheet?.is_submitted && !employeeHasProjects ? "View Timesheet" : "Submit Timesheet"}

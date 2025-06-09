@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Link } from "react-router-dom";
 
 interface Interview {
   name: string;
@@ -12,13 +13,13 @@ interface Interview {
   interview_location: string;
   interview_type: string;
   round: string;
-  employee_name?: string; // Add employee_name for superadmin
+  employee_name?: string;
 }
 
 interface InterviewsListProps {
   employeeId: string;
   selectedDate: Date;
-  role?: string; // Add role prop
+  role?: string;
 }
 
 export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, selectedDate, role }) => {
@@ -29,7 +30,6 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
       try {
         let fullName = '';
         if (role !== 'organization_superadmin') {
-          // Fetch employee data to get first_name and last_name for non-superadmin users
           const { data: employeeData, error: employeeError } = await supabase
             .from("hr_employees")
             .select("first_name, last_name")
@@ -43,10 +43,9 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
           }
         }
 
-        // Fetch candidates with main_status_id for interviews
         const query = supabase
           .from("hr_job_candidates")
-          .select("name, interview_date, interview_time, interview_location, interview_type, round, applied_from");
+          .select("id, job_id, name, interview_date, interview_time, interview_location, interview_type, round, applied_from");
 
         if (role !== 'organization_superadmin') {
           query.eq("applied_from", fullName);
@@ -58,7 +57,6 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
 
         if (candidatesError) throw candidatesError;
 
-        // Filter for upcoming interviews
         const currentDate = new Date();
         const upcomingInterviews = candidatesData
           .filter((candidate) => {
@@ -70,13 +68,21 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
           })
           .map((candidate) => ({
             name: candidate.name,
+            candidate_id: candidate.id,
+            job_id: candidate.job_id,
             interview_date: candidate.interview_date,
             interview_time: candidate.interview_time,
             interview_location: candidate.interview_location,
             interview_type: candidate.interview_type,
             round: candidate.round,
-            employee_name: candidate.applied_from, // Include employee name for superadmin
-          }));
+            employee_name: candidate.applied_from,
+          }))
+          // Sort by interview_date (ascending) and interview_time (ascending) for same dates
+          .sort((a, b) => {
+            const dateA = new Date(`${a.interview_date}T${a.interview_time || "00:00:00"}+05:30`);
+            const dateB = new Date(`${b.interview_date}T${b.interview_time || "00:00:00"}+05:30`);
+            return dateA.getTime() - dateB.getTime();
+          });
 
         setInterviews(upcomingInterviews);
       } catch (error) {
@@ -88,14 +94,14 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
     fetchInterviews();
   }, [employeeId, role]);
 
-  // Format interview date as "MMM D"
+  console.log("intervies", interviews)
+
   const formatInterviewDate = (date: string) => {
     const interviewDate = new Date(date);
     const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
     return interviewDate.toLocaleDateString("en-US", options);
   };
 
-  // Format interview time as "h:mm A"
   const formatInterviewTime = (time: string) => {
     if (!time) return "N/A";
     const [hours, minutes] = time.split(":");
@@ -105,7 +111,7 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
   };
 
   return (
-    <div className="relative h-[220px]">
+    <div className="relative h-[300px]">
       <ScrollArea className="h-full pr-4 -mr-4">
         <div className="space-y-2">
           {interviews.length > 0 ? (
@@ -114,11 +120,13 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
               const isSelected = isSameDay(interviewDate, selectedDate);
 
               return (
+                <Link
+                  to={`/employee/${interview.candidate_id}/${interview.job_id}`}>
                 <div
                   key={index}
                   className={cn(
-                    "w-full bg-white border p-1.5 rounded-lg hover:border-[#1A73E8]/20 hover:bg-blue-50/30 transition-all duration-200 cursor-pointer",
-                    isSelected ? "border-purple-500 bg-purple-100" : "border-gray-100"
+                    "w-full border-purple-500 bg-purple-50 p-1.5 rounded-lg transition-all duration-200 cursor-pointer",
+                    
                   )}
                 >
                   <div className="space-y-0.5">
@@ -143,6 +151,7 @@ export const InterviewsList: React.FC<InterviewsListProps> = ({ employeeId, sele
                     </div>
                   </div>
                 </div>
+                </Link>
               );
             })
           ) : (

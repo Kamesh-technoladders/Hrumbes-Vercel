@@ -49,7 +49,7 @@ const TimesheetDialog = ({
   return (
     <>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-full sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {isApproved 
@@ -73,7 +73,7 @@ const TimesheetDialog = ({
           
           <div className="text-center pt-2">
             <Button 
-              variant="outline" 
+              variant="resume1" 
               onClick={() => setViewDetailsOpen(true)}
               className="w-full flex items-center justify-center gap-2"
             >

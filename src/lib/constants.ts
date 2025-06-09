@@ -91,6 +91,8 @@ export const INDIAN_CITIES = [
   { value: "ranchi", label: "Ranchi" },
   { value: "mangalore", label: "Mangalore" },
   { value: "gurgaon", label: "Gurgaon"},
+  { value: "noida", label: "Noida" },
+
   { value: "remote", label: "Remote" }
 ];
 
