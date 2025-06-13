@@ -27,7 +27,7 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
   const [date, setDate] = useState<Date>(new Date());
   const [detailedEntries, setDetailedEntries] = useState<DetailedTimesheetEntry[]>([]);
   const [projectEntries, setProjectEntries] = useState<
-    {projectId: string; hours: number; report: string}[]
+    { projectId: string; clockIn?: string; clockOut?: string; hours: number; report: string }[]
   >([]);
   const [hrProjectEmployees, setHrProjectEmployees] = useState<any[]>([]);
 
@@ -41,10 +41,6 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
     };
     fetchData();
   }, [employeeId, employeeHasProjects]);
-
-  // Log employeeId for debugging
-  console.log('CreateTimesheetDialog employeeId:', { employeeId });
-  console.log("CreateTimesheetDialog hremployees", hrProjectEmployees );
 
   const { validateForm } = useTimesheetValidation();
   const { isSubmitting, submitTimesheet } = useTimesheetSubmission();
@@ -60,7 +56,7 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
     onOpenChange(false);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (title: string, workReport: string) => {
     if (!employeeId) {
       toast.error('User not authenticated. Please log in to submit a timesheet.');
       console.log('Submission blocked: No employeeId');
@@ -76,12 +72,17 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
       return;
     }
 
+    const totalWorkingHours = projectEntries.reduce((sum, entry) => sum + entry.hours, 0);
+
     const success = await submitTimesheet({
       employeeId,
-      date,
+      title,
+      workReport,
+      totalWorkingHours,
       employeeHasProjects,
       projectEntries,
-      detailedEntries
+      detailedEntries,
+      date,
     });
 
     if (success) {
@@ -92,7 +93,7 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
       handleClose();
     } else {
       toast.error('Failed to create timesheet');
-      console.log('Submission failed:', { employeeId, date });
+      console.log('Submission failed:', { employeeId, date, title, workReport });
     }
   };
 

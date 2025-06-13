@@ -2449,7 +2449,7 @@ const renderWorkHistory = () => {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => handleVerifyEmployee(history)}
+                      onClick={() => verifyEmployee(history)}
                       disabled={isVerifyingAll}
                     >
                       Verify Employee

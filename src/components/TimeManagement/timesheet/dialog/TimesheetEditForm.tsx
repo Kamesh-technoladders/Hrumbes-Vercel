@@ -3,9 +3,15 @@ import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TimeLogTable } from "@/types/time-tracker-types";
 import { supabase } from "@/integrations/supabase/client";
 import QuillTableBetterDemo from "@/utils/QuillTableBetterDemo";
+
+interface TimeLog {
+  id?: string;
+  date: string;
+  duration_minutes: number;
+  notes: string | Record<string, any>;
+}
 
 interface TimesheetEditFormProps {
   timesheet?: TimeLog;
@@ -23,10 +29,36 @@ interface TimesheetEditFormProps {
 }
 
 interface Submission {
-  job_title: string;
-  client_owner: string;
   candidate_name: string;
-  status: string;
+  email: string;
+  phone: string;
+  experience: string;
+  skills: string;
+  match_score: string;
+  overall_score: string;
+  applied_date: string;
+  submission_date: string;
+  applied_from: string;
+  current_salary: string;
+  expected_salary: string;
+  location: string;
+  preferred_location: string;
+  notice_period: string;
+  resume_url: string;
+  main_status: string;
+  sub_status: string;
+  interview_date: string;
+  interview_time: string;
+  interview_type: string;
+  interview_round: string;
+  interviewer_name: string;
+  interview_result: string;
+  reject_reason: string;
+  ctc: string;
+  joining_date: string;
+  created_at: string;
+  job_title: string;
+  client_name: string;
 }
 
 export const TimesheetEditForm: React.FC<TimesheetEditFormProps> = ({
@@ -142,13 +174,36 @@ export const TimesheetEditForm: React.FC<TimesheetEditFormProps> = ({
           .from("hr_job_candidates")
           .select(`
             name,
-            status:job_statuses!hr_job_candidates_sub_status_id_fkey(name),
+            email,
+            phone,
+            experience,
+            skills,
+            match_score,
+            overall_score,
+            applied_date,
+            submission_date,
+            applied_from,
+            current_salary,
+            expected_salary,
+            location,
+            preferred_location,
+            notice_period,
+            resume_url,
+            main_status_id,
+            sub_status_id,
+            interview_date,
+            interview_time,
+            interview_type,
+            round,
+            interviewer_name,
+            interview_result,
+            reject_reason,
+            ctc,
+            joining_date,
             created_at,
-            job_id,
-            hr_jobs!hr_job_candidates_job_id_fkey(
-              title,
-              client_owner
-            )
+            status:job_statuses!hr_job_candidates_main_status_id_fkey(name),
+            sub_status:job_statuses!hr_job_candidates_sub_status_id_fkey(name),
+            hr_jobs!hr_job_candidates_job_id_fkey(title, client_owner)
           `)
           .eq("created_by", userId)
           .gte("created_at", format(dateStart, "yyyy-MM-dd'T'HH:mm:ss"))
@@ -156,14 +211,38 @@ export const TimesheetEditForm: React.FC<TimesheetEditFormProps> = ({
 
         if (error) throw error;
 
-        const formattedSubmissions: Submission[] = candidates.map(
-          (candidate: any) => ({
-            job_title: candidate.hr_jobs?.title || "N/A",
-            client_owner: candidate.hr_jobs?.client_owner || "N/A",
-            candidate_name: candidate.name,
-            status: candidate.status?.name,
-          })
-        );
+        const formattedSubmissions: Submission[] = candidates.map((candidate: any) => ({
+          candidate_name: candidate.name || 'n/a',
+          email: candidate.email || 'n/a',
+          phone: candidate.phone || 'n/a',
+          experience: candidate.experience || 'n/a',
+          skills: candidate.skills?.length ? candidate.skills.join(', ') : 'n/a',
+          match_score: candidate.match_score?.toString() || 'n/a',
+          overall_score: candidate.overall_score?.toString() || 'n/a',
+          applied_date: candidate.applied_date ? format(new Date(candidate.applied_date), 'dd:MM:yyyy') : 'n/a',
+          submission_date: candidate.submission_date || 'n/a',
+          applied_from: candidate.applied_from || 'n/a',
+          current_salary: candidate.current_salary ? `₹${candidate.current_salary}` : 'n/a',
+          expected_salary: candidate.expected_salary ? `₹${candidate.expected_salary}` : 'n/a',
+          location: candidate.location || 'n/a',
+          preferred_location: candidate.preferred_location || 'n/a',
+          notice_period: candidate.notice_period || 'n/a',
+          resume_url: candidate.resume_url || 'n/a',
+          main_status: candidate.status?.name || 'n/a',
+          sub_status: candidate.sub_status?.name || 'n/a',
+          interview_date: candidate.interview_date || 'n/a',
+          interview_time: candidate.interview_time || 'n/a',
+          interview_type: candidate.interview_type || 'n/a',
+          interview_round: candidate.round || 'n/a',
+          interviewer_name: candidate.interviewer_name || 'n/a',
+          interview_result: candidate.interview_result || 'n/a',
+          reject_reason: candidate.reject_reason || 'n/a',
+          ctc: candidate.ctc || 'n/a',
+          joining_date: candidate.joining_date || 'n/a',
+          created_at: candidate.created_at || 'n/a',
+          job_title: candidate.hr_jobs?.title || 'n/a',
+          client_name: candidate.hr_jobs?.client_owner || 'n/a'
+        }));
 
         setSubmissions(formattedSubmissions);
         console.log("submissions", formattedSubmissions);
@@ -269,7 +348,6 @@ export const TimesheetEditForm: React.FC<TimesheetEditFormProps> = ({
       </div>
 
       <div>
-        {/* Display submissions table above Work Summary */}
         {isRecruiter && (
           <div className="mb-4">
             <h3 className="text-lg font-semibold">Candidate Submissions</h3>
@@ -293,9 +371,9 @@ export const TimesheetEditForm: React.FC<TimesheetEditFormProps> = ({
                     {submissions.map((sub, index) => (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="border border-gray-300 p-2">{sub.job_title}</td>
-                        <td className="border border-gray-300 p-2">{sub.client_owner}</td>
+                        <td className="border border-gray-300 p-2">{sub.client_name}</td>
                         <td className="border border-gray-300 p-2">{sub.candidate_name}</td>
-                        <td className="border border-gray-300 p-2">{sub.status}</td>
+                        <td className="border border-gray-300 p-2">{sub.sub_status}</td>
                       </tr>
                     ))}
                   </tbody>

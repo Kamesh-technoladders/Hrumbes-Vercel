@@ -1183,7 +1183,7 @@ const fetchCandidatesAndEmployees = async (client: string) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-6 md:p-10">
-     <main className="w-full max-w-8xl md:max-w-7xl lg:max-w-8xl mx-auto space-y-8">
+     <main className="w-full max-w-8xl md:max-w-8xl lg:max-w-8xl mx-auto space-y-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-2">
             <Button

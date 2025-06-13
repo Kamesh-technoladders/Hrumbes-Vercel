@@ -215,6 +215,7 @@ const ProjectDashboard = () => {
           billing_type,
           salary_type,
           salary_currency,
+          working_hours,
           hr_employees:hr_employees!hr_project_employees_assign_employee_fkey (first_name, last_name, salary_type)
         `)
         .eq("project_id", id)

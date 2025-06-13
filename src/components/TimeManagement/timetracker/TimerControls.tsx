@@ -49,7 +49,7 @@ export function TimerControls({
             onClick={handleClockOut}
           >
             <StopCircle className="h-5 w-5" />
-            Check Out
+            Log Out
           </Button>
         ) : (
           <Button 
@@ -60,7 +60,7 @@ export function TimerControls({
             title={!handleClockIn ? "Submit previous timesheets before clocking in" : undefined}
           >
             <Play className="h-5 w-5" />
-            Check In
+            Log In
             {hasUnsubmittedTimesheets && (
               <span className="text-xs block mt-1">(Submit previous timesheets first)</span>
             )}

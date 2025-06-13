@@ -7,14 +7,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TimesheetList from "./components/TimesheetList";
 import TimesheetDialog from "./components/TimesheetDialog";
-import { useTimesheetApproval } from "./hooks/useTimesheetApproval";
+import { useTimesheetApproval } from "./hooks/useTimesheetApproval"; 
 import { toast } from "sonner";
 
 const TimesheetApproval = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("pending");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("all"); // New state for status filter
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [employeeFilter, setEmployeeFilter] = useState("all");
 
   const {
     pendingTimesheets,
@@ -31,15 +33,20 @@ const TimesheetApproval = () => {
     openDialog,
   } = useTimesheetApproval();
 
-  // Initial load and periodic refresh
+  // Mock departments and employees (replace with API calls in production)
+  const departments = Array.from(
+    new Set(pendingTimesheets.map((t) => t.employee?.department?.name).filter(Boolean))
+  ).concat("all");
+  const employees = Array.from(
+    new Set(
+      pendingTimesheets.map(
+        (t) => `${t.employee?.first_name} ${t.employee?.last_name}`
+      )
+    )
+  ).concat("all");
+
   useEffect(() => {
     fetchTimesheets();
-    
-    const intervalId = setInterval(() => {
-      fetchTimesheets();
-    }, 60000); // Refresh every minute
-    
-    return () => clearInterval(intervalId);
   }, []);
 
   const handleRefresh = async () => {
@@ -49,10 +56,14 @@ const TimesheetApproval = () => {
     toast("Timesheet data refreshed");
   };
 
-  // Filter pending timesheets based on status
+  // Filter pending timesheets
   const filteredPendingTimesheets = pendingTimesheets.filter((timesheet) => {
-    if (statusFilter === "all") return true;
-    return timesheet.status === statusFilter;
+    const employeeName = `${timesheet.employee?.first_name} ${timesheet.employee?.last_name}`;
+    return (
+      (statusFilter === "all" || timesheet.status === statusFilter) &&
+      (departmentFilter === "all" || timesheet.employee?.department?.name === departmentFilter) &&
+      (employeeFilter === "all" || employeeName === employeeFilter)
+    );
   });
 
   return (
@@ -82,7 +93,7 @@ const TimesheetApproval = () => {
           <div className="grid gap-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <h2 className="text-xl font-semibold">Pending Approvals</h2>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -101,6 +112,30 @@ const TimesheetApproval = () => {
                     <SelectItem value="all">All</SelectItem>
                     <SelectItem value="normal">Normal</SelectItem>
                     <SelectItem value="auto_terminated">Auto Terminated</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept === "all" ? "All Departments" : dept}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp} value={emp}>
+                        {emp === "all" ? "All Employees" : emp}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Button 

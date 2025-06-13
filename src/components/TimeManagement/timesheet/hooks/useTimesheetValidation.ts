@@ -25,10 +25,10 @@ export const useTimesheetValidation = () => {
         return false;
       }
 
-      const invalidProject = validProjectEntries.find(p => 
+      const invalidProject = validProjectEntries.find(p =>
         !p.projectId || (p.hours > 0 && !p.report.trim())
       );
-      
+
       if (invalidProject) {
         toast({
           title: "Invalid project entry",
@@ -38,25 +38,9 @@ export const useTimesheetValidation = () => {
         return false;
       }
 
-      const totalProjectHours = validProjectEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      if (totalProjectHours > 8) {
-        toast({
-          title: "Hours exceeded",
-          description: "Total project hours cannot exceed 8 hours",
-          variant: "destructive"
-        });
-        return false;
-      }
+      // Removed 8-hour validation for project entries
     } else if (detailedEntries.length > 0) {
-      const totalDetailedHours = detailedEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      if (totalDetailedHours > 8) {
-        toast({
-          title: "Hours exceeded",
-          description: "Total detailed hours cannot exceed 8 hours",
-          variant: "destructive"
-        });
-        return false;
-      }
+      // Removed 8-hour validation for detailed entries
     }
 
     return true;

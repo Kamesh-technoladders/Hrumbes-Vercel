@@ -52,6 +52,7 @@ interface AssignEmployee {
   status: string;
   sow: string | null;
   duration: number;
+    working_hours?: number;
   billing_type?: string;
   hr_employees?: {
     first_name: string;
@@ -93,6 +94,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
       status: string;
       sowFile: File | null;
       noOfDays: number;
+      working_hours: string;
       isSalaryEditable: boolean;
     }[]
   >([]);
@@ -155,6 +157,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           sowFile: null,
           noOfDays: editEmployee.duration,
           isSalaryEditable: false,
+          working_hours: editEmployee.working_hours?.toString() || "0",
         },
       ]);
     } else {
@@ -194,6 +197,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           sowFile: null,
           noOfDays: projectData.duration || 0,
           isSalaryEditable: false,
+          working_hours: "8",
         },
       ]);
     }
@@ -266,9 +270,10 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
           !assignment.client_billing ||
           !assignment.billing_type ||
           !assignment.salary_currency ||
-          !assignment.salary_type
+          !assignment.salary_type ||
+           !assignment.working_hours
         ) {
-          toast.error("Please fill in all required fields (Employee, Start Date, End Date, Client Billing, Billing Type, Salary Currency, Salary Type)");
+          toast.error("Please fill in all required fields (Employee, Start Date, End Date, Client Billing, Billing Type, Salary Currency, Salary Type, Working Hours)");
           return;
         }
 
@@ -297,6 +302,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
             salary_currency: assignment.salary_currency,
             salary_type: assignment.salary_type,
             client_billing: parseFloat(assignment.client_billing) || 0,
+            working_hours: parseFloat(assignment.working_hours) || 8,
             billing_type: assignment.billing_type,
             status: assignment.status,
             updated_by: user.id,
@@ -351,6 +357,7 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
               client_billing: parseFloat(employee.client_billing) || 0,
               billing_type: employee.billing_type,
               status: employee.status,
+             working_hours: parseFloat(employee.working_hours) || 8,
               sow: sowUrl,
               organization_id,
               created_by: user.id,
@@ -640,6 +647,21 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                         </div>
                       </div>
                       <div>
+                      <Label className="text-sm font-medium block mb-1">Working Hours*</Label>
+                    <div>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={assignment.working_hours}
+                        onChange={(e) => handleFieldChange(index, "working_hours", e.target.value)}
+                        placeholder="Enter working hours (e.g., 4.2)"
+                        required
+                        className="w-full text-sm"
+                      />
+                    </div>
+                    </div>
+                      <div>
                         <Label className="text-sm font-medium block mb-1">SOW</Label>
                         <Input
                           type="file"
@@ -676,7 +698,8 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
                     !a.client_billing ||
                     !a.billing_type ||
                     !a.salary_currency ||
-                    !a.salary_type
+                    !a.salary_type ||
+                     !a.working_hours
                 )
               }
               className="w-full sm:w-auto"
@@ -691,3 +714,5 @@ const AssignEmployeeDialog = ({ open, onOpenChange, projectId, clientId, editEmp
 };
 
 export default AssignEmployeeDialog;
+
+// Alloted working hours

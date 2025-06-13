@@ -3,8 +3,10 @@ import { TimeLog } from "@/types/time-tracker-types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, MessageCircleQuestion, ChevronLeft, ChevronRight } from "lucide-react";
-import { formatDate, formatTime } from "@/utils/timeFormatters";
+import { formatDate } from "@/utils/timeFormatters";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import parse from "html-react-parser";
 
 interface TimesheetListProps {
   timesheets: TimeLog[];
@@ -19,8 +21,8 @@ interface TimesheetListProps {
 export const formatDuration = (minutes: number | null) => {
   if (!minutes) return "N/A";
   const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours}h ${mins}m`;
+  const mins = Math.round((minutes % 60) * 10) / 10;
+  return `${hours}.${mins} hrs`;
 };
 
 export const filterTimesheetsByEmployee = (timesheets: TimeLog[], searchTerm: string) => {
@@ -32,30 +34,100 @@ export const filterTimesheetsByEmployee = (timesheets: TimeLog[], searchTerm: st
   });
 };
 
-const getLogoutTypeColor = (status: string) => {
-  switch (status) {
-    case 'normal':
-      return "bg-green-100 text-green-800 border-green-200";
-    case 'auto_terminated':
-      return "bg-red-100 text-red-800 border-red-200";
-      case 'grace_period':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    default:
-      return "bg-gray-100 text-gray-800 border-gray-200";
-  }
+// Convert UTC ISO time to IST and format as 12-hour with AM/PM
+const format12HourTime = (time: string | null) => {
+  if (!time) return "N/A";
+  const date = new Date(time);
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istDate = new Date(date.getTime() + istOffset);
+  const hours = istDate.getUTCHours();
+  const minutes = istDate.getUTCMinutes().toString().padStart(2, "0");
+  const period = hours >= 12 ? "PM" : "AM";
+  const adjustedHour = hours % 12 || 12;
+  return `${adjustedHour}:${minutes} ${period}`;
 };
 
-const formatLogoutType = (status: string) => {
-  switch (status) {
-    case 'normal':
-      return 'Normal';
-    case 'auto_terminated':
-      return 'Auto Terminated';
-      case 'grace_period':
-        return 'Overtime';
-    default:
-      return 'Unknown';
-  }
+// Get hours in IST for login/logout rules
+const getISTHours = (time: string | null) => {
+  if (!time) return 0;
+  const date = new Date(time);
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istDate = new Date(date.getTime() + istOffset);
+  return istDate.getUTCHours() + istDate.getUTCMinutes() / 60;
+};
+
+// Determine time-based status with color
+const getTimeBasedStatus = (minutes: number | null) => {
+  if (!minutes) return { display: "", components: [] };
+  const hours = minutes / 60;
+  let statuses: string[] = [];
+
+  if (hours > 9) statuses.push("Overtime");
+  if (hours > 10) statuses.push("Clarification");
+  else if (hours < 5) statuses.push("Half Day");
+  else if (hours >= 5 && hours < 8) statuses.push("Short Time");
+  else if (hours >= 8 && hours <= 9) statuses.push("Normal");
+
+  const components = statuses.map((status) => {
+    let variant: string;
+    switch (status) {
+      case "Overtime":
+        variant = "bg-blue-100 text-blue-800 border-blue-200";
+        break;
+      case "Clarification":
+        variant = "bg-yellow-100 text-yellow-800 border-yellow-200";
+        break;
+      case "Half Day":
+        variant = "bg-red-100 text-red-800 border-red-200";
+        break;
+      case "Short Time":
+        variant = "bg-orange-100 text-orange-800 border-orange-200";
+        break;
+      case "Normal":
+        variant = "bg-green-100 text-green-800 border-green-200";
+        break;
+      default:
+        variant = "bg-gray-100 text-gray-800 border-gray-200";
+    }
+    return (
+      <Badge key={status} className={variant}>
+        {status}
+      </Badge>
+    );
+  });
+
+  return { display: statuses.join(", "), components };
+};
+
+
+// Check login/logout rules
+const getLoginDisplay = (clockIn: string | null) => {
+  if (!clockIn) return { display: "N/A", className: "" };
+  const hourNum = getISTHours(clockIn);
+  const formattedTime = format12HourTime(clockIn);
+  const isLate = hourNum > 10.3;
+  return {
+    display: isLate ? `${formattedTime} (Late Login)` : formattedTime,
+    className: isLate ? "text-red-500" : "",
+  };
+};
+
+const getLogoutDisplay = (clockOut: string | null, duration: number | null) => {
+  if (!clockOut) return { display: "N/A", className: "" };
+  const hourNum = getISTHours(clockOut);
+  const formattedTime = format12HourTime(clockOut);
+  const isEarly = hourNum < 19 || (duration && duration / 60 < 8);
+  return {
+    display: isEarly ? `${formattedTime} (Early Logout)` : formattedTime,
+    className: isEarly ? "text-red-500" : "",
+  };
+};
+
+// Truncate notes
+const truncateNotes = (notes: string | null, maxLength: number = 50) => {
+  if (!notes) return "-";
+  const text = notes.replace(/<[^>]+>/g, ""); // Strip HTML tags for truncation
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 };
 
 const TimesheetList = ({
@@ -69,26 +141,6 @@ const TimesheetList = ({
 }: TimesheetListProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-
-  const formatStatus = (timesheet: TimeLog) => {
-    if (type === 'pending') {
-      return timesheet.is_submitted ? 'Pending Approval' : 'Not Submitted';
-    } else if (type === 'clarification') {
-      return 'Clarification Needed';
-    } else {
-      return 'Approved';
-    }
-  };
-
-  const getStatusColor = (timesheet: TimeLog) => {
-    if (type === 'pending') {
-      return timesheet.is_submitted ? 'text-amber-500' : 'text-red-500';
-    } else if (type === 'clarification') {
-      return 'text-amber-500';
-    } else {
-      return 'text-green-500';
-    }
-  };
 
   const filteredTimesheets = filterTimesheetsByEmployee(timesheets, searchTerm);
   const totalPages = Math.ceil(filteredTimesheets.length / itemsPerPage);
@@ -118,78 +170,88 @@ const TimesheetList = ({
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Employee</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Timesheet Date</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Submitted on</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Log In</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Log Out</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Duration</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Logout Type</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Status</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Actions</th>
+                <th className="px-4 py-2 text-left text-sm">Date</th>
+                <th className="px-4 py-2 text-left text-sm">Employee</th>
+                <th className="px-4 py-2 text-left text-sm">Department</th>
+                <th className="px-4 py-2 text-left text-sm">Login</th>
+                <th className="px-4 py-2 text-left text-sm">Logout</th>
+                <th className="px-4 py-2 text-right text-sm">Hours</th>
+                <th className="px-4 py-2 text-left text-sm">Status</th>
+                <th className="px-4 py-2 text-left text-sm">Notes</th>
+                <th className="px-4 py-2 text-left text-sm">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedTimesheets.map((timesheet) => (
-                <tr key={timesheet.id} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-2 font-medium">
-                    {timesheet.employee?.first_name && timesheet.employee?.last_name
-                      ? `${timesheet.employee.first_name} ${timesheet.employee.last_name}`
-                      : 'Unknown Employee'}
-                  </td>
-                  <td className="px-4 py-2">{formatDate(timesheet.date)}</td>
-                  <td className="px-4 py-2">{formatDate(timesheet.submitted_at)}</td>
-                  <td className="px-4 py-2">
-                    {timesheet.clock_in_time ? formatTime(timesheet.clock_in_time) : 'N/A'}
-                  </td>
-                  <td className="px-4 py-2">
-                    {timesheet.clock_out_time ? formatTime(timesheet.clock_out_time) : 'N/A'}
-                  </td>
-                  <td className="px-4 py-2">{formatDuration(timesheet.duration_minutes)}</td>
-                  <td className="px-4 py-2">
-                    <Badge className={getLogoutTypeColor(timesheet.status)}>
-                      {formatLogoutType(timesheet.status)}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className={getStatusColor(timesheet)}>{formatStatus(timesheet)}</span>
-                  </td>
-                  <td className="px-4 py-2 flex gap-2">
-                    {type === 'pending' && !timesheet.is_submitted ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={() => onViewTimesheet(timesheet)}
-                      >
-                        <FileText className="h-4 w-4 mr-1" />
-                        Submit
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={() => onViewTimesheet(timesheet)}
-                      >
-                        <FileText className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                    )}
-                    {type === 'clarification' && onRespondToClarification && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={() => onRespondToClarification(timesheet)}
-                      >
-                        <MessageCircleQuestion className="h-4 w-4 mr-1" />
-                        Respond
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {paginatedTimesheets.map((timesheet) => {
+                const loginDisplay = getLoginDisplay(timesheet.clock_in_time);
+                const logoutDisplay = getLogoutDisplay(timesheet.clock_out_time, timesheet.duration_minutes);
+                const statusDisplay = getTimeBasedStatus(timesheet.duration_minutes);
+                return (
+                  <tr key={timesheet.id} className="hover:bg-gray-50 transition">
+                    <td className="px-4 py-2">{formatDate(timesheet.date)}</td>
+                    <td className="px-4 py-2 font-medium">
+                      {timesheet.employee?.first_name && timesheet.employee?.last_name
+                        ? `${timesheet.employee.first_name} ${timesheet.employee.last_name}`
+                        : 'Unknown Employee'}
+                    </td>
+                    <td className="px-4 py-2">{timesheet.employee?.department?.name || 'N/A'}</td>
+                    <td className={`px-4 py-2 ${loginDisplay.className}`}>
+                      {loginDisplay.display}
+                    </td>
+                    <td className={`px-4 py-2 ${logoutDisplay.className}`}>
+                      {logoutDisplay.display}
+                    </td>
+                    <td className="px-4 py-2 text-right">{formatDuration(timesheet.duration_minutes)}</td>
+                    <td className="px-4 py-2 flex gap-1 flex-wrap">
+                      {statusDisplay.components.length > 0 ? statusDisplay.components : '-'}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <span className="cursor-pointer">{truncateNotes(timesheet.notes)}</span>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-250">
+                          {timesheet.notes ? parse(timesheet.notes) : '-'}
+                        </PopoverContent>
+                      </Popover>
+                    </td>
+                    <td className="px-4 py-2 flex gap-2">
+                      {type === 'pending' && !timesheet.is_submitted ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => onViewTimesheet(timesheet)}
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          Submit
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => onViewTimesheet(timesheet)}
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                      )}
+                      {type === 'clarification' && onRespondToClarification && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => onRespondToClarification(timesheet)}
+                        >
+                          <MessageCircleQuestion className="h-4 w-4 mr-1" />
+                          Respond
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

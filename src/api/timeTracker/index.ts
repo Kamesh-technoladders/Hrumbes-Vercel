@@ -6,7 +6,7 @@ export const fetchHrProjectEmployees = async (employeeId: string): Promise<any[]
   try {
     const { data, error } = await supabase
       .from('hr_project_employees')
-      .select('id, assign_employee, project_id, client_id')
+      .select('id, assign_employee, project_id, client_id, working_hours')
       .eq('assign_employee', employeeId);
 
     if (error) throw error;
@@ -167,6 +167,8 @@ export const submitTimesheet = async (
         project_time_data: projectTimeData,
         total_working_hours: formData.totalWorkingHours || 8,
         updated_at: new Date().toISOString(),
+        clock_out_time: formData.clockOut || null,
+        clock_in_time: formData.clockIn || null,
       })
       .eq('id', timeLogId);
 
