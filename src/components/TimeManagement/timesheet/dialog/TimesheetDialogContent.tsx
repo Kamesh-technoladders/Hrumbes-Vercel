@@ -19,9 +19,14 @@ interface TimesheetDialogContentProps {
   employeeHasProjects: boolean;
   isSubmitting: boolean;
   handleClose: () => void;
-  handleSubmit: (title: string, workReport: string) => void;
+ handleSubmit: (title: string, workReport: string, clockIn?: string, clockOut?: string) => void;
   employeeId: string;
   hrProjectEmployees: any[];
+  clockIn: string | undefined;
+setClockIn: React.Dispatch<React.SetStateAction<string | undefined>>;
+clockOut: string | undefined;
+setClockOut: React.Dispatch<React.SetStateAction<string | undefined>>;
+
 }
 
 export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
@@ -43,6 +48,13 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
   const [projectReports, setProjectReports] = useState<{ [key: string]: string }>({});
   const [title, setTitle] = useState("");
   const [workReport, setWorkReport] = useState("");
+  const [clockIn, setClockIn] = useState<string | undefined>(undefined);
+  const [clockOut, setClockOut] = useState<string | undefined>(undefined);
+
+  console.log("clockin", clockIn)
+  console.log("clockout", clockOut)
+  console.log("projectEntries", projectEntries)
+  console.log("projectTimeData", projectTimeData)
 
   const updateProjectTimeAllocation = (projectId: string, hours: number) => {
     setProjectTimeData((prev) => ({
@@ -113,6 +125,10 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
             updateProjectReport={updateProjectReport}
             employeeId={employeeId}
             hrProjectEmployees={hrProjectEmployees}
+             clockIn={clockIn}
+            setClockIn={setClockIn}
+            clockOut={clockOut}
+            setClockOut={setClockOut}
           />
         ) : (
           <StandardTimesheetForm
@@ -134,3 +150,4 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
     </DialogContent>
   );
 };
+// 

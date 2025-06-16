@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus } from "lucide-react";
 import { Project } from "@/types/project-types";
@@ -11,6 +11,7 @@ interface ProjectEntry {
   projectId: string;
   hours: number;
   report: string;
+  clientId?: string;
 }
 
 interface HrProjectEmployee {
@@ -31,6 +32,10 @@ interface ProjectAllocationFormProps {
   updateProjectReport?: (projectId: string, report: string) => void;
   employeeId: string;
   hrProjectEmployees: HrProjectEmployee[];
+  clockIn?: string;
+  setClockIn: (clockIn: string | undefined) => void;
+  clockOut?: string;
+  setClockOut: (clockOut: string | undefined) => void;
 }
 
 export const ProjectAllocationForm = ({
@@ -43,10 +48,12 @@ export const ProjectAllocationForm = ({
   updateProjectReport,
   employeeId,
   hrProjectEmployees,
+  clockIn,
+  setClockIn,
+  clockOut,
+  setClockOut,
 }: ProjectAllocationFormProps) => {
-  const [expandedReports, setExpandedReports] = useState<{ [key: string]: boolean }>({});
-  const [clockIn, setClockIn] = useState<string | undefined>(undefined);
-  const [clockOut, setClockOut] = useState<string | undefined>(undefined);
+  const [expandedReports, setExpandedReports] = React.useState<{ [key: string]: boolean }>({});
 
   const filteredProjects = useMemo(() => {
     const assignedProjectIds = hrProjectEmployees
@@ -69,10 +76,11 @@ export const ProjectAllocationForm = ({
         projectId: project.id,
         hours: 0,
         report: "",
+        clientId: hrProjectEmployees.find((pe) => pe.project_id === project.id)?.client_id,
       }));
       setProjectEntries(initialEntries);
     }
-  }, [filteredProjects, projectEntries.length, setProjectEntries]);
+  }, [filteredProjects, projectEntries.length, setProjectEntries, hrProjectEmployees]);
 
   const handleHoursChange = (projectId: string, hours: string) => {
     const numericHours = hours === "" ? 0 : parseFloat(hours) || 0;
@@ -168,6 +176,7 @@ export const ProjectAllocationForm = ({
           projectId: project.id,
           hours: 0,
           report: "",
+          clientId: hrProjectEmployees.find((pe) => pe.project_id === project.id)?.client_id,
         };
         const isReportExpanded = expandedReports[project.id] || false;
         const projectEmployee = hrProjectEmployees.find((pe) => pe.project_id === project.id);
@@ -184,7 +193,7 @@ export const ProjectAllocationForm = ({
               </h4>
               <div className="flex gap-2 items-center">
                 <div className="w-24">
-                  {/* <Label htmlFor={`hours-${project.id}`} className="text-xs">Hours</Label> */}
+                  <Label htmlFor={`hours-${project.id}`} className="text-xs">Hours</Label>
                   <Input
                     id={`hours-${project.id}`}
                     type="number"

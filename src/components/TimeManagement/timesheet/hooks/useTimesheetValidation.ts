@@ -5,6 +5,8 @@ interface ValidationProps {
   employeeHasProjects: boolean;
   projectEntries: { projectId: string; hours: number; report: string }[];
   detailedEntries: DetailedTimesheetEntry[];
+  clockIn?: string; // Added for clock-in validation
+  clockOut?: string; // Added for clock-out validation
 }
 
 export const useTimesheetValidation = () => {
@@ -12,7 +14,29 @@ export const useTimesheetValidation = () => {
     employeeHasProjects,
     projectEntries,
     detailedEntries,
+    clockIn,
+    clockOut,
   }: ValidationProps): boolean => {
+    // Validate clockIn and clockOut
+    if (!clockIn || !clockOut) {
+      toast({
+        title: "Missing time information",
+        description: "Please provide both clock-in and clock-out times.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const timeFormat = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeFormat.test(clockIn) || !timeFormat.test(clockOut)) {
+      toast({
+        title: "Invalid time format",
+        description: "Clock-in and clock-out times must be in HH:mm format (e.g., 08:30).",
+        variant: "destructive",
+      });
+      return false;
+    }
+
     if (employeeHasProjects) {
       const validProjectEntries = projectEntries.filter(p => p.projectId);
 
@@ -20,7 +44,7 @@ export const useTimesheetValidation = () => {
         toast({
           title: "Missing information",
           description: "Please add at least one project",
-          variant: "destructive"
+          variant: "destructive",
         });
         return false;
       }
@@ -33,7 +57,7 @@ export const useTimesheetValidation = () => {
         toast({
           title: "Invalid project entry",
           description: "Please provide a work summary for projects with non-zero hours",
-          variant: "destructive"
+          variant: "destructive",
         });
         return false;
       }
