@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { toast } from "sonner";
 import { submitRegularizationRequest } from "@/api/regularization";
 import { subDays, isAfter, isBefore, format, parse } from "date-fns";
+import { useSelector } from "react-redux";
 
 interface UseRegularizationFormProps {
   employeeId: string;
@@ -16,6 +17,7 @@ export const useRegularizationForm = ({ employeeId, onSuccess }: UseRegularizati
   const [timeLogId, setTimeLogId] = useState<string | undefined>(undefined);
   const [originalClockIn, setOriginalClockIn] = useState<string | undefined>(undefined);
   const [originalClockOut, setOriginalClockOut] = useState<string | undefined>(undefined);
+  const organizationId = useSelector((state: any) => state.auth.organization_id);
 
   // Calculate the earliest allowed date (10 days ago from today)
   const earliestDate = subDays(new Date(), 10);
@@ -86,7 +88,8 @@ export const useRegularizationForm = ({ employeeId, onSuccess }: UseRegularizati
         originalClockOut,
         requestedClockIn: clockInDateTime,
         requestedClockOut: clockOutDateTime,
-        reason
+        reason,
+        organization_id: organizationId
       });
 
       if (success && onSuccess) {

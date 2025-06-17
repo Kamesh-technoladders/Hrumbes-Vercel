@@ -12,6 +12,7 @@ export const submitRegularizationRequest = async (data: {
   requestedClockIn: string;
   requestedClockOut: string;
   reason: string;
+  organization_id: string;
 }) => {
   try {
     console.log("Submitting regularization with data:", data);
@@ -27,7 +28,8 @@ export const submitRegularizationRequest = async (data: {
         requested_clock_in: data.requestedClockIn,
         requested_clock_out: data.requestedClockOut,
         reason: data.reason,
-        status: 'pending'
+        status: 'pending',
+        organization_id: data.organization_id
       })
       .select();
 

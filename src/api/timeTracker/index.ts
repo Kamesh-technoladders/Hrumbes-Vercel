@@ -25,7 +25,8 @@ export const clockIn = async (
   employeeId: string,
   notes: string,
   projectTimeData?: any,
-  totalWorkingHours?: number
+  totalWorkingHours?: number,
+  organization_id: string
 ): Promise<TimeLog | null> => {
   try {
     const now = new Date();
@@ -40,7 +41,8 @@ export const clockIn = async (
         notes: notes,
         status: 'normal',
         project_time_data: projectTimeData || null,
-        total_working_hours: totalWorkingHours || 8
+        total_working_hours: totalWorkingHours || 8,
+        organization_id
       })
       .select()
       .single();
@@ -152,7 +154,8 @@ export const fetchTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
 
 export const submitTimesheet = async (
   timeLogId: string,
-  formData: any
+  formData: any,
+  organization_id: string
 ): Promise<boolean> => {
   try {
     const projectTimeData = formData.projectEntries
@@ -167,8 +170,6 @@ export const submitTimesheet = async (
         project_time_data: projectTimeData,
         total_working_hours: formData.totalWorkingHours || 8,
         updated_at: new Date().toISOString(),
-        clock_out_time: formData.clockOut || null,
-        clock_in_time: formData.clockIn || null,
       })
       .eq('id', timeLogId);
 
@@ -183,6 +184,7 @@ export const submitTimesheet = async (
         submitted_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        organization_id
       });
 
     if (approvalError) throw approvalError;

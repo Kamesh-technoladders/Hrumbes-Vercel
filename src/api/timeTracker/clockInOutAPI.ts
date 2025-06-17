@@ -7,6 +7,7 @@ export const clockIn = async (
   employeeId: string, 
   projectId?: string, 
   projectTimeData?: any
+  organization_id: string
 ) => {
   try {
     const { data, error } = await supabase
@@ -16,7 +17,9 @@ export const clockIn = async (
         project_id: projectId,
         project_time_data: projectTimeData,
         clock_in_time: new Date().toISOString(),
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        organization_id,
+
       })
       .select()
       .single();

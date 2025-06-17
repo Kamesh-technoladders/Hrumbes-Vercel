@@ -64,6 +64,7 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
   employeeHasProjects,
 }) => {
   const user = useSelector((state: any) => state.auth.user);
+    const organization_id = useSelector((state: any) => state.auth.organization_id);
   const employeeId = user?.id || "";
   const [isEditing, setIsEditing] = useState(!timesheet?.is_submitted);
   const [date, setDate] = useState<Date>(new Date(timesheet?.date || Date.now()));
@@ -360,7 +361,8 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
         projectEntries,
         detailedEntries,
         timeLogId: timesheet.id,
-      });
+        
+      }, organization_id);
 
       if (success) {
         await sendEODReport();

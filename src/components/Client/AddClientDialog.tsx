@@ -129,6 +129,7 @@ const AddClientDialog = ({ open, onOpenChange, clientToEdit }: AddClientDialogPr
           email: contact.email || null,
           phone: contact.phone || null,
           designation: contact.designation || null,
+          organization_id
         }));
  
         const { error: contactsError } = await supabase
@@ -172,6 +173,7 @@ const AddClientDialog = ({ open, onOpenChange, clientToEdit }: AddClientDialogPr
           email: contact.email || null,
           phone: contact.phone || null,
           designation: contact.designation || null,
+          organization_id
         }));
  
         const { error: contactsError } = await supabase

@@ -22,6 +22,7 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
   onTimesheetCreated
 }) => {
   const user = useSelector((state: any) => state.auth.user);
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
   const employeeId = user?.id || "";
   
   const [date, setDate] = useState<Date>(new Date());
@@ -83,6 +84,7 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
       projectEntries,
       detailedEntries,
       date,
+      organization_id,
     });
 
     if (success) {

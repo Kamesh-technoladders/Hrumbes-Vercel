@@ -213,6 +213,7 @@ const AddProjectDialog = ({ open, onOpenChange, clientId, editProject }: AddProj
         const { error } = await supabase.from("hr_projects").insert({
           ...projectData,
           created_by: user.id,
+          organization_id
         });
         if (error) throw error;
         toast.success("Project added successfully");
