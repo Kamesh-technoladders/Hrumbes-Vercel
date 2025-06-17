@@ -4,25 +4,15 @@ import { toast } from "sonner";
 import { DetailedTimesheetEntry } from '@/types/time-tracker-types';
 import { submitTimesheet } from '@/api/timeTracker';
 
-interface ProjectEntry {
-  projectId: string;
-  clockIn?: string;
-  clockOut?: string;
-  hours: number;
-  report: string;
-  clientId?: string;
-}
-
 interface SubmissionParams {
   employeeId: string;
   title: string;
   workReport: string;
   totalWorkingHours: number;
   employeeHasProjects: boolean;
-  projectEntries: ProjectEntry[];
+  projectEntries: { projectId: string; hours: number; report: string; clientId?: string }[];
   detailedEntries: DetailedTimesheetEntry[];
   timeLogId?: string;
-  date: Date;
 }
 
 export const useTimesheetSubmission = () => {
@@ -37,59 +27,17 @@ export const useTimesheetSubmission = () => {
     projectEntries,
     detailedEntries,
     timeLogId,
-    date,
   }: SubmissionParams): Promise<boolean> => {
     setIsSubmitting(true);
 
     try {
-      // Calculate earliest clock-in and latest clock-out for the time_logs table
-      let earliestClockIn: string | null = null;
-      let latestClockOut: string | null = null;
-
-      if (employeeHasProjects && projectEntries.length > 0) {
-        const validEntries = projectEntries.filter(
-          (entry) => entry.clockIn && entry.clockOut && entry.hours > 0
-        );
-        if (validEntries.length > 0) {
-          earliestClockIn = validEntries.reduce((earliest, entry) =>
-            !earliest || (entry.clockIn && entry.clockIn < earliest) ? entry.clockIn : earliest,
-            validEntries[0].clockIn!
-          );
-          latestClockOut = validEntries.reduce((latest, entry) =>
-            !latest || (entry.clockOut && entry.clockOut > latest) ? entry.clockOut : latest,
-            validEntries[0].clockOut!
-          );
-        }
-      }
-
-      // Convert date and times to ISO format for database
-      const dateString = date.toISOString().split('T')[0];
-      const clockInTime = earliestClockIn
-        ? new Date(`${dateString}T${earliestClockIn}:00Z`).toISOString()
-        : new Date().toISOString();
-      const clockOutTime = latestClockOut
-        ? new Date(`${dateString}T${latestClockOut}:00Z`).toISOString()
-        : null;
-
-      // Calculate duration_minutes from totalWorkingHours
-      const durationMinutes = Math.round(totalWorkingHours * 60);
-
       const formData = {
         employeeId,
         title,
         workReport,
         totalWorkingHours,
         projectEntries: employeeHasProjects
-          ? projectEntries
-              .filter((entry) => entry.projectId && entry.hours > 0)
-              .map(({ projectId, hours, report, clockIn, clockOut, clientId }) => ({
-                projectId,
-                hours,
-                report,
-                clockIn,
-                clockOut,
-                clientId,
-              }))
+          ? projectEntries.filter((entry) => entry.projectId && entry.hours > 0)
           : [],
         detailedEntries,
       };
@@ -97,11 +45,12 @@ export const useTimesheetSubmission = () => {
       let targetTimeLogId = timeLogId;
 
       if (!targetTimeLogId) {
+        const today = new Date().toISOString().split('T')[0];
         const { data: existingLogs, error: fetchError } = await supabase
           .from('time_logs')
           .select('id')
           .eq('employee_id', employeeId)
-          .eq('date', dateString)
+          .eq('date', today)
           .eq('is_submitted', false)
           .single();
 
@@ -114,28 +63,17 @@ export const useTimesheetSubmission = () => {
 
       if (!targetTimeLogId) {
         const notesObject = { title, workReport };
+        const durationMinutes = Math.round(totalWorkingHours * 60);
         const projectTimeData = employeeHasProjects
-          ? {
-              projects: projectEntries
-                .filter((entry) => entry.projectId && entry.hours > 0)
-                .map(({ projectId, hours, report, clockIn, clockOut, clientId }) => ({
-                  projectId,
-                  hours,
-                  report,
-                  clockIn,
-                  clockOut,
-                  clientId,
-                })),
-            }
+          ? { projects: projectEntries.filter((entry) => entry.projectId && entry.hours > 0) }
           : { entries: detailedEntries };
 
         const { data, error: insertError } = await supabase
           .from('time_logs')
           .insert({
             employee_id: employeeId,
-            date: dateString,
-            clock_in_time: clockInTime,
-            clock_out_time: clockOutTime,
+            date: new Date().toISOString().split('T')[0],
+            clock_in_time: new Date().toISOString(),
             notes: JSON.stringify(notesObject),
             total_working_hours: totalWorkingHours,
             duration_minutes: durationMinutes,
