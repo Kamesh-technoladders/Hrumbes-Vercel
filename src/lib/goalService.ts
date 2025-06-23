@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { GoalInstance, GoalWithDetails, Employee, GoalStatistics, AssignedGoal } from "@/types/goal";
 import { isAfter, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
+import { getAuthDataFromLocalStorage } from "@/utils/localstorage";
 
 export const getGoalsWithDetails = async (): Promise<GoalWithDetails[]> => {
   try {
@@ -237,6 +238,12 @@ export const updateEmployeeGoalTarget = async (
     const targetDate = specificDate ? new Date(specificDate) : new Date();
     const targetDateISO = targetDate.toISOString().split("T")[0];
 
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
+
     let periodStart: string;
     let periodEnd: string;
 
@@ -287,6 +294,7 @@ export const updateEmployeeGoalTarget = async (
           created_at: new Date(),
           updated_at: new Date(),
           notes: null,
+          organization_id,
         })
         .select()
         .single();
@@ -415,6 +423,13 @@ export const addEmployeesToGoal = async (
   goalType: 'Daily' | 'Weekly' | 'Monthly' | 'Yearly'
 ): Promise<boolean> => {
   try {
+
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
+
     for (const employee of employees) {
       const { error } = await supabase
         .from('hr_assigned_goals')
@@ -428,6 +443,7 @@ export const addEmployeesToGoal = async (
           goal_type: goalType,
           assigned_at: new Date(),
           updated_at: new Date(),
+          organization_id,
         });
 
       if (error) throw error;

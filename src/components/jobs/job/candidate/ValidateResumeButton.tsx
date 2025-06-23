@@ -28,6 +28,7 @@ const ValidateResumeButton = ({
 }: ValidateResumeButtonProps) => {
   const user = useSelector((state: any) => state.auth.user);
   const userId = user?.id || null;
+  
  
   const getScoreColor = (score: number) => {
   if (score >= 80) return "bg-green-100 text-green-800";

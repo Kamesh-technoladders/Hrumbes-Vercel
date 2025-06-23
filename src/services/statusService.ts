@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getAuthDataFromLocalStorage } from "@/utils/localstorage";
 
 // Type definitions
 export interface MainStatus {
@@ -496,6 +497,12 @@ export const createStatusChangeTimelineEntry = async (
   }
 ): Promise<boolean> => {
   try {
+
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
     const eventData = {
       action: 'Status updated',
       timestamp: new Date().toISOString(),
@@ -510,7 +517,8 @@ export const createStatusChangeTimelineEntry = async (
         event_type: 'status_change',
         previous_state: statusChangeData.previousState,
         new_state: statusChangeData.newState,
-        event_data: eventData
+        event_data: eventData,
+        organization_id: organization_id,
       });
 
     if (error) {
@@ -533,6 +541,12 @@ export const updateStatusChangeCounts = async (
   userId?: string
 ): Promise<boolean> => {
   try {
+
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
     // Check if a count entry already exists
     const { data: existingCount, error: countError } = await supabase
       .from('hr_status_change_counts')
@@ -567,7 +581,8 @@ export const updateStatusChangeCounts = async (
           main_status_id: mainStatusId,
           sub_status_id: subStatusId,
           employee_id: userId,
-          count: 1
+          count: 1,
+          organization_id: organization_id,
         });
       
       if (error) throw error;
@@ -752,6 +767,11 @@ export const updateClientSubmissionStatus = async (
   additionalData: Record<string, any> = {}
 ): Promise<boolean> => {
   try {
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
     // Fetch the sub-status to verify it's "Processed (Client)"
     const { data: subStatus, error: subStatusError } = await supabase
       .from('job_statuses')
@@ -852,6 +872,7 @@ export const updateClientSubmissionStatus = async (
           count: 1,
           created_at: submissionDate,
           updated_at: submissionDate,
+          organization_id: organization_id,
         });
 
       if (insertCountError) {
@@ -899,6 +920,7 @@ export const updateClientSubmissionStatus = async (
         },
         event_data: eventData,
         created_at: currentTime,
+        organization_id: organization_id,
       });
 
     if (timelineError) {

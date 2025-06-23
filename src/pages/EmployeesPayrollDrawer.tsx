@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ChevronRight, Save } from "lucide-react";
 import { motion } from "framer-motion";
 import DynamicEarningsDeductions from './DynamicEarningsEmployee';
+import { useSelector } from "react-redux";
 
 interface PaymentEarning {
   id?: string;
@@ -95,6 +96,7 @@ const formatINR = (value: number, options: { decimals?: number; showSymbol?: boo
 
 const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year }: EmployeesPayrollDrawerProps) => {
   const [activeTab, setActiveTab] = useState("details");
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
   const [paymentRecord, setPaymentRecord] = useState<PaymentRecord>(() => ({
     employee_id: "",
     employee_name: "",
@@ -615,6 +617,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
               gross_earnings: earningsData.gross_earnings,
               payslipEnabled: earningsData.payslipEnabled,
               updated_at: earningsData.updated_at,
+              organization_id: organization_id,
             })
             .eq("payment_id", paymentId);
 
@@ -660,6 +663,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
               paid_days: deductionsData.paid_days,
               lop_days: deductionsData.lop_days,
               updated_at: deductionsData.updated_at,
+              organization_id: organization_id,
             })
             .eq("payment_id", paymentId);
 
@@ -685,6 +689,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             name: ded.name,
             amount: ded.amount || 0,
             created_at: ded.created_at || currentTimestamp,
+            organization_id: organization_id,
           }));
 
           const { error: customDeductionsError } = await supabase
@@ -707,6 +712,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
               created_at: currentTimestamp,
               updated_at: currentTimestamp,
               last_updated_by: "EmployeesPayrollDrawer",
+              organization_id: organization_id,
             });
 
           if (appraisalError) throw new Error(`Failed to insert appraisal_records: ${appraisalError.message}`);
@@ -728,6 +734,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             updated_at: currentTimestamp,
             last_updated_by: "EmployeesPayrollDrawer",
             source: "EmployeesPayrollDrawer",
+            organization_id: organization_id,
           })
           .select()
           .single();
@@ -753,6 +760,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             payslipEnabled: paymentRecord.payslipEnabled,
             created_at: currentTimestamp,
             updated_at: currentTimestamp,
+            organization_id: organization_id,
           });
 
         if (earningsError) throw new Error(`Failed to insert payment_earnings: ${earningsError.message}`);
@@ -770,6 +778,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             lop_days: paymentRecord.deductions.lop_days || 0,
             created_at: currentTimestamp,
             updated_at: currentTimestamp,
+            organization_id: organization_id,
           });
 
         if (deductionsError) throw new Error(`Failed to insert payment_deductions: ${deductionsError.message}`);
@@ -780,6 +789,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
             name: ded.name,
             amount: ded.amount || 0,
             created_at: ded.created_at || currentTimestamp,
+            organization_id: organization_id,
           }));
 
           const { error: customDeductionsError } = await supabase
@@ -802,6 +812,7 @@ const EmployeesPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month,
               created_at: currentTimestamp,
               updated_at: currentTimestamp,
               last_updated_by: "EmployeesPayrollDrawer",
+              organization_id: organization_id,
             });
 
           if (appraisalError) throw new Error(`Failed to insert appraisal_records: ${appraisalError.message}`);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Project, Employee, ProjectAssignment } from "@/types/project-types";
-
+import { getAuthDataFromLocalStorage } from "@/utils/localstorage";
 // In-memory storage to simulate persistence between component unmounts
 const sessionStorage = {
   projects: [] as Project[],
@@ -17,6 +17,11 @@ export const useProjectData = () => {
   const [assignments, setAssignments] = useState<ProjectAssignment[]>(sessionStorage.assignments);
   const [loading, setLoading] = useState(!sessionStorage.initialized);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
 
   const fetchProjects = async () => {
     try {
@@ -95,7 +100,8 @@ export const useProjectData = () => {
         .from('hr_project_employees')
         .insert({
           project_id: projectId,
-          employee_id: employeeId
+          employee_id: employeeId,
+          organization_id
         });
       
       if (error) throw error;

@@ -3,11 +3,17 @@ import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { format } from 'date-fns';
 import { toast } from "sonner";
+import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
 
 export const useAttendanceMarking = (refetchData: () => void) => {
   const [markAttendanceOpen, setMarkAttendanceOpen] = useState(false);
   const [markAttendanceDate, setMarkAttendanceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [markAttendanceTime, setMarkAttendanceTime] = useState(format(new Date(), 'HH:mm'));
+  const authData = getAuthDataFromLocalStorage();
+      if (!authData) {
+        throw new Error('Failed to retrieve authentication data');
+      }
+      const { organization_id, userId } = authData;
 
   const handleMarkAttendance = async () => {
     try {
@@ -22,7 +28,8 @@ export const useAttendanceMarking = (refetchData: () => void) => {
           clock_out_time: clockInTime,
           duration_minutes: 480,
           status: 'normal', // Using the proper enum value
-          is_submitted: true
+          is_submitted: true,
+          organization_id
         });
 
       if (error) throw error;

@@ -4,10 +4,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { LeaveType } from '@/types/leave-types';
 import { toast } from '@/hooks/use-toast';
+import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
 
 export const useLeaveTypes = () => {
   const queryClient = useQueryClient();
   const [isAddPolicyDialogOpen, setIsAddPolicyDialogOpen] = useState(false);
+  const authData = getAuthDataFromLocalStorage();
+      if (!authData) {
+        throw new Error('Failed to retrieve authentication data');
+      }
+      const { organization_id, userId } = authData;
 
   // Fetch all leave types
   const { data: leaveTypes, isLoading } = useQuery({
@@ -43,7 +49,8 @@ export const useLeaveTypes = () => {
           year: currentYear,
           remaining_days: annualAllowance,
           used_days: 0,
-          carryforward_days: 0
+          carryforward_days: 0,
+          organization_id
         }));
         
         const { error: insertError } = await supabase
@@ -64,7 +71,7 @@ export const useLeaveTypes = () => {
     mutationFn: async (newLeaveType: Omit<LeaveType, 'id' | 'created_at' | 'updated_at'>) => {
       const { data, error } = await supabase
         .from('leave_types')
-        .insert(newLeaveType)
+        .insert(newLeaveType, organization_id)
         .select()
         .single();
       

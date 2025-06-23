@@ -75,6 +75,8 @@ const ResumeAnalysisDetailView = () => {
         }
       }
     }, [analysis?.job_id, jobs, selectedJobId]);
+
+    console.log("analysis.job_id:", analysis);
    
     // Find current job and others
     const currentJob = jobs?.find((job) => job.id === analysis?.job_id); // Compare with hr_jobs.id (UUID)
@@ -95,11 +97,14 @@ const ResumeAnalysisDetailView = () => {
           email: analysis?.email || null,
           github: analysis?.github || null,
           linkedin: analysis?.linkedin || null,
-          skills: analysis?.top_skills || [], // text[] from top_skills
+          skills: [], // text[] from top_skills
           overall_score: analysis?.overall_score || null,
           applied_from:appliedFrom,
           created_by: createdBy,
-          has_validated_resume: true
+          has_validated_resume: false,
+          main_status_id:'0dcd262f-f307-4179-ac79-d7465c51a9a0',
+          sub_status_id: 'aaebf9b9-58eb-498c-8b87-1d2c5b1d1e54',
+          organization_id: organization_id, // Set to organization_id
    
           // Let defaults handle: id, applied_date (CURRENT_DATE), created_at (now()), updated_at (now()), status ('queued')
         });

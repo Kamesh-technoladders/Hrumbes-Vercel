@@ -12,6 +12,7 @@ import { Pencil, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Project, Employee } from "@/types/project-types";
+import { useSelector } from "react-redux";
 
 interface ProjectsTableProps {
   projects: Project[];
@@ -20,10 +21,14 @@ interface ProjectsTableProps {
 }
 
 export const ProjectsTable = ({ projects, employees, onRefetch }: ProjectsTableProps) => {
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
+
+
   const assignProjectToEmployee = async (projectId: string, employeeId: string) => {
     const { error } = await supabase.from('hr_project_employees').insert({
       project_id: projectId,
-      employee_id: employeeId
+      employee_id: employeeId,
+      organization_id: organization_id
     });
     
     if (error) {

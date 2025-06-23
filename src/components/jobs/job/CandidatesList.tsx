@@ -1682,14 +1682,13 @@ const CandidatesList = ({
   const userRole = useSelector((state: any) => state.auth.role);
   const isEmployee = userRole === 'employee';
 
-  console.log("user", user)
+
 
   const { data: candidatesData = [], isLoading, refetch } = useQuery({
     queryKey: ["job-candidates", jobId],
     queryFn: () => getCandidatesByJobId(jobId),
   });
 
-  console.log("candidatesData", candidatesData)
 
   const { data: appliedCandidates = [] } = useQuery({
     queryKey: ["applied-candidates", jobId],
@@ -1760,6 +1759,8 @@ const CandidatesList = ({
 
   const [showOfferJoiningModal, setShowOfferJoiningModal] = useState(false);
 
+
+
 const [currentSubStatus, setCurrentSubStatus] = useState<{ id: string; name: string; parentId?: string | null } | null>(null);
   const currencies = [
     { value: "INR", symbol: "₹" },
@@ -1778,7 +1779,7 @@ const [currentSubStatus, setCurrentSubStatus] = useState<{ id: string; name: str
     [key: string]: { email: boolean; phone: boolean };
   }>({});
 
-  console.log("filtered resumes", filteredCandidates);
+
 
   const {
     data: job,
@@ -1790,7 +1791,7 @@ const [currentSubStatus, setCurrentSubStatus] = useState<{ id: string; name: str
     enabled: !!jobId,
   });
 
-  console.log("jobsss", job);
+
 
     // Initialize dialog fields when opening
     useEffect(() => {
@@ -1869,84 +1870,89 @@ const [currentSubStatus, setCurrentSubStatus] = useState<{ id: string; name: str
 
   const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://62.72.51.159:5005";
 
-  useEffect(() => {
-    setFilteredCandidates(candidatesData);
+useEffect(() => {
+  setFilteredCandidates(candidatesData);
 
-    const checkAnalysisData = async () => {
-      const { data, error } = await supabase
-        .from("candidate_resume_analysis")
-        .select("candidate_id, summary, overall_score")
-        .eq("job_id", jobId)
-        .not("summary", "is", null);
+  const checkAnalysisData = async () => {
+    const { data, error } = await supabase
+      .from("candidate_resume_analysis")
+      .select("candidate_id, summary, overall_score")
+      .eq("job_id", jobId)
+      .not("summary", "is", null);
 
-      if (error) {
-        console.error("Error checking analysis data:", error);
-        return;
-      }
+    if (error) {
+      console.error("Error checking analysis data:", error);
+      // Console log the error
+      console.log("checkAnalysisData error:", error);
+      return;
+    }
 
-      const availableData: { [key: string]: boolean } = {};
-      const analysisDataTemp: { [key: string]: any } = {};
-      data.forEach((item) => {
-        availableData[item.candidate_id] = true;
-        analysisDataTemp[item.candidate_id] = { overall_score: item.overall_score };
-      });
+    // Console log the fetched data
+    console.log("checkAnalysisData fetched data:", data);
 
-      setAnalysisDataAvailable(availableData);
-      setCandidateAnalysisData((prev) => ({ ...prev, ...analysisDataTemp }));
-    };
+    const availableData: { [key: string]: boolean } = {};
+    const analysisDataTemp: { [key: string]: any } = {};
+    data.forEach((item) => {
+      availableData[item.candidate_id] = true;
+      analysisDataTemp[item.candidate_id] = { overall_score: item.overall_score };
+    });
 
-    checkAnalysisData();
-  }, [candidatesData, jobId]);
+    setAnalysisDataAvailable(availableData);
+    setCandidateAnalysisData((prev) => ({ ...prev, ...analysisDataTemp }));
+  };
 
-  const fetchAnalysisData = async (candidateId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("candidate_resume_analysis")
-        .select("overall_score, summary, top_skills, missing_or_weak_areas, candidate_name, report_url")
-        .eq("job_id", jobId)
-        .eq("candidate_id", candidateId)
-        .single();
+  checkAnalysisData();
+}, [candidatesData, jobId]);
 
+ const fetchAnalysisData = async (candidateId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from("candidate_resume_analysis")
+      .select("overall_score, summary, top_skills, missing_or_weak_areas, candidate_name, report_url")
+      .eq("job_id", jobId)
+      .eq("candidate_id", candidateId)
+      .single();
 
-        
-      if (error) throw error;
-      
+    if (error) throw error;
 
-      setAnalysisData({
+    // Console log the fetched data
+    console.log(`fetchAnalysisData for candidate ${candidateId}:`, data);
+
+    setAnalysisData({
+      overall_score: data.overall_score || 0,
+      summary: data.summary || "",
+      top_skills: data.top_skills || [],
+      missing_or_weak_areas: data.missing_or_weak_areas || [],
+      report_url: data.report_url ?? null,
+      candidate_name: data.candidate_name ?? null,
+    });
+    setCandidateAnalysisData((prev) => ({
+      ...prev,
+      [candidateId]: {
         overall_score: data.overall_score || 0,
         summary: data.summary || "",
         top_skills: data.top_skills || [],
         missing_or_weak_areas: data.missing_or_weak_areas || [],
-        report_url: data.report_url ?? null, // Add report_url, default to null
-        
+        report_url: data.report_url ?? null,
         candidate_name: data.candidate_name ?? null,
-      });
-     
-      setCandidateAnalysisData((prev) => ({
-        ...prev,
-        [candidateId]: {
-          overall_score: data.overall_score || 0,
-          summary: data.summary || "",
-          top_skills: data.top_skills || [],
-          missing_or_weak_areas: data.missing_or_weak_areas || [],
-          report_url: data.report_url ?? null,
-          candidate_name: data.candidate_name ?? null,
-        },
-      }));
-      setAnalysisDataAvailable((prev) => ({
-        ...prev,
-        [candidateId]: true,
-      }));
-      setIsSummaryModalOpen(true);
-    } catch (error) {
-      console.error("Error fetching analysis data:", error);
-      toast.error("Failed to fetch candidate analysis.");
-      setAnalysisDataAvailable((prev) => ({
-        ...prev,
-        [candidateId]: false,
-      }));
-    }
-  };
+      },
+    }));
+    setAnalysisDataAvailable((prev) => ({
+      ...prev,
+      [candidateId]: true,
+    }));
+    setIsSummaryModalOpen(true);
+  } catch (error) {
+    console.error("Error fetching analysis data:", error);
+    // Console log the error details
+    console.log(`fetchAnalysisData error for candidate ${candidateId}:`, error);
+    toast.error("Failed to fetch candidate analysis.");
+    setAnalysisDataAvailable((prev) => ({
+      ...prev,
+      [candidateId]: false,
+    }));
+  }
+};
 
   // Static USD to INR conversion rate
 const USD_TO_INR_RATE = 84;
@@ -1955,9 +1961,9 @@ const USD_TO_INR_RATE = 84;
 
 // Parse salary and return amount with budgetType
 const parseSalary = (salary: string | number | undefined): { amount: number; budgetType: string } => {
-  console.log(`parseSalary called with salary: ${salary}`);
+
   if (!salary) {
-    console.log("No salary provided, returning 0");
+
     return { amount: 0, budgetType: "LPA" };
   }
   let amount = 0;
@@ -1968,28 +1974,24 @@ const parseSalary = (salary: string | number | undefined): { amount: number; bud
     // Check if the string is a valid number (e.g., "2000000")
     if (!isNaN(parseFloat(salary)) && !salary.includes(" ")) {
       amount = parseFloat(salary);
-      console.log(`String is numeric: ${amount}, treating as INR LPA`);
+   
     } else {
       // Handle formatted strings (e.g., "₹2000000 LPA")
       currency = currencies.find((c) => salary.startsWith(c.symbol)) || currencies[0];
-      console.log(`Detected currency: ${currency.value}, symbol: ${currency.symbol}`);
+     
       const parts = salary.replace(currency.symbol, "").trim().split(" ");
       amount = parseFloat(parts[0]) || 0;
       budgetType = parts[1] || "LPA";
-      console.log(`Parsed amount: ${amount}, budgetType: ${budgetType}`);
     }
   } else {
     amount = salary;
-    console.log(`Salary is number: ${amount}, assuming INR LPA`);
   }
 
   let convertedAmount = amount;
   if (currency.value === "USD") {
-    console.log(`Converting USD to INR: ${amount} * ${USD_TO_INR_RATE}`);
     convertedAmount *= USD_TO_INR_RATE;
   }
 
-  console.log(`Final parsed salary: ${convertedAmount} INR, budgetType: ${budgetType}`);
   return { amount: convertedAmount, budgetType };
 };
 
@@ -1999,16 +2001,12 @@ const calculateProfit = (
   job: any,
   client: any
 ): { profit: number | null; period: string } => {
-  console.log("=== calculateProfit called ===");
-  console.log("Candidate:", candidate);
-  console.log("Job:", job);
-  console.log("Client:", client);
+
 
   let salary = candidate.ctc || candidate.expected_salary || 0;
   let budget = candidate.accrual_ctc;
   let commissionValue = client?.commission_value || 0;
 
-  console.log(`Initial salary: ${salary}, budget: ${budget}, commissionValue: ${commissionValue}`);
 
   const salaryParsed = parseSalary(salary);
   const budgetParsed = budget ? parseSalary(budget) : { amount: 0, budgetType: "LPA" };
@@ -2016,51 +2014,40 @@ const calculateProfit = (
   let budgetAmount = budgetParsed.amount;
   let profitPeriod = budgetParsed.budgetType; // Use accrual_ctc's budgetType for period
 
-  console.log(`Parsed salaryAmount: ${salaryAmount} (LPA), budgetAmount: ${budgetAmount} (${budgetParsed.budgetType}), profitPeriod: ${profitPeriod}`);
 
   if (job.jobType === "Internal") {
     // Skip profit calculation if accrual_ctc is missing
     if (budget == null || budget === "") {
-      console.log("Internal job, accrual_ctc is missing, returning null for N/A");
       return { profit: null, period: profitPeriod };
     }
 
     // For Monthly or Hourly, convert to Monthly profit
     if (profitPeriod === "Monthly" || profitPeriod === "Hourly") {
       if (profitPeriod === "Hourly") {
-        console.log(`Converting budget from Hourly to Monthly: ${budgetAmount} * 160`);
         budgetAmount *= 160;
         profitPeriod = "Monthly";
       }
-      console.log(`Converting salary from LPA to Monthly: ${salaryAmount} / 12`);
       salaryAmount /= 12;
     }
     // For LPA, both budget and salary are already in LPA, no conversion needed
 
     const profit = budgetAmount - salaryAmount;
-    console.log(`Internal job, profit = budgetAmount (${budgetAmount}) - salaryAmount (${salaryAmount}) = ${profit} (${profitPeriod})`);
     return { profit, period: profitPeriod };
   } else {
     // For External jobs, calculate profit using commission (yearly, as original)
-    console.log("External job, ignoring accrual_ctc, using commission-based calculation");
     const effectiveCommissionType = client?.commission_type || (commissionValue ? "percentage" : null);
-    console.log(`Effective commission type: ${effectiveCommissionType}`);
 
     // Salary is already in LPA, no conversion needed
     if (client?.currency === "USD" && client?.commission_type === "fixed") {
-      console.log(`Converting USD fixed commission: ${commissionValue} * ${USD_TO_INR_RATE}`);
       commissionValue *= USD_TO_INR_RATE;
     }
 
     if (effectiveCommissionType === "percentage" && commissionValue) {
       const profit = (salaryAmount * commissionValue) / 100;
-      console.log(`Non-Internal, percentage commission: (${salaryAmount} * ${commissionValue}) / 100 = ${profit} (LPA)`);
       return { profit, period: "LPA" };
     } else if (effectiveCommissionType === "fixed" && commissionValue) {
-      console.log(`Non-Internal, fixed commission: ${commissionValue} (LPA)`);
       return { profit: commissionValue, period: "LPA" };
     }
-    console.log("No valid commission data, returning 0");
     return { profit: 0, period: "LPA" };
   }
 };
@@ -2137,7 +2124,6 @@ const { data: clientData } = useQuery({
         const defaultSubStatus = newStatus.subStatuses.find(s => s.name === "New Application") || newStatus.subStatuses[0];
         
         await updateCandidateStatus(candidateId, defaultSubStatus.id, user?.id);
-        console.log(`Set default status for candidate ${candidateId}`);
       }
     } catch (error) {
       console.error("Error setting default status:", error);
@@ -2550,7 +2536,8 @@ const { data: clientData } = useQuery({
             interview_round: currentRound,
             interviewers: [{ name: interviewerName }],
             status: 'scheduled',
-            created_by: user.id
+            created_by: user.id,
+            organization_id: organizationId
           });
           
         if (error) throw error;
@@ -2667,6 +2654,7 @@ const { data: clientData } = useQuery({
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         onboarding_status: "pending",
+        organization_id: organizationId,
       };
   
       if (existingDetails) {
@@ -2774,6 +2762,7 @@ const { data: clientData } = useQuery({
             created_by: user.id,
             created_at: submissionDate ? new Date(submissionDate).toISOString() : new Date().toISOString(),
             updated_at: submissionDate ? new Date(submissionDate).toISOString() : new Date().toISOString(),
+            organization_id: organizationId,
           });
   
         if (error) throw error;
@@ -2870,7 +2859,6 @@ const { data: clientData } = useQuery({
     startIndex + itemsPerPage
   );
 
-console.log("paginated candidate", paginatedCandidates)
 
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(Number(value));
@@ -3191,7 +3179,8 @@ console.log("paginated candidate", paginatedCandidates)
                 owner: user.id,
                 name: "New Candidate",
                 applied_date: new Date().toISOString().split('T')[0],
-                skills: []
+                skills: [],
+                organization_id: organizationId
               });
               await onRefresh();
               toast.success("New candidate added successfully");

@@ -5,6 +5,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useSelector } from 'react-redux';
 
 interface PayrollRecord {
   employee_id: string;
@@ -39,6 +40,7 @@ interface PayrollSummary {
 const TerminatedEmployeesPayroll: React.FC = () => {
   const { year, month, employeeId } = useParams<{ year: string; month: string; employeeId: string }>();
   const navigate = useNavigate();
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null);
   const [payrollStatus, setPayrollStatus] = useState<string>('Pending');
@@ -247,6 +249,7 @@ const TerminatedEmployeesPayroll: React.FC = () => {
               lop_days: remainingDays,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+              organization_id: organization_id,
             });
 
           if (insertDeductionError) {

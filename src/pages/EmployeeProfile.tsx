@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Input } from '@/components/ui/input';
 import { Edit, Mail, Phone, Globe, User, MoreVertical, Activity, Clock, FileText, Home, Eye, Download, Copy, Briefcase } from "lucide-react";
+import {useSelector} from "react-redux";
 
 interface PaymentEarning {
   id: string;
@@ -166,6 +167,7 @@ interface EmployeeDetail {
 
 const EmployeeProfile = () => {
   const { id } = useParams<{ id: string }>();
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
   const navigate = useNavigate();
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -469,6 +471,7 @@ const EmployeeProfile = () => {
       exit_notes: exitForm.notes,
       initiated_at: new Date().toISOString(),
       employment_status: 'Terminated',
+      organization_id: organization_id,
     };
 
     try {

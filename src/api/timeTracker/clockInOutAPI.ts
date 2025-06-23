@@ -2,15 +2,22 @@
 import { supabase } from "@/integrations/supabase/client";
 import { TimeLog } from "@/types/time-tracker-types";
 import { toast } from "sonner";
+import { getAuthDataFromLocalStorage } from "@/utils/localstorage";
 
 export const clockIn = async (
   employeeId: string, 
   projectId?: string, 
-  projectTimeData?: any
+  projectTimeData?: any,
   organization_id: string
 ) => {
   try {
+    const authData = getAuthDataFromLocalStorage();
+        if (!authData) {
+          throw new Error('Failed to retrieve authentication data');
+        }
+        const { organization_id, userId } = authData;
     const { data, error } = await supabase
+    
       .from('time_logs')
       .insert({
         employee_id: employeeId,
@@ -18,7 +25,7 @@ export const clockIn = async (
         project_time_data: projectTimeData,
         clock_in_time: new Date().toISOString(),
         date: new Date().toISOString().split('T')[0],
-        organization_id,
+        organization_id: organization_id,
 
       })
       .select()

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { LeavePolicyPeriod } from '@/types/leave-types';
 import { toast } from 'sonner';
+import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
 
 export const useLeavePolicyPeriods = () => {
   const [leavePeriods, setLeavePeriods] = useState<LeavePolicyPeriod[]>([]);
@@ -11,6 +12,11 @@ export const useLeavePolicyPeriods = () => {
   const [isEditPeriodDialogOpen, setIsEditPeriodDialogOpen] = useState(false);
   // Add a default policy period state
   const [policyPeriod, setPolicyPeriod] = useState<LeavePolicyPeriod | null>(null);
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
 
   // Load leave policy periods
   const loadLeavePolicyPeriods = async () => {
@@ -44,6 +50,7 @@ export const useLeavePolicyPeriods = () => {
         .insert({
           is_calendar_year: period.is_calendar_year,
           start_month: period.start_month,
+          organization_id
         });
 
       if (error) throw error;

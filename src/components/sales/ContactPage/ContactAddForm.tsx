@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ContactInsert } from '@/types/contact';
 import SingleCompanySelector from './SingleCompanySelector';
+import { useSelector } from 'react-redux';
 
 interface ContactAddFormProps {
   onClose: () => void;
@@ -43,6 +44,7 @@ type AddContactFormValues = z.infer<typeof addContactSchema>;
 const ContactAddForm: React.FC<ContactAddFormProps> = ({ onClose }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
 
   const { data: companies, isLoading: isLoadingCompanies, error: fetchCompaniesError } = useQuery<CompanyOption[], Error>({
     queryKey: ['companiesListForDropdown'],
@@ -83,6 +85,7 @@ const ContactAddForm: React.FC<ContactAddFormProps> = ({ onClose }) => {
         contact_owner: formData.contact_owner || null,
         contact_stage: formData.contact_stage || 'Prospect',
         company_id: formData.company_id ? Number(formData.company_id) : null,
+        organization_id: organization_id,
       };
       const { error, data: newContact } = await supabase.from('contacts').insert(insertData).select().single();
       if (error) {

@@ -57,7 +57,7 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
     onOpenChange(false);
   };
 
-  const handleSubmit = async (title: string, workReport: string) => {
+  const handleSubmit = async (title: string, workReport: string, clockIn?: string, clockOut?:string) => {
     if (!employeeId) {
       toast.error('User not authenticated. Please log in to submit a timesheet.');
       console.log('Submission blocked: No employeeId');
@@ -84,6 +84,8 @@ export const CreateTimesheetDialog: React.FC<CreateTimesheetDialogProps> = ({
       projectEntries,
       detailedEntries,
       date,
+      clockIn,
+      clockOut,
       organization_id,
     });
 

@@ -1,5 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
+
 
 // Basic query functions for hr_jobs table
 // supabaseQueries.ts
@@ -85,9 +87,15 @@ export const fetchJobsAssignedToUser = async (userId: string) => {
 
 
 export const insertJob = async (jobData: Record<string, any>) => {
+
+  const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
   const { data, error } = await supabase
     .from("hr_jobs")
-    .insert(jobData)
+    .insert(jobData, organization_id)
     .select("*")
     .single();
 
@@ -144,9 +152,15 @@ export const deleteJobRecord = async (id: string): Promise<void> => {
 };
 
 export const shareJob = async (jobId) => {
+
+  const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
   const { data, error } = await supabase
     .from("shared_jobs")
-    .insert([{ job_id: jobId }]);
+    .insert([{ job_id: jobId, organization_id }]);
 
   if (error) {
     console.error("Error sharing job:", error);

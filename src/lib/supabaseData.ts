@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { GoalInstance } from "@/types/goal";
 import { Employee, Goal, AssignedGoal, GoalWithDetails, KPI, TrackingRecord, GoalType,EmployeeGoalTarget } from "@/types/goal";
 import { format } from 'date-fns';
-
+import { getAuthDataFromLocalStorage } from "@/utils/localstorage";
 // Type definitions for database tables
 type HrEmployee = {
   id: string;
@@ -408,6 +408,12 @@ export const createGoal = async (
     const currentDate = new Date().toISOString();
     const futureDate = new Date();
     futureDate.setMonth(futureDate.getMonth() + 3);
+
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
     
     const { data: goalData, error: goalError } = await supabase
       .from('hr_goals')
@@ -419,7 +425,8 @@ export const createGoal = async (
         metric_type: goal.metricType,
         metric_unit: goal.metricUnit,
         start_date: goal.startDate ?? currentDate,
-        end_date: goal.endDate ?? futureDate.toISOString()
+        end_date: goal.endDate ?? futureDate.toISOString(),
+        organization_id: organization_id
       })
       .select()
       .single();
@@ -476,6 +483,12 @@ export const assignGoalToEmployees = async (
     throw new Error('Goal not found');
   }
 
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
+
   const assignedGoalsPromises = employeeTargets.map(async ({ employee, targetValue }) => {
     const { data: assignedGoal, error: assignError } = await supabase
       .from('hr_assigned_goals')
@@ -486,7 +499,8 @@ export const assignGoalToEmployees = async (
         goal_type: goalType,
         current_value: 0,
         progress: 0,
-        status: 'pending'
+        status: 'pending',
+        organization_id: organization_id
       })
       .select()
       .single();
@@ -808,6 +822,12 @@ export const addTrackingRecord = async (
       .lte('period_start', datePart)
       .gte('period_end', datePart)
       .maybeSingle();
+
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
     
     if (instanceError) {
       console.error('Error checking goal instance:', instanceError);
@@ -819,7 +839,8 @@ export const addTrackingRecord = async (
         assigned_goal_id: assignedGoalId,
         record_date: recordDate,
         value,
-        notes
+        notes,
+        organization_id: organization_id
       })
       .select()
       .single();

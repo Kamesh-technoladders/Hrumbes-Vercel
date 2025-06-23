@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { TimeLog } from "@/types/time-tracker-types";
 import { fetchActiveTimeLog } from "./activeTimeLogAPI";
+import { getAuthDataFromLocalStorage } from "@/utils/localstorage";
 
 export const fetchHrProjectEmployees = async (employeeId: string): Promise<any[]> => {
   try {
@@ -31,6 +32,11 @@ export const clockIn = async (
   try {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
+    const authData = getAuthDataFromLocalStorage();
+        if (!authData) {
+          throw new Error('Failed to retrieve authentication data');
+        }
+        const { organization_id, userId } = authData;
     
     const { data, error } = await supabase
       .from('time_logs')
@@ -158,6 +164,12 @@ export const submitTimesheet = async (
   organization_id: string
 ): Promise<boolean> => {
   try {
+
+    const authData = getAuthDataFromLocalStorage();
+        if (!authData) {
+          throw new Error('Failed to retrieve authentication data');
+        }
+        const { organization_id, userId } = authData;
     const projectTimeData = formData.projectEntries
       ? { projects: formData.projectEntries }
       : null;

@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { NewProject } from "@/types/project-types";
+import { useSelector } from "react-redux";
 
 interface CreateProjectDialogProps {
   onProjectCreated: () => void;
@@ -17,6 +18,7 @@ export const CreateProjectDialog = ({ onProjectCreated }: CreateProjectDialogPro
   const [newProject, setNewProject] = useState<NewProject>({ name: '', client: '', start_date: '', end_date: '' });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
 
   const handleCreateProject = async () => {
     if (!newProject.name || !newProject.start_date) {
@@ -32,7 +34,8 @@ export const CreateProjectDialog = ({ onProjectCreated }: CreateProjectDialogPro
         client: newProject.client,
         start_date: newProject.start_date,
         end_date: newProject.end_date || null,
-        status: 'Active'
+        status: 'Active',
+        organization_id: organization_id,
       });
       
       if (error) {

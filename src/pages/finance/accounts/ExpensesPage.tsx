@@ -29,6 +29,7 @@ import { PayrollDrawer } from '@/components/financial/PayrollDrawer';
 import PayslipViewer from '@/components/financial/PayslipViewer'
 import { PayslipData } from '@/utils/payslip-extractor';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 
 interface Employee {
   id: string;
@@ -73,6 +74,7 @@ const ExpensesPage: React.FC = () => {
   const [isPayslipDialogOpen, setIsPayslipDialogOpen] = useState(false);
   const [payslipData, setPayslipData] = useState<PayslipData | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
 
   const navigate = useNavigate();
 
@@ -456,6 +458,7 @@ const ExpensesPage: React.FC = () => {
           status: 'Pending',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          organization_id: organization_id,
         };
 
         const { data, error } = await supabase

@@ -3,10 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { LeaveRequest, LeaveRequestFormData, LeaveType } from '@/types/leave-types';
+import {getAuthDataFromLocalStorage} from '@/utils/localstorage';
 
 export const useLeaveRequests = (employeeId: string) => {
   const queryClient = useQueryClient();
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
 
   const { data: leaveRequests = [], isLoading } = useQuery({
     queryKey: ['leave_requests', employeeId],
@@ -101,7 +107,8 @@ export const useLeaveRequests = (employeeId: string) => {
           working_days: workingDays,
           holiday_days: holidayDays,
           status: 'pending',
-          notes: formData.notes
+          notes: formData.notes,
+          organization_id
         })
         .select()
         .single();

@@ -2,9 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { EmployeeLeaveBalance, LeaveType } from '@/types/leave-types';
 import { toast } from 'sonner';
+import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
 
 export const useEmployeeLeaveBalances = (employeeId: string) => {
   const queryClient = useQueryClient();
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
 
   const { data: leaveBalances = [], isLoading } = useQuery({
     queryKey: ['employee_leave_balances', employeeId],
@@ -78,7 +84,8 @@ export const useEmployeeLeaveBalances = (employeeId: string) => {
           year: currentYear,
           remaining_days: annualAllowance,
           used_days: 0,
-          carryforward_days: 0
+          carryforward_days: 0,
+          organization_id
         };
       });
 

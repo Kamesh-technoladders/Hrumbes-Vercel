@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { CandidateStatus } from "@/lib/types";
 import { MainStatus, SubStatus } from "@/services/statusService";
+import { getAuthDataFromLocalStorage } from "@/utils/localstorage";
 
 // Interfaces remain unchanged
 export interface HrJobCandidate {
@@ -379,6 +380,12 @@ export const createCandidate = async (jobId: string, candidate: CandidateData): 
   try {
     const dbCandidate = mapCandidateToDbData(candidate);
 
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
+
     // Fetch the main status "Processed"
     const { data: mainStatus, error: mainStatusError } = await supabase
       .from("job_statuses")
@@ -421,6 +428,7 @@ export const createCandidate = async (jobId: string, candidate: CandidateData): 
         name: candidate.name,
         main_status_id: mainStatus.id, // Set main status to Processed
         sub_status_id: subStatus.id, // Set sub-status to Processed (Internal)
+        organization_id: organization_id,
       })
       .select("*")
       .single();
@@ -677,6 +685,12 @@ export const updateCandidateStatusCounts = async (
   userId?: string
 ): Promise<boolean> => {
   try {
+
+const authData = getAuthDataFromLocalStorage();
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { organization_id, userId } = authData;
     // Check if a count entry already exists
     const { data: existingCount, error: countError } = await supabase
       .from('hr_status_change_counts')
@@ -717,7 +731,8 @@ export const updateCandidateStatusCounts = async (
           employee_id: userId,
           count: 1,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          organization_id: organization_id
         });
       
       if (error) {

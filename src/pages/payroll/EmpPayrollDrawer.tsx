@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ChevronRight, Save } from "lucide-react";
 import { motion } from "framer-motion";
 import DynamicEarningsDeductions from './DynamicEarningsEmployee';
+import { useSelector } from "react-redux";
 
 interface PaymentEarning {
   id?: string;
@@ -85,6 +86,7 @@ interface CTCFormData {
 
 const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year }: EmployeesPayrollDrawerProps) => {
   const [activeTab, setActiveTab] = useState("details");
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
   const [paymentRecord, setPaymentRecord] = useState<PaymentRecord>(() => ({
     employee_id: "",
     employee_name: "",
@@ -564,6 +566,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
           payslipEnabled: paymentRecord.payslipEnabled,
           updated_at: currentTimestamp,
           created_at: paymentRecord.earnings.created_at || currentTimestamp,
+          organization_id: organization_id,
         };
 
         if (existingEarnings) {
@@ -620,6 +623,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
           lop_days: paymentRecord.deductions.lop_days || 0,
           updated_at: currentTimestamp,
           created_at: paymentRecord.deductions.created_at || currentTimestamp,
+          organization_id: organization_id,
         };
 
         if (existingDeductions) {
@@ -668,6 +672,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
             name: ded.name,
             amount: ded.amount || 0,
             created_at: ded.created_at || currentTimestamp,
+            organization_id: organization_id,
           }));
 
           const { error: customDeductionsError } = await supabase
@@ -693,6 +698,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
               created_at: currentTimestamp,
               updated_at: currentTimestamp,
               last_updated_by: "EmployeesPayrollDrawer",
+              organization_id: organization_id,
             });
 
           if (appraisalError) {
@@ -717,6 +723,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
             updated_at: currentTimestamp,
             last_updated_by: "EmployeesPayrollDrawer",
             source: "EmployeesPayrollDrawer",
+            orangization_id: organization_id,
           })
           .select()
           .single();
@@ -747,6 +754,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
             payslipEnabled: paymentRecord.payslipEnabled,
             created_at: currentTimestamp,
             updated_at: currentTimestamp,
+            organization_id: organization_id,
           });
 
         if (earningsError) {
@@ -767,6 +775,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
             lop_days: paymentRecord.deductions.lop_days || 0,
             created_at: currentTimestamp,
             updated_at: currentTimestamp,
+            organization_id: organization_id,
           });
 
         if (deductionsError) {
@@ -780,6 +789,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
             name: ded.name,
             amount: ded.amount || 0,
             created_at: ded.created_at || currentTimestamp,
+            organization_id: organization_id,
           }));
 
           const { error: customDeductionsError } = await supabase
@@ -805,6 +815,7 @@ const EmpPayrollDrawer = ({ isOpen, onOpenChange, selectedEmployee, month, year 
               created_at: currentTimestamp,
               updated_at: currentTimestamp,
               last_updated_by: "EmployeesPayrollDrawer",
+              organization_id: organization_id,
             });
 
           if (appraisalError) {

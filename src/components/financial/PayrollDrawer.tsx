@@ -13,6 +13,7 @@ import { ChevronRight, Save } from 'lucide-react';
 import { motion } from 'framer-motion';
 import DynamicEarningsDeductions from './DynamicEarningsDeductions';
 import { supabase } from "@/integrations/supabase/client";
+import { useSelector } from "react-redux";
 
 type PaymentCategory = 'Staff' | 'Member' | 'Freelance' | 'Part-Time';
 type PaymentStatus = 'Success' | 'Pending' | 'Unpaid';
@@ -52,6 +53,7 @@ interface HourlyFormData {
 
 export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange, payment, editMode = false }) => {
   const { addPayment, updatePayment } = useFinancialStore();
+  const organization_id = useSelector((state: any) => state.auth.organization_id);
   const [activeTab, setActiveTab] = useState("details");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [formData, setFormData] = useState({
@@ -579,7 +581,8 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
           const customEarningsData = customEarnings.map(item => ({
             payment_id: payment.id,
             name: item.name,
-            amount: item.amount
+            amount: item.amount,
+            organization_id
           }));
 
           const { error: customEarningsError } = await supabase
@@ -595,7 +598,8 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
           const customDeductionsData = customDeductions.map(item => ({
             payment_id: payment.id,
             name: item.name,
-            amount: item.amount
+            amount: item.amount,
+            organization_id
           }));
 
           const { error: customDeductionsError } = await supabase
@@ -632,6 +636,7 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
             payment_amount: netPay,
             payment_category: 'Staff' as PaymentCategory,
             status: formData.paymentStatus,
+            organization_id,
           })
           .select()
           .single();
@@ -655,6 +660,7 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
             is_ctc_mode: isCTCMode,
             hourly_rate: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.hourlyRate),
             total_hours_worked: isCTCMode ? null : parseCurrencyToNumber(hourlyFormData.totalHoursWorked),
+            organization_id,
           });
 
         if (earningsError) {
@@ -672,6 +678,7 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
             total_deductions: totalDeductions,
             paid_days: parseInt(formData.paidDays) || 30,
             lop_days: parseInt(formData.lopDays) || 0,
+            organization_id,
           });
 
         if (deductionsError) {
@@ -682,7 +689,8 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
           const customEarningsData = customEarnings.map(item => ({
             payment_id: paymentId,
             name: item.name,
-            amount: item.amount
+            amount: item.amount,
+            organization_id
           }));
 
           const { error: customEarningsError } = await supabase
@@ -698,7 +706,8 @@ export const PayrollDrawer: React.FC<PayrollDrawerProps> = ({ open, onOpenChange
           const customDeductionsData = customDeductions.map(item => ({
             payment_id: paymentId,
             name: item.name,
-            amount: item.amount
+            amount: item.amount,
+            organization_id
           }));
 
           const { error: customDeductionsError } = await supabase

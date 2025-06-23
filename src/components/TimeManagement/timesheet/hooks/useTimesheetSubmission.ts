@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DetailedTimesheetEntry } from '@/types/time-tracker-types';
 import { submitTimesheet } from '@/api/timeTracker';
+import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
 
 interface ProjectEntry {
   projectId: string;
@@ -43,9 +44,15 @@ export const useTimesheetSubmission = () => {
     date,
     clockIn,
     clockOut,
-    organization_id
+
   }: SubmissionParams): Promise<boolean> => {
     setIsSubmitting(true);
+
+    const authData = getAuthDataFromLocalStorage();
+        if (!authData) {
+          throw new Error('Failed to retrieve authentication data');
+        }
+        const { organization_id, userId } = authData;
 
     try {
       // Log top-level clockIn and clockOut

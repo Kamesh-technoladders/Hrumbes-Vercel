@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm, UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -22,7 +23,7 @@ import MultiLocationSelector from "./MultiLocationSelector";
 import SingleLocationSelector from "./SingleLocationSelector"; // Import new component
 import { CandidateFormData } from "./AddCandidateDrawer";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { toast } from "sonner";
@@ -188,43 +189,71 @@ const sanitizeFileName = (fileName: string): string => {
 };
 
 const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformationTabProps) => {
-const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isParsing, setIsParsing] = useState(false);
+ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Sanitize the file name
+    // Check file type
+    const allowedTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Invalid file type. Please upload a PDF or DOCX file.");
+      return;
+    }
+
     const sanitizedFileName = sanitizeFileName(file.name);
     const filePath = `resumes/${Date.now()}_${sanitizedFileName}`;
     
+    setIsParsing(true);
+    toast.info("Uploading resume...");
+
     try {
-      const { data, error } = await supabase.storage
+      // 1. Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
         .from("candidate_resumes")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: false,
-        });
+        .upload(filePath, file, { cacheControl: "3600", upsert: false });
 
-      if (error) {
-        console.error("Upload Error:", error.message);
-        toast.error("Failed to upload resume. Please try again.");
-        return;
+      if (uploadError) throw new Error(`Upload Error: ${uploadError.message}`);
+
+      const { data: { publicUrl } } = supabase.storage.from("candidate_resumes").getPublicUrl(filePath);
+
+      if (!publicUrl) throw new Error("Failed to retrieve resume URL.");
+      
+      form.setValue("resume", publicUrl);
+      toast.success("Resume uploaded. Parsing with AI, please wait...");
+
+      // 2. Invoke the Supabase Edge Function
+      const { data: parsedData, error: functionError } = await supabase.functions.invoke('parse-resume', {
+        body: { fileUrl: publicUrl },
+      });
+      
+      if (functionError) {
+        throw new Error(`AI Parsing Error: ${functionError.message}`);
       }
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("candidate_resumes").getPublicUrl(filePath);
-
-      if (publicUrl) {
-        form.setValue("resume", publicUrl);
-        toast.success("Resume uploaded successfully!");
-      } else {
-        toast.error("Failed to retrieve resume URL.");
+      
+      // 3. Populate form with parsed data from Gemini
+      if (parsedData) {
+        if (parsedData.firstName) form.setValue("firstName", parsedData.firstName, { shouldValidate: true });
+        if (parsedData.lastName) form.setValue("lastName", parsedData.lastName, { shouldValidate: true });
+        if (parsedData.email) form.setValue("email", parsedData.email, { shouldValidate: true });
+        if (parsedData.phone) form.setValue("phone", parsedData.phone, { shouldValidate: true });
+        if (parsedData.currentLocation) form.setValue("currentLocation", parsedData.currentLocation, { shouldValidate: true });
+        if (parsedData.totalExperience !== undefined) form.setValue("totalExperience", parsedData.totalExperience, { shouldValidate: true });
+        if (parsedData.totalExperienceMonths !== undefined) form.setValue("totalExperienceMonths", parsedData.totalExperienceMonths, { shouldValidate: true });
+        if (parsedData.skills && parsedData.skills.length > 0) form.setValue("skills", parsedData.skills);
+        if (parsedData.linkedInId) form.setValue("linkedInId", parsedData.linkedInId, { shouldValidate: true });
       }
-    } catch (err) {
-      console.error("Unexpected error during upload:", err);
-      toast.error("An unexpected error occurred while uploading the resume.");
+      
+      toast.success("Resume parsed and form has been auto-filled!");
+
+    } catch (err: any) {
+      console.error("Error during resume processing:", err);
+      toast.error(err.message || "An unexpected error occurred.");
+    } finally {
+      setIsParsing(false);
     }
   };
+
 
 
   const currentSalary = form.watch("currentSalary");
@@ -622,7 +651,7 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
             />
           )}
         </div>
-        <FormField
+         <FormField
           control={form.control}
           name="resume"
           render={({ field }) => (
@@ -631,17 +660,21 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
                 Resume <span className="text-red-500">*</span>
               </FormLabel>
               <FormControl>
-                <Input type="file" accept=".pdf,.doc,.docx" onChange={handleFileChange} />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept=".pdf,.docx"
+                    onChange={handleFileChange}
+                    disabled={isParsing}
+                    className="flex-1"
+                  />
+                  {isParsing && <Loader2 className="h-5 w-5 animate-spin text-purple-600" />}
+                </div>
               </FormControl>
-              {field.value && (
+              {field.value && !isParsing && (
                 <div className="flex items-center text-sm mt-1 gap-1">
                   <FileText size={16} className="purple-text-color" />
-                  <a
-                    href={field.value}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="purple-text-color underline"
-                  >
+                  <a href={field.value} target="_blank" rel="noopener noreferrer" className="purple-text-color underline">
                     View Resume
                   </a>
                 </div>
@@ -651,10 +684,12 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
           )}
         />
         <div className="flex justify-end space-x-4 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isParsing}>
             Cancel
           </Button>
-          <Button type="submit">Save & Next</Button>
+          <Button type="submit" disabled={isParsing}>
+            {isParsing ? 'Parsing...' : 'Save & Next'}
+          </Button>
         </div>
       </form>
     </Form>
