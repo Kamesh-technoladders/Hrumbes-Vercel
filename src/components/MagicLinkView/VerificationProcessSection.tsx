@@ -38,7 +38,8 @@ interface VerificationProcessSectionProps {
   isSavingDocuments: boolean;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4001';
+// const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4001';
+const API_PROXY_URL = '/api/uan-full-history-proxy';
 
 interface FullHistoryEmploymentEntry {
   DateOfExitEpf: string;
@@ -62,7 +63,7 @@ interface TruthScreenFullHistoryResponse {
 const encryptUanFullHistory = async (transId: string, uan: string): Promise<string> => {
   try {
     const response = await axios.post<any>(
-      `${API_BASE_URL}/encrypt`,
+      `${API_PROXY_URL}?endpoint=encrypt`,
       { transID: transId, docType: '337', uan },
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -78,7 +79,7 @@ const encryptUanFullHistory = async (transId: string, uan: string): Promise<stri
 const verifyUanFullHistory = async (requestData: string): Promise<string> => {
   try {
     const response = await axios.post<any>(
-      `${API_BASE_URL}/verify`,
+      `${API_PROXY_URL}?endpoint=verify`,
       { requestData },
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -94,7 +95,7 @@ const verifyUanFullHistory = async (requestData: string): Promise<string> => {
 const decryptUanFullHistory = async (responseData: string): Promise<TruthScreenFullHistoryResponse> => {
   try {
     const response = await axios.post<any>(
-      `${API_BASE_URL}/decrypt`,
+      `${API_PROXY_URL}?endpoint=decrypt`,
       { responseData },
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -563,3 +564,4 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
     </Card>
   );
 };
+// Pan and UI change

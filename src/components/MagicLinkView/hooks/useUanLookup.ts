@@ -6,21 +6,20 @@ import { v4 as uuidv4 } from 'uuid';
 import { Candidate } from '@/components/MagicLinkView/types';
 import { supabase } from "@/integrations/supabase/client";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4001';
+// Use the proxy endpoint
+const API_PROXY_URL = '/api/uan-proxy';
 
 export const useUanLookup = (
   candidate: Candidate | null,
   organizationId: string | null,
-
 ) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [uanData, setUanData] = useState<any | null>(null); // State for basic UAN lookup data
+  const [uanData, setUanData] = useState<any | null>(null);
   const [lookupMethod, setLookupMethod] = useState<'mobile' | 'pan'>('mobile');
   const [lookupValue, setLookupValue] = useState('');
 
-  console.log("candidate", candidate)
-  // Debug log to trace input props
+  console.log("candidate", candidate);
   console.log('useUanLookup input:', { candidateId: candidate?.id, organizationId });
 
   const onSaveResult = useCallback(
@@ -158,7 +157,8 @@ export const useUanLookup = (
     setIsLoading(true);
     try {
       const transId = `lovable-${uuidv4()}`;
-      const encryptResponse = await axios.post(`${API_BASE_URL}/api/uan-lookup/encrypt`, {
+      // Call encrypt endpoint via proxy
+      const encryptResponse = await axios.post(`${API_PROXY_URL}?endpoint=encrypt`, {
         transId,
         docType: 526,
         mobile: lookupMethod === 'mobile' ? finalLookupValue : '',
@@ -167,7 +167,8 @@ export const useUanLookup = (
       const { requestData } = encryptResponse.data;
       let responseData: string | null = null;
       try {
-        const getUanResponse = await axios.post(`${API_BASE_URL}/api/uan-lookup/get-uan`, { requestData });
+        // Call get-uan endpoint via proxy
+        const getUanResponse = await axios.post(`${API_PROXY_URL}?endpoint=get-uan`, { requestData });
         responseData = getUanResponse.data.responseData;
       } catch (getUanError: any) {
         if (getUanError.response?.data.responseData) {
@@ -180,7 +181,8 @@ export const useUanLookup = (
       if (!responseData) {
         throw new Error('No valid response from UAN service (basic lookup).');
       }
-      const decryptResponse = await axios.post(`${API_BASE_URL}/api/uan-lookup/decrypt`, { responseData });
+      // Call decrypt endpoint via proxy
+      const decryptResponse = await axios.post(`${API_PROXY_URL}?endpoint=decrypt`, { responseData });
       const finalData = decryptResponse.data;
       setUanData(finalData);
       await onSaveResult(finalData, lookupMethod, finalLookupValue);
@@ -197,11 +199,11 @@ export const useUanLookup = (
     }
   }, [lookupValue, lookupMethod, candidate, organizationId, onSaveResult, toast]);
 
-  console.log("uanData", uanData)
+  console.log("uanData", uanData);
 
   return {
     isLoading,
-    uanData, // This exclusively provides the basic UAN data
+    uanData,
     lookupMethod,
     setLookupMethod,
     lookupValue,
@@ -209,4 +211,3 @@ export const useUanLookup = (
     handleLookup,
   };
 };
-// 
