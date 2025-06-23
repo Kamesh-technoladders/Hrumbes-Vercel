@@ -1,4 +1,3 @@
-// components/EmployeeProfilePage.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -14,11 +13,10 @@ import { useShareLink } from "@/components/MagicLinkView/hooks/useShareLink";
 import { EmployeeInfoCard } from "./EmployeeInfoCard";
 import { ProfileTabs } from "./ProfileTabs";
 import { Candidate } from "@/components/MagicLinkView/types";
-import { VerificationProcessSection } from "./VerificationProcessSection"; // NEW IMPORT
+import { VerificationProcessSection } from "./VerificationProcessSection";
 import { useUanLookup } from "@/components/MagicLinkView/hooks/useUanLookup";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-
 
 interface EmployeeProfilePageProps {
   shareMode?: boolean;
@@ -125,7 +123,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
       const updatedMetadata = {
         ...currentMetadata,
         uan: uanNumber,
-        // *** ADD THIS LINE: Store the full UAN data for persistence ***
         uan_full_data: dataToSave,
       };
 
@@ -144,6 +141,15 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         metadata: updatedMetadata,
       });
 
+      // Update documents state to reflect the new UAN
+      setDocuments((prev: any) => ({
+        ...prev,
+        uan: {
+          ...prev.uan,
+          value: uanNumber || prev.uan.value,
+        },
+      }));
+
       console.log("UAN Lookup result saved to uanlookups and candidate metadata updated.");
       toast({
         title: 'Success',
@@ -160,7 +166,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
       });
       throw error;
     }
-  }, [candidate, organization_id, setCandidate, toast]);
+  }, [candidate, organization_id, setCandidate, setDocuments, toast]);
 
   const {
     isLoading: isUanLoading,
@@ -173,7 +179,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
   } = useUanLookup(candidate, organization_id, handleSaveUanResult);
 
   console.log("UAN Data:", uanData);
-
 
   useEffect(() => {
     setDocuments(verifiedDocuments);
@@ -245,7 +250,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         offerDetails: "N/A",
       } as Candidate);
 
-
   const employee = shareMode
     ? {
         ...employeeFormatted,
@@ -276,7 +280,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         offerDetails: currentDataOptions?.personalInfo && candidate?.metadata?.offerDetails ? candidate.metadata.offerDetails : "N/A",
       }
     : employeeFormatted;
-
 
   const availableTabs = [
     resumeAnalysis && "resume-analysis",
@@ -343,7 +346,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
       <div className="min-h-screen bg-gray-50 py-4 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-8xl mx-auto">
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Main Content (3/4th on lg screens) */}
             <div className="lg:w-[65%] w-full">
               <EmployeeInfoCard
                 employee={employee as any}
@@ -397,8 +399,6 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                 organizationId={organization_id}
               />
             </div>
-
-            {/* Verification Process Section (1/4th on lg screens, replaces CandidateTimeline) */}
             <div className="lg:w-[40%] w-full">
               <VerificationProcessSection
                 candidate={candidate}
@@ -414,7 +414,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                 shareMode={shareMode}
                 onDocumentChange={handleDocumentChange}
                 onToggleEditing={toggleEditing}
-                onToggleUANResults={toggleUANResults} // Ensure this is still passed correctly if useDocumentVerification relies on it for UAN state
+                onToggleUANResults={toggleUANResults}
                 onVerifyDocument={(type) =>
                   verifyDocument(type, candidateId || '', workHistory, candidate, organization_id)
                 }

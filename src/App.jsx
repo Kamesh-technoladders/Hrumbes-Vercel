@@ -124,6 +124,9 @@ function App() {
             <Route path="/projects" element={<Clients />} />
             <Route path="/client/:id" element={<ClientDashboard />} />
             <Route path="/project/:id" element={<ProjectDashboard />} />
+
+{/* User management */}
+
             <Route path="/user-management" element={<UserManagement />} />
             <Route
               path="/organization"

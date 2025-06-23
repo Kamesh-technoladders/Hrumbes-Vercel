@@ -1,4 +1,3 @@
-// components/MagicLinkView/hooks/useUanLookup.ts
 import { useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
 import { useToast } from '@/components/ui/use-toast';
@@ -6,12 +5,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { Candidate } from '@/components/MagicLinkView/types';
 import { supabase } from "@/integrations/supabase/client";
 
-// Use the proxy endpoint
 const API_PROXY_URL = '/api/uan-proxy';
 
 export const useUanLookup = (
   candidate: Candidate | null,
   organizationId: string | null,
+  onSaveResult?: (data: any, method: 'mobile' | 'pan', value: string) => Promise<void>
 ) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -22,7 +21,7 @@ export const useUanLookup = (
   console.log("candidate", candidate);
   console.log('useUanLookup input:', { candidateId: candidate?.id, organizationId });
 
-  const onSaveResult = useCallback(
+  const internalSaveResult = useCallback(
     async (data: any, method: 'mobile' | 'pan', value: string) => {
       if (!candidate?.id || !organizationId) {
         toast({ title: 'Error', description: 'Candidate ID or Organization ID is missing.', variant: 'destructive' });
@@ -55,6 +54,7 @@ export const useUanLookup = (
               metadata: {
                 ...candidate.metadata,
                 uan,
+                uan_full_data: data,
               },
             })
             .eq('id', candidate.id);
@@ -157,7 +157,6 @@ export const useUanLookup = (
     setIsLoading(true);
     try {
       const transId = `lovable-${uuidv4()}`;
-      // Call encrypt endpoint via proxy
       const encryptResponse = await axios.post(`${API_PROXY_URL}?endpoint=encrypt`, {
         transId,
         docType: 526,
@@ -167,7 +166,6 @@ export const useUanLookup = (
       const { requestData } = encryptResponse.data;
       let responseData: string | null = null;
       try {
-        // Call get-uan endpoint via proxy
         const getUanResponse = await axios.post(`${API_PROXY_URL}?endpoint=get-uan`, { requestData });
         responseData = getUanResponse.data.responseData;
       } catch (getUanError: any) {
@@ -181,11 +179,14 @@ export const useUanLookup = (
       if (!responseData) {
         throw new Error('No valid response from UAN service (basic lookup).');
       }
-      // Call decrypt endpoint via proxy
       const decryptResponse = await axios.post(`${API_PROXY_URL}?endpoint=decrypt`, { responseData });
       const finalData = decryptResponse.data;
       setUanData(finalData);
-      await onSaveResult(finalData, lookupMethod, finalLookupValue);
+      if (onSaveResult) {
+        await onSaveResult(finalData, lookupMethod, finalLookupValue);
+      } else {
+        await internalSaveResult(finalData, lookupMethod, finalLookupValue);
+      }
     } catch (err: any) {
       const finalErrorData = err.response?.data || { error: err.message || 'An unknown error occurred.', status: 9 };
       setUanData(finalErrorData);
@@ -197,7 +198,7 @@ export const useUanLookup = (
     } finally {
       setIsLoading(false);
     }
-  }, [lookupValue, lookupMethod, candidate, organizationId, onSaveResult, toast]);
+  }, [lookupValue, lookupMethod, candidate, organizationId, onSaveResult, internalSaveResult, toast]);
 
   console.log("uanData", uanData);
 

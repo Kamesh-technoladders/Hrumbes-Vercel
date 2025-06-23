@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,7 +37,6 @@ interface VerificationProcessSectionProps {
   isSavingDocuments: boolean;
 }
 
-// const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4001';
 const API_PROXY_URL = '/api/uan-full-history-proxy';
 
 interface FullHistoryEmploymentEntry {
@@ -107,13 +105,11 @@ const decryptUanFullHistory = async (responseData: string): Promise<TruthScreenF
       throw new Error(response.data.error);
     }
 
-    // Log and handle TruthScreen-specific error message
     if (response.data.msg && response.data.status !== 1) {
       console.error('TruthScreen Error in decryptUanFullHistory:', response.data.msg);
       throw new Error(response.data.msg);
     }
 
-    // Validate response structure
     if (response.data.status === undefined || !response.data.tsTransId || response.data.msg === undefined) {
       const errorMsg = typeof response.data.msg === 'string'
         ? response.data.msg
@@ -175,6 +171,7 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
   const [isFullHistoryLoading, setIsFullHistoryLoading] = useState(false);
   const [fullHistoryError, setFullHistoryError] = useState<string | null>(null);
   const [isUanVerified, setIsUanVerified] = useState<boolean>(false);
+  const [showUanFetch, setShowUanFetch] = useState<boolean>(false);
 
   const candidateUanFromMetadata = candidate?.metadata?.uan;
   const hasUanInMetadata = !!candidateUanFromMetadata;
@@ -183,6 +180,9 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
   console.log("candidateUanFromMetadata", candidateUanFromMetadata);
   console.log("hasUanInMetadata", hasUanInMetadata);
   console.log("isUanBasicVerifiedAndDataAvailable", isUanBasicVerifiedAndDataAvailable);
+  console.log("candidate data:::", candidate);
+  console.log("uandData:::", uanData);
+  console.log("documents:::", documents);
 
   useEffect(() => {
     const fetchPreviousFullHistoryData = async () => {
@@ -225,7 +225,7 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
     fetchPreviousFullHistoryData();
   }, [candidate?.id, candidateUanFromMetadata, toast]);
 
-  const fetchAndSaveFullEmployeeHistory = useCallback(async () => {
+    const fetchAndSaveFullEmployeeHistory = useCallback(async () => {
     if (!candidate?.id || !organizationId || !candidateUanFromMetadata) {
       toast({ title: 'Error', description: 'Missing candidate ID, organization ID, or UAN for full history check.', variant: 'destructive' });
       return;
@@ -308,6 +308,8 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
 
   const renderDocumentRow = (type: keyof typeof documents, label: string) => {
     const doc = documents[type];
+    const isUan = type === 'uan';
+    const displayValue = isUan && !doc.value && hasUanInMetadata ? candidateUanFromMetadata : doc.value;
     return (
       <div className="border rounded-lg mb-4 bg-white shadow-sm hover:shadow-md transition-shadow w-full">
         <div className="p-4">
@@ -329,7 +331,7 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
                 />
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  {doc.value || "Not Provided"}
+                  {displayValue || "Not Provided"}
                 </p>
               )}
               {renderVerificationStatus(doc)}
@@ -340,55 +342,68 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
                   onClick={() => onToggleEditing(type)}
                   variant="outline"
                   size="sm"
-                  disabled={doc.isVerifying || doc.isVerified}
+                  disabled={doc.isVerifying || (isUan ? false : doc.isVerified)}
                   className={cn(
                     doc.isEditing && "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
                   )}
                 >
                   {doc.isEditing ? "Cancel" : "Edit"}
                 </Button>
-                <Button
-                  onClick={() => onVerifyDocument(type, candidate?.id || '', null, candidate, organizationId || '')}
-                  variant="secondary"
-                  size="sm"
-                  disabled={doc.isVerifying}
-                  className={cn(
-                    doc.isVerified && "bg-green-100 text-green-800 hover:bg-green-200"
-                  )}
-                >
-                  {doc.isVerifying ? (
-                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  ) : doc.isVerified ? (
-                    <>
-                      Verified <CheckCircle2 className="ml-1 h-3 w-3" />
-                    </>
-                  ) : (
-                    <>Verify 🔍</>
-                  )}
-                </Button>
+                {isUan ? (
+                  <Button
+                    onClick={() => {
+                      if (hasUanInMetadata) {
+                        fetchAndSaveFullEmployeeHistory();
+                      } else {
+                        setShowUanFetch(true);
+                      }
+                    }}
+                    variant="secondary"
+                    size="sm"
+                    disabled={doc.isVerifying || isUanLoading}
+                    className={cn(
+                      doc.isVerified && "bg-green-100 text-green-800 hover:bg-green-200"
+                    )}
+                  >
+                    {doc.isVerifying ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : doc.isVerified ? (
+                      <>
+                        Verified <CheckCircle2 className="ml-1 h-3 w-3" />
+                      </>
+                    ) : hasUanInMetadata ? (
+                      <>Verify UAN 🔍</>
+                    ) : (
+                      <>Fetch UAN 🔍</>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => onVerifyDocument(type, candidate?.id || '', null, candidate, organizationId || '')}
+                    variant="secondary"
+                    size="sm"
+                    disabled={doc.isVerifying}
+                    className={cn(
+                      doc.isVerified && "bg-green-100 text-green-800 hover:bg-green-200"
+                    )}
+                  >
+                    {doc.isVerifying ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : doc.isVerified ? (
+                      <>
+                        Verified <CheckCircle2 className="ml-1 h-3 w-3" />
+                      </>
+                    ) : (
+                      <>Verify 🔍</>
+                    )}
+                  </Button>
+                )}
               </div>
             )}
           </div>
-        </div>
-      </div>
-    );
-  };
-
-  if (!candidate) {
-    return <div className="text-sm text-gray-500">Loading candidate data...</div>;
-  }
-
-  return (
-    <Card className="bg-white w-full p-4">
-      <CardHeader className="p-0 mb-4">
-        <CardTitle className="text-lg font-semibold">Verification Process</CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="mb-6">
-          <h3 className="text-md font-medium mb-3">UAN Verification</h3>
-          <Card className="border border-gray-200 bg-white shadow-sm p-4">
-            {!hasUanInMetadata && (
-              <div className="flex flex-col sm:flex-row gap-2 items-end mb-4">
+          {isUan && showUanFetch && !hasUanInMetadata && !shareMode && (
+            <div className="mt-4">
+              <div className="flex flex-col sm:flex-row gap-2 items-end">
                 <div className="w-full sm:w-1/4">
                   <label className="text-xs font-medium text-gray-600">Method</label>
                   <Select value={lookupMethod} onValueChange={(val: 'mobile' | 'pan') => setLookupMethod(val)}>
@@ -417,145 +432,114 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
                   {isUanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Get UAN'}
                 </Button>
               </div>
-            )}
-            {isUanLoading && <p className="text-sm text-gray-500 mt-4">Verifying...</p>}
-            {uanData && uanData.status === 9 && (
-              <div className="mt-4 text-red-600 text-sm">
-                {lookupMethod === 'mobile' ? (
-                  <>Mobile no. {lookupValue} has no UAN record. Try another number or method.</>
-                ) : (
-                  <>PAN no. {lookupValue} has no UAN record. Try another number or method.</>
-                )}
-              </div>
-            )}
-            {uanData && uanData.status !== 1 && uanData.status !== 9 && (
-              <div className="mt-4 text-red-600 text-sm">
-                Error: {uanData.msg || uanData.error || 'UAN lookup failed.'}
-              </div>
-            )}
-            {(isUanBasicVerifiedAndDataAvailable || hasUanInMetadata) && (
-              <div>
-                {hasUanInMetadata && (
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-medium">UAN: <span className="font-bold text-indigo-600">{candidateUanFromMetadata}</span></p>
-                    <Badge className={cn(
-                      isUanVerified ? "bg-green-100 text-green-800 hover:bg-green-100" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-                    )}>
-                      {isUanVerified ? (
-                        <>
-                          <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-3 h-3 mr-1" /> Unverified
-                        </>
-                      )}
-                    </Badge>
-                  </div>
-                )}
-                <Tabs value={activeUanTab} onValueChange={setActiveUanTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 mb-4">
-                    {isUanBasicVerifiedAndDataAvailable && (
-                      <TabsTrigger value="basic">Basic Employee Info</TabsTrigger>
-                    )}
-                    <TabsTrigger value="full-history">Full Employee History</TabsTrigger>
-                  </TabsList>
-                  {isUanBasicVerifiedAndDataAvailable && (
-                 <TabsContent value="basic">
-  {/* Basic Info Header */}
-  <div>
-    <h4 className="font-semibold text-lg mb-2">Basic Information</h4>
-  </div>
-
-  {uanData?.msg?.uan_details?.[0] ? (
-    <>
-      {/* Basic Info Section */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-2 text-sm text-green-600">
-        <p><strong>Name:</strong> {uanData.msg.uan_details[0].name}</p>
-        <p><strong>Gender:</strong> {uanData.msg.uan_details[0].gender}</p>
-        <p><strong>Date of Birth:</strong> {uanData.msg.uan_details[0].date_of_birth}</p>
-      </div>
-
-      {/* Employment Info Header */}
-      <div className="mt-4">
-        <h4 className="font-semibold text-lg mb-2">Current Employment Information</h4>
-      </div>
-
-      {/* Employment Info Section */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-2 text-sm text-green-600">
-        <p><strong>Company:</strong> {uanData.msg.employment_details[0].establishment_name}</p>
-        <p><strong>Date of Joining:</strong> {uanData.msg.employment_details[0].date_of_joining}</p>
-        <p><strong>Establishment ID:</strong> {uanData.msg.employment_details[0].establishment_id}</p>
-        <p><strong>Member ID:</strong> {uanData.msg.employment_details[0].member_id}</p>
-      </div>
-    </>
-  ) : (
-    <p className="text-sm text-purple-300">
-      No basic UAN details available from previous lookup.
-    </p>
-  )}
-</TabsContent>
-
-
+              {isUanLoading && <p className="text-sm text-gray-500 mt-4">Fetching UAN...</p>}
+              {uanData && uanData.status === 9 && (
+                <div className="mt-4 text-red-600 text-sm">
+                  {lookupMethod === 'mobile' ? (
+                    <>Mobile no. {lookupValue} has no UAN record. Try another number or method.</>
+                  ) : (
+                    <>PAN no. {lookupValue} has no UAN record. Try another number or method.</>
                   )}
-                  <TabsContent value="full-history">
-                    <div className="flex justify-end mb-4">
-                      <Button
-                        onClick={fetchAndSaveFullEmployeeHistory}
-                        disabled={isFullHistoryLoading}
-                        size="sm"
-                      >
-                        {isFullHistoryLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Verify Full History'}
-                      </Button>
+                </div>
+              )}
+              {uanData && uanData.status !== 1 && uanData.status !== 9 && (
+                <div className="mt-4 text-red-600 text-sm">
+                  Error: {uanData.msg || uanData.error || 'UAN lookup failed.'}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (!candidate) {
+    return <div className="text-sm text-gray-500">Loading candidate data...</div>;
+  }
+
+  return (
+    <Card className="bg-white w-full p-4">
+      <CardHeader className="p-0 mb-4">
+        <CardTitle className="text-lg font-semibold">Verification Process</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="space-y-6">
+          <h3 className="text-md font-medium mb-3">Verification Documents</h3>
+          {renderDocumentRow("uan", "UAN Number")}
+          {(isUanBasicVerifiedAndDataAvailable || hasUanInMetadata) && (
+            <Card className="border border-gray-200 bg-white shadow-sm p-4">
+              <Tabs value={activeUanTab} onValueChange={setActiveUanTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  {isUanBasicVerifiedAndDataAvailable && (
+                    <TabsTrigger value="basic">Basic Employee Info</TabsTrigger>
+                  )}
+                  <TabsTrigger value="full-history">Full Employee History</TabsTrigger>
+                </TabsList>
+                {isUanBasicVerifiedAndDataAvailable && (
+                  <TabsContent value="basic">
+                    <div>
+                      <h4 className="font-semibold text-lg mb-2">Basic Information</h4>
                     </div>
-                    {isFullHistoryLoading && <p className="text-sm text-gray-500">Fetching full history...</p>}
-                    {fullHistoryError && <p className="text-sm text-red-600">Error: {fullHistoryError}</p>}
-                    {fullHistoryData && Array.isArray(fullHistoryData.msg) && fullHistoryData.msg.length > 0 ? (
-                      <div className="space-y-4">
-                        <h4 className="font-semibold text-md mb-2">Employment Details</h4>
-                        {fullHistoryData.msg.map((entry: FullHistoryEmploymentEntry, index: number) => (
-                          <div key={index} className="pb-2 border-b last:border-b-0 text-green-700">
-                            <p className="text-sm font-medium">{entry.EstablishmentName}</p>
-                            <p className="text-xs text-green-600">Join Date: {entry.Doj}</p>
-                            <p className="text-xs text-green-600">Exit Date: {entry.DateOfExitEpf || "Currently Employed"}</p>
-                            <p className="text-xs text-green-600">Member ID: {entry.MemberId}</p>
-                            <p className="text-xs text-green-600">UAN: {entry.uan}</p>
-                            {entry.Overlapping && <p className="text-xs text-green-600 font-semibold">Overlapping: {entry.Overlapping}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    ) : fullHistoryData && !isFullHistoryLoading && typeof fullHistoryData.msg === 'string' ? (
-                      <p className="text-sm text-gray-600">{fullHistoryData.msg}</p>
+                    {uanData?.msg?.uan_details?.[0] ? (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-1 gap-2 text-sm text-green-600">
+                          <p><strong>Name:</strong> {uanData.msg.uan_details[0].name}</p>
+                          <p><strong>Gender:</strong> {uanData.msg.uan_details[0].gender}</p>
+                          <p><strong>Date of Birth:</strong> {uanData.msg.uan_details[0].date_of_birth}</p>
+                        </div>
+                        <div className="mt-4">
+                          <h4 className="font-semibold text-lg mb-2">Current Employment Information</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-1 gap-2 text-sm text-green-600">
+                          <p><strong>Company:</strong> {uanData.msg.employment_details[0].establishment_name}</p>
+                          <p><strong>Date of Joining:</strong> {uanData.msg.employment_details[0].date_of_joining}</p>
+                          <p><strong>Establishment ID:</strong> {uanData.msg.employment_details[0].establishment_id}</p>
+                          <p><strong>Member ID:</strong> {uanData.msg.employment_details[0].member_id}</p>
+                        </div>
+                      </>
                     ) : (
-                      <p className="text-sm text-gray-600">Click "Verify Full History" to retrieve detailed employment records.</p>
+                      <p className="text-sm text-purple-300">
+                        No basic UAN details available from previous lookup.
+                      </p>
                     )}
                   </TabsContent>
-                </Tabs>
-              </div>
-            )}
-          </Card>
-        </div>
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-md font-medium">Other Verification Documents</h3>
-            {!shareMode && (
-              <Button
-                onClick={onSaveDocuments}
-                variant="secondary"
-                size="sm"
-                disabled={isSavingDocuments || !Object.values(documents).some((doc) => doc.isEditing)}
-              >
-                {isSavingDocuments ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Changes"
                 )}
-              </Button>
-            )}
-          </div>
+                <TabsContent value="full-history">
+                  <div className="flex justify-end mb-4">
+                    <Button
+                      onClick={fetchAndSaveFullEmployeeHistory}
+                      disabled={isFullHistoryLoading}
+                      size="sm"
+                    >
+                      {isFullHistoryLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Verify Full History'}
+                    </Button>
+                  </div>
+                  {isFullHistoryLoading && <p className="text-sm text-gray-600">Fetching full history...</p>}
+                  {fullHistoryError && <p className="text-sm text-red-600">Error: {fullHistoryError}</p>}
+                  {fullHistoryData && Array.isArray(fullHistoryData.msg) && fullHistoryData.msg.length > 0 ? (
+                    <div className="space-y-4">
+                      <h4 className="font-semibold text-md mb-2">Employment Details</h4>
+                      {fullHistoryData.msg.map((entry: FullHistoryEmploymentEntry, index: number) => (
+                        <div key={index} className="pb-2 border-b last:border-b-0 text-green-700">
+                          <p className="text-sm font-medium">{entry.EstablishmentName}</p>
+                          <p className="text-xs text-green-600">Join Date: {entry.Doj}</p>
+                          <p className="text-xs text-green-600">Exit Date: {entry.DateOfExitEpf || "Currently Employed"}</p>
+                          <p className="text-xs text-green-600">Member ID: {entry.MemberId}</p>
+                          <p className="text-xs text-green-600">UAN: {entry.uan}</p>
+                          {entry.Overlapping && <p className="text-xs text-green-600 font-semibold">Overlapping: {entry.Overlapping}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : fullHistoryData && !isFullHistoryLoading && typeof fullHistoryData.msg === 'string' ? (
+                    <p className="text-sm text-gray-600">{fullHistoryData.msg}</p>
+                  ) : (
+                    <p className="text-sm text-gray-600">Click "Verify Full History" to retrieve detailed employment records.</p>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </Card>
+          )}
           {renderDocumentRow("pan", "PAN Number")}
           {renderDocumentRow("pf", "PF Number")}
           {renderDocumentRow("esic", "ESIC Number")}
@@ -564,4 +548,3 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
     </Card>
   );
 };
-// Pan and UI change
