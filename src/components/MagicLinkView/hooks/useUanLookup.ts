@@ -18,9 +18,6 @@ export const useUanLookup = (
   const [lookupMethod, setLookupMethod] = useState<'mobile' | 'pan'>('mobile');
   const [lookupValue, setLookupValue] = useState('');
 
-  console.log("candidate", candidate);
-  console.log('useUanLookup input:', { candidateId: candidate?.id, organizationId });
-
   const internalSaveResult = useCallback(
     async (data: any, method: 'mobile' | 'pan', value: string) => {
       if (!candidate?.id || !organizationId) {
@@ -165,42 +162,110 @@ export const useUanLookup = (
       });
       const { requestData } = encryptResponse.data;
       let responseData: string | null = null;
+
       try {
-        const getUanResponse = await axios.post(`${API_PROXY_URL}?endpoint=get-uan`, { requestData });
+        // Add a timeout to the request to catch 504s earlier
+        const getUanResponse = await axios.post(
+          `${API_PROXY_URL}?endpoint=get-uan`,
+          { requestData },
+          { timeout: 20000 } // Increased timeout to 20 seconds (adjust as needed)
+        );
         responseData = getUanResponse.data.responseData;
       } catch (getUanError: any) {
-        if (getUanError.response?.data.responseData) {
-          console.warn('Caught non-200 response from get-uan, but found responseData.');
-          responseData = getUanError.response.data.responseData;
-        } else {
-          throw getUanError;
+        console.error('Error from get-uan proxy during initial fetch:', {
+          message: getUanError.message,
+          status: getUanError.response?.status,
+          data: getUanError.response?.data,
+          code: getUanError.code // e.g., 'ECONNABORTED' for timeout
+        });
+
+        // Handle specific Axios errors (e.g., network error, timeout)
+        if (getUanError.code === 'ECONNABORTED' || getUanError.message === 'Network Error') {
+          throw new Error('UAN lookup request timed out or network error. Please try again later.');
         }
+
+        // If the proxy sent a response, even an error one, try to extract data
+        if (getUanError.response?.data) {
+          // Prioritize structured error messages if available
+          if (typeof getUanError.response.data.error === 'string') {
+              throw new Error(getUanError.response.data.error);
+          }
+          if (typeof getUanError.response.data.message === 'string') {
+              throw new Error(getUanError.response.data.message);
+          }
+          // Fallback to stringifying the entire response data if it's an object
+          throw new Error(`Proxy error: ${JSON.stringify(getUanError.response.data)}`);
+        }
+
+        // If no response data, re-throw the original message
+        throw getUanError;
       }
+
       if (!responseData) {
-        throw new Error('No valid response from UAN service (basic lookup).');
+        throw new Error('No valid response data received for UAN lookup.');
       }
+
       const decryptResponse = await axios.post(`${API_PROXY_URL}?endpoint=decrypt`, { responseData });
       const finalData = decryptResponse.data;
-      setUanData(finalData);
+
+      // Ensure the structure of finalData for consistent state update
+      // It should ideally be { status: number, msg: string | array, error?: string }
+      if (finalData.status === undefined && !finalData.msg && !finalData.error) {
+          throw new Error('Decryption returned an unexpected data format.');
+      }
+
+      setUanData(finalData); // This will be the parsed JSON from decrypt
+
       if (onSaveResult) {
         await onSaveResult(finalData, lookupMethod, finalLookupValue);
       } else {
         await internalSaveResult(finalData, lookupMethod, finalLookupValue);
       }
     } catch (err: any) {
-      const finalErrorData = err.response?.data || { error: err.message || 'An unknown error occurred.', status: 9 };
-      setUanData(finalErrorData);
+      console.error("UAN Lookup process failed:", err);
+
+      let errorMessage: string;
+      let status: number = 9; // Default status for general errors
+
+      if (err instanceof Error) {
+        errorMessage = err.message; // Use the specific error message
+      } else if (err.response?.data) {
+        // If it's an Axios error with a response body
+        const errorData = err.response.data;
+        if (typeof errorData.msg === 'string') {
+          errorMessage = errorData.msg;
+          status = errorData.status || 9;
+        } else if (typeof errorData.error === 'string') {
+          errorMessage = errorData.error;
+          status = errorData.status || 9;
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData; // Raw string error response
+        } else {
+          errorMessage = 'Unexpected error format from proxy: ' + JSON.stringify(errorData);
+        }
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      } else {
+        errorMessage = 'An unknown error occurred during UAN lookup.';
+      }
+
+      // Always set uanData to a predictable structure for rendering
+      setUanData({
+        status: status,
+        msg: errorMessage, // Ensure msg is always a string for UI display
+        error: errorMessage, // Ensure error is always a string for UI display
+        tsTransId: 'N/A', // Set a default to avoid undefined issues
+      });
+
       toast({
         title: 'Verification Failed',
-        description: finalErrorData.msg || finalErrorData.error || 'Failed to process UAN lookup.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
     }
   }, [lookupValue, lookupMethod, candidate, organizationId, onSaveResult, internalSaveResult, toast]);
-
-  console.log("uanData", uanData);
 
   return {
     isLoading,

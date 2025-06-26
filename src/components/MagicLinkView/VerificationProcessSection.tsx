@@ -37,7 +37,10 @@ interface VerificationProcessSectionProps {
   isSavingDocuments: boolean;
 }
 
-const API_PROXY_URL = '/api/uan-full-history-proxy';
+// Conditionally set the API_PROXY_URL based on development mode
+const API_PROXY_BASE_URL = import.meta.env.DEV
+  ? 'http://62.72.51.159:4001' // Direct backend URL for local development
+  : '/api/uan-full-history-proxy'; // Vercel serverless function proxy path for production/Vercel dev
 
 interface FullHistoryEmploymentEntry {
   DateOfExitEpf: string;
@@ -61,7 +64,7 @@ interface TruthScreenFullHistoryResponse {
 const encryptUanFullHistory = async (transId: string, uan: string): Promise<string> => {
   try {
     const response = await axios.post<any>(
-      `${API_PROXY_URL}?endpoint=encrypt`,
+      `${API_PROXY_BASE_URL}/encrypt`, // Use the determined base URL
       { transID: transId, docType: '337', uan },
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -77,7 +80,7 @@ const encryptUanFullHistory = async (transId: string, uan: string): Promise<stri
 const verifyUanFullHistory = async (requestData: string): Promise<string> => {
   try {
     const response = await axios.post<any>(
-      `${API_PROXY_URL}?endpoint=verify`,
+      `${API_PROXY_BASE_URL}/verify`, // Use the determined base URL
       { requestData },
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -93,7 +96,7 @@ const verifyUanFullHistory = async (requestData: string): Promise<string> => {
 const decryptUanFullHistory = async (responseData: string): Promise<TruthScreenFullHistoryResponse> => {
   try {
     const response = await axios.post<any>(
-      `${API_PROXY_URL}?endpoint=decrypt`,
+      `${API_PROXY_BASE_URL}/decrypt`, // Use the determined base URL
       { responseData },
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -548,3 +551,4 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
     </Card>
   );
 };
+// 
