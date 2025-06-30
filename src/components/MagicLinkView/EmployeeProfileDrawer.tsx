@@ -57,20 +57,13 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
   } = useDocumentVerification(documents, shareMode);
 
   const {
-    workHistory,
-    setWorkHistory,
-    isVerifyingAll: isVerifyingAllWorkHistory,
-    verifyAllCompanies,
-    handleVerifySingleWorkHistory,
-    updateWorkHistoryItem,
-  } = useWorkHistoryVerification(
-    candidateId,
-    jobId,
-    shareMode,
-    candidate,
-    user?.id,
-    organization_id
-  );
+  workHistory,
+  setWorkHistory, // You might not need this if all state is managed in the hook
+  isVerifyingAll: isVerifyingAllWorkHistory,
+  verifyAllCompanies,
+  handleVerifySingleWorkHistory,
+  updateWorkHistoryItem,
+} = useWorkHistoryVerification(candidate, organization_id);
 
   const { timeline, timelineLoading, timelineError } = useTimeline(
     candidateId,
@@ -89,19 +82,18 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     setCurrentDataOptions,
   } = useShareLink(initialSharedDataOptions);
 
-  const handleSaveUanResult = useCallback(async (
+const handleSaveUanResult = useCallback(async (
     dataToSave: any,
     lookupMethod: 'mobile' | 'pan',
     lookupValue: string
   ) => {
     if (!candidate?.id || !organization_id) {
-      toast({ title: 'Error', description: 'Missing candidate ID or organization ID for saving.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Missing candidate ID or organization ID.', variant: 'destructive' });
       return;
     }
 
     try {
-      const uanNumber = dataToSave?.msg?.uan_details?.[0]?.uan || null;
-
+      // 1. Save the full lookup result to our history table
       const { error: uanLookupError } = await supabase
         .from('uanlookups')
         .insert({
@@ -115,58 +107,66 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
         });
 
       if (uanLookupError) {
-        console.error('Error saving UAN lookup result to uanlookups table:', uanLookupError);
-        throw new Error('Failed to save UAN lookup history.');
+        // We can log this but don't need to block the UI update
+        console.error('Error saving UAN lookup result to history:', uanLookupError);
+      }
+      
+      // 2. Only proceed to update the candidate profile if the lookup was successful
+      if (dataToSave.status !== 1) {
+        console.log("UAN lookup was not successful (status != 1), skipping candidate profile update.");
+        return;
       }
 
-      let currentMetadata = candidate.metadata || {};
+      const uanNumber = dataToSave?.msg?.uan_details?.[0]?.uan || null;
+      if (!uanNumber) {
+        console.log("Successful lookup but no UAN number found in the response.");
+        return;
+      }
+      
+      // 3. Prepare the updated metadata object
+      // This safely merges the new UAN into the existing metadata
       const updatedMetadata = {
-        ...currentMetadata,
-        uan: uanNumber,
-        uan_full_data: dataToSave,
+        ...candidate.metadata, // Keep all existing metadata
+        uan: uanNumber,         // Add or overwrite the uan field
       };
 
+      // 4. Update the candidate's metadata in the database
       const { error: updateCandidateError } = await supabase
         .from('hr_job_candidates')
         .update({ metadata: updatedMetadata })
         .eq('id', candidate.id);
 
       if (updateCandidateError) {
-        console.error('Error updating candidate UAN in metadata:', updateCandidateError);
-        throw new Error('Failed to update candidate UAN in profile metadata.');
+        throw new Error(`Failed to update candidate profile: ${updateCandidateError.message}`);
       }
 
+      // 5. Update the local state to reflect the change immediately in the UI
       setCandidate({
         ...candidate,
         metadata: updatedMetadata,
       });
 
-      // Update documents state to reflect the new UAN
       setDocuments((prev: any) => ({
         ...prev,
-        uan: {
-          ...prev.uan,
-          value: uanNumber || prev.uan.value,
-        },
+        uan: { ...prev.uan, value: uanNumber },
       }));
 
-      console.log("UAN Lookup result saved to uanlookups and candidate metadata updated.");
       toast({
         title: 'Success',
-        description: 'UAN details retrieved and saved to profile.',
+        description: `UAN ${uanNumber} has been saved to the profile.`,
         variant: 'success',
       });
 
     } catch (error: any) {
-      console.error("Failed to save UAN lookup result:", error);
+      console.error("Failed to save UAN result to profile:", error);
       toast({
-        title: "Save Failed",
-        description: error.message || "Could not save the UAN verification result to the profile.",
+        title: "Profile Update Failed",
+        description: error.message,
         variant: "destructive",
       });
-      throw error;
     }
   }, [candidate, organization_id, setCandidate, setDocuments, toast]);
+
 
   const {
     isLoading: isUanLoading,
@@ -176,6 +176,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
     lookupValue,
     setLookupValue,
     handleLookup: onUanLookup,
+    isQueued: isUanQueued,
   } = useUanLookup(candidate, organization_id, handleSaveUanResult);
 
   console.log("UAN Data:", uanData);
@@ -385,18 +386,20 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                 onSaveDocuments={() => saveDocuments(candidateId || '', candidate?.metadata)}
                 isSavingDocuments={isSavingDocuments}
                 isVerifyingAllWorkHistory={isVerifyingAllWorkHistory}
-                onVerifyAllCompanies={() =>
-                  verifyAllCompanies(candidateId || '', candidate, user?.id, organization_id)
-                }
-                onVerifySingleWorkHistory={(company, manualCompanyOption, manualVerificationYear) =>
-                  handleVerifySingleWorkHistory(company, candidate, user?.id, organization_id, manualCompanyOption, manualVerificationYear)
-                }
-                updateWorkHistoryItem={updateWorkHistoryItem}
+              
+               
+       
                 employeeResumeUrl={employee.resume}
                 candidateId={candidateId}
-                candidate={candidate}
+             
                 userId={user?.id}
                 organizationId={organization_id}
+                
+
+  onVerifyAllCompanies={verifyAllCompanies}
+  onVerifySingleWorkHistory={handleVerifySingleWorkHistory}
+  updateWorkHistoryItem={updateWorkHistoryItem}
+  candidate={candidate}
               />
             </div>
             <div className="lg:w-[40%] w-full">
@@ -420,6 +423,7 @@ const EmployeeProfilePage: React.FC<EmployeeProfilePageProps> = ({
                 }
                 onSaveDocuments={() => saveDocuments(candidateId || '', candidate?.metadata)}
                 isSavingDocuments={isSavingDocuments}
+               isUanQueued={isUanQueued}
               />
             </div>
           </div>

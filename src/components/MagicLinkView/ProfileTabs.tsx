@@ -15,13 +15,7 @@ interface ProfileTabsProps {
   setActiveTab: (tab: string) => void;
   availableTabs: string[];
   resumeAnalysis: ResumeAnalysis | null;
-  workHistory: WorkHistory[];
-  documents: {
-    uan: DocumentState;
-    pan: DocumentState;
-    pf: DocumentState;
-    esic: DocumentState;
-  };
+
   shareMode: boolean;
   sharedDataOptions?: DataSharingOptions;
   employeeSkillRatings: Array<{
@@ -36,25 +30,18 @@ interface ProfileTabsProps {
   onVerifyDocument: (type: keyof typeof documents) => Promise<void>;
   onSaveDocuments: () => Promise<void>;
   isSavingDocuments: boolean;
-  isVerifyingAllWorkHistory: boolean;
-  onVerifyAllCompanies: () => void;
-  onVerifySingleWorkHistory: (
-    company: WorkHistory,
-    candidate: Candidate | null,
-    userId: string,
-    organizationId: string,
-    manualCompanyOption?: CompanyOption,
-    manualVerificationYear?: number
-  ) => void;
-  updateWorkHistoryItem: (
-    companyId: number,
-    updates: Partial<WorkHistory>
-  ) => void;
+
   employeeResumeUrl: string;
   candidateId: string | undefined;
   candidate: Candidate | null; // Pass down
   userId: string; // Pass down
   organizationId: string; // Pass down
+  workHistory: WorkHistory[];
+  isVerifyingAllWorkHistory: boolean;
+  onVerifyAllCompanies: () => void;
+  onVerifySingleWorkHistory: (company: WorkHistory) => void;
+  updateWorkHistoryItem: (companyId: number, updates: Partial<WorkHistory>) => void;
+
 }
 
 export const ProfileTabs: React.FC<ProfileTabsProps> = ({
@@ -118,16 +105,13 @@ export const ProfileTabs: React.FC<ProfileTabsProps> = ({
       {workHistory.length > 0 && (
           <TabsContent value="work-history">
             <WorkHistorySection
-              workHistory={workHistory}
-              shareMode={shareMode}
-              isVerifyingAll={isVerifyingAllWorkHistory}
-              onVerifyAllCompanies={onVerifyAllCompanies}
-              onVerifySingleWorkHistory={onVerifySingleWorkHistory} // Pass directly
-              updateWorkHistoryItem={updateWorkHistoryItem}
-              candidateId={candidateId}
-              candidate={candidate} // Pass down
-              userId={userId}    // Pass down
-              organizationId={organizationId} // Pass down
+  workHistory={workHistory}
+  shareMode={shareMode}
+  isVerifyingAll={isVerifyingAllWorkHistory}
+  onVerifyAllCompanies={onVerifyAllCompanies}
+  onVerifySingleWorkHistory={onVerifySingleWorkHistory}
+  updateWorkHistoryItem={updateWorkHistoryItem}
+  candidate={candidate}
             />
           </TabsContent>
         )}

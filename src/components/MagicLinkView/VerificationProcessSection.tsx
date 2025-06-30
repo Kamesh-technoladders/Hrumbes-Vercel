@@ -9,9 +9,29 @@ import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { Candidate, DocumentState } from "@/components/MagicLinkView/types";
-import axios from "axios";
 import { supabase } from "@/integrations/supabase/client";
 
+// Define the structure of the API response data for clarity
+interface FullHistoryEmploymentEntry {
+  DateOfExitEpf: string;
+  Doj: string;
+  EstablishmentName: string;
+  MemberId: string;
+  fatherOrHusbandName: string;
+  name: string;
+  uan: string;
+  Overlapping?: string;
+}
+
+interface TruthScreenFullHistoryResponse {
+  msg: FullHistoryEmploymentEntry[] | string;
+  status: number;
+  transId: string;
+  tsTransId: string;
+  error?: string;
+}
+
+// Props interface remains the same
 interface VerificationProcessSectionProps {
   candidate: Candidate | null;
   organizationId: string | null;
@@ -35,119 +55,8 @@ interface VerificationProcessSectionProps {
   onVerifyDocument: (type: keyof typeof documents, candidateId: string, workHistory: any, candidate: any, organizationId: string) => Promise<void>;
   onSaveDocuments: () => Promise<void>;
   isSavingDocuments: boolean;
+  isUanQueued: boolean;
 }
-
-// Conditionally set the API_PROXY_URL based on development mode
-const API_PROXY_BASE_URL = import.meta.env.DEV
-  ? 'http://62.72.51.159:4001' // Direct backend URL for local development
-  : '/api/uan-full-history-proxy'; // Vercel serverless function proxy path for production/Vercel dev
-
-interface FullHistoryEmploymentEntry {
-  DateOfExitEpf: string;
-  Doj: string;
-  EstablishmentName: string;
-  MemberId: string;
-  fatherOrHusbandName: string;
-  name: string;
-  uan: string;
-  Overlapping: string;
-}
-
-interface TruthScreenFullHistoryResponse {
-  msg: FullHistoryEmploymentEntry[] | string;
-  status: number;
-  transId: string;
-  tsTransId: string;
-  error?: string;
-}
-
-const encryptUanFullHistory = async (transId: string, uan: string): Promise<string> => {
-  try {
-    const response = await axios.post<any>(
-      `${API_PROXY_BASE_URL}/encrypt`, // Use the determined base URL
-      { transID: transId, docType: '337', uan },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-    if (response.data.error) throw new Error(response.data.error);
-    if (!response.data.requestData) throw new Error('Missing requestData in encryption response');
-    return response.data.requestData;
-  } catch (error: any) {
-    console.error('Full History Encryption error:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.error || error.message || 'Failed to encrypt full history data');
-  }
-};
-
-const verifyUanFullHistory = async (requestData: string): Promise<string> => {
-  try {
-    const response = await axios.post<any>(
-      `${API_PROXY_BASE_URL}/verify`, // Use the determined base URL
-      { requestData },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-    if (response.data.error) throw new Error(response.data.error);
-    if (!response.data.responseData) throw new Error('Missing responseData in verification response');
-    return response.data.responseData;
-  } catch (error: any) {
-    console.error('Full History Verification error:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.error || error.message || 'Failed to verify full history data');
-  }
-};
-
-const decryptUanFullHistory = async (responseData: string): Promise<TruthScreenFullHistoryResponse> => {
-  try {
-    const response = await axios.post<any>(
-      `${API_PROXY_BASE_URL}/decrypt`, // Use the determined base URL
-      { responseData },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-
-    console.log("🔓 Decrypted Response:", response.data);
-
-    if (response.data.error) {
-      console.error('API Error in decryptUanFullHistory:', response.data.error);
-      throw new Error(response.data.error);
-    }
-
-    if (response.data.msg && response.data.status !== 1) {
-      console.error('TruthScreen Error in decryptUanFullHistory:', response.data.msg);
-      throw new Error(response.data.msg);
-    }
-
-    if (response.data.status === undefined || !response.data.tsTransId || response.data.msg === undefined) {
-      const errorMsg = typeof response.data.msg === 'string'
-        ? response.data.msg
-        : 'Incomplete data or unexpected status in decryption response.';
-      console.error('Validation Error in decryptUanFullHistory:', errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    const normalizedMsg = Array.isArray(response.data.msg)
-      ? response.data.msg.map((entry: any) => ({
-          DateOfExitEpf: entry.DateOfExitEpf,
-          Doj: entry.Doj,
-          EstablishmentName: entry['Establishment Name'] || entry.EstablishmentName,
-          MemberId: entry.MemberId,
-          fatherOrHusbandName: entry['father or Husband Name'] || entry.fatherOrHusbandName,
-          name: entry.name,
-          uan: entry.uan,
-          Overlapping: entry.Overlapping,
-        }))
-      : response.data.msg;
-
-    return {
-      ...response.data,
-      msg: normalizedMsg,
-    };
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.error || error.message || 'Failed to decrypt full history data';
-    console.error('Full History Decryption Error:', {
-      message: errorMessage,
-      responseData: error.response?.data,
-      originalError: error.message,
-    });
-    throw new Error(errorMessage);
-  }
-};
 
 export const VerificationProcessSection: React.FC<VerificationProcessSectionProps> = ({
   candidate,
@@ -163,149 +72,129 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
   shareMode,
   onDocumentChange,
   onToggleEditing,
-  onToggleUANResults,
   onVerifyDocument,
-  onSaveDocuments,
-  isSavingDocuments,
+  isUanQueued,
 }) => {
   const { toast } = useToast();
   const [activeUanTab, setActiveUanTab] = useState<string>('basic');
   const [fullHistoryData, setFullHistoryData] = useState<TruthScreenFullHistoryResponse | null>(null);
   const [isFullHistoryLoading, setIsFullHistoryLoading] = useState(false);
   const [fullHistoryError, setFullHistoryError] = useState<string | null>(null);
-  const [isUanVerified, setIsUanVerified] = useState<boolean>(false);
   const [showUanFetch, setShowUanFetch] = useState<boolean>(false);
 
   const candidateUanFromMetadata = candidate?.metadata?.uan;
   const hasUanInMetadata = !!candidateUanFromMetadata;
   const isUanBasicVerifiedAndDataAvailable = !!uanData && uanData.status === 1 && !!uanData.msg?.uan_details?.length;
 
-  console.log("candidateUanFromMetadata", candidateUanFromMetadata);
-  console.log("hasUanInMetadata", hasUanInMetadata);
-  console.log("isUanBasicVerifiedAndDataAvailable", isUanBasicVerifiedAndDataAvailable);
-  console.log("candidate data:::", candidate);
-  console.log("uandData:::", uanData);
-  console.log("documents:::", documents);
-
+  // This powerful useEffect handles both the initial data load AND listens for real-time updates.
   useEffect(() => {
-    const fetchPreviousFullHistoryData = async () => {
-      if (!candidate?.id || !candidateUanFromMetadata || isFullHistoryLoading) {
-        setFullHistoryData(null);
-        setIsUanVerified(false);
-        return;
-      }
-      setIsFullHistoryLoading(true);
-      console.log(`Fetching previous full UAN history for candidate ${candidate.id}...`);
+    if (!candidate?.id) return;
+
+    // 1. Fetch the latest completed UAN history record on component load.
+    const fetchInitialData = async () => {
       const { data, error } = await supabase
         .from('uanlookups')
         .select('response_data')
         .eq('candidate_id', candidate.id)
         .eq('lookup_type', 'uan_full_history')
-        .eq('status', 1)
+        .in('status', [0, 1]) // Only fetch final statuses (Success or No Record)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching previous full UAN history from uanlookups:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load previous full UAN history.',
-          variant: 'destructive',
-        });
-        setFullHistoryData(null);
-        setIsUanVerified(false);
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is not an error
+        console.error("Error fetching initial UAN history:", error);
       } else if (data) {
         setFullHistoryData(data.response_data);
-        setIsUanVerified(true);
-        console.log('Successfully loaded previous full UAN history from DB.');
-      } else {
-        console.log('No successful full UAN history found in DB for this candidate.');
-        setFullHistoryData(null);
-        setIsUanVerified(false);
       }
-      setIsFullHistoryLoading(false);
     };
-    fetchPreviousFullHistoryData();
-  }, [candidate?.id, candidateUanFromMetadata, toast]);
 
-    const fetchAndSaveFullEmployeeHistory = useCallback(async () => {
+    fetchInitialData();
+
+    // 2. Subscribe to real-time updates for the uanlookups table for this specific candidate.
+    const channel = supabase.channel(`uan-lookups:${candidate.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to both INSERT and UPDATE
+          schema: 'public',
+          table: 'uanlookups',
+          filter: `candidate_id=eq.${candidate.id}`,
+        },
+        (payload) => {
+          console.log('Real-time UAN history update received!', payload);
+          const newRecord = payload.new as { response_data: TruthScreenFullHistoryResponse };
+          if (newRecord?.response_data) {
+            setFullHistoryData(newRecord.response_data);
+            setIsFullHistoryLoading(false); // Stop the loading spinner
+            toast({
+              title: 'UAN Verification Updated',
+              description: 'The employee history has been successfully retrieved.',
+              variant: 'success'
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // 3. Cleanup: Unsubscribe from the channel when the component is unmounted.
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [candidate?.id, toast]);
+
+  // This function now just starts the process. The result will arrive via the real-time listener.
+  const initiateFullEmployeeHistoryCheck = useCallback(async () => {
     if (!candidate?.id || !organizationId || !candidateUanFromMetadata) {
-      toast({ title: 'Error', description: 'Missing candidate ID, organization ID, or UAN for full history check.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Missing required data for full history check.', variant: 'destructive' });
       return;
     }
+    
     setIsFullHistoryLoading(true);
     setFullHistoryError(null);
-    setFullHistoryData(null);
+
     try {
-      const transId = `${candidate.id}-${Date.now()}`;
-      const requestData = await encryptUanFullHistory(transId, candidateUanFromMetadata);
-      const responseData = await verifyUanFullHistory(requestData);
-      const decryptedResponse = await decryptUanFullHistory(responseData);
-      if (decryptedResponse.status === 1 && Array.isArray(decryptedResponse.msg) && decryptedResponse.msg.length > 0) {
-        setFullHistoryData(decryptedResponse);
-        setIsUanVerified(true);
-        const { error: saveError } = await supabase
-          .from('uanlookups')
-          .insert({
-            candidate_id: candidate.id,
-            organization_id: organizationId,
-            lookup_type: 'uan_full_history',
-            lookup_value: candidateUanFromMetadata,
-            status: decryptedResponse.status,
-            ts_trans_id: decryptedResponse.tsTransId,
-            response_data: decryptedResponse,
-          });
-        if (saveError) {
-          console.error('Error saving full UAN history to uanlookups:', saveError);
-          toast({ title: 'Error', description: 'Failed to save full UAN history.', variant: 'destructive' });
-        } else {
-          toast({ title: 'Success', description: 'Full employee history retrieved and saved.', variant: 'success' });
-        }
-      } else {
-        const errorMessage = typeof decryptedResponse.msg === 'string'
-          ? decryptedResponse.msg
-          : 'No specific details or an unexpected status was returned for full history.';
-        setFullHistoryError(errorMessage);
-        toast({ title: 'Verification Failed', description: `Full history: ${errorMessage}`, variant: 'destructive' });
-        setFullHistoryData(decryptedResponse);
-        setIsUanVerified(false);
+      const { data, error } = await supabase.functions.invoke('uan-full-history', {
+        body: {
+          transID: `${candidate.id}-${Date.now()}`,
+          docType: '337',
+          uan: candidateUanFromMetadata,
+          candidateId: candidate.id,
+          organizationId: organizationId,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.status === 'pending') {
+        toast({ title: 'Verification In Progress', description: data.message, variant: 'default' });
+      } else if (data.status === 'completed') {
+        setFullHistoryData(data.data);
+        toast({ title: 'Verification Complete', description: 'History retrieved instantly.', variant: 'success' });
+        setIsFullHistoryLoading(false); // Stop loading as it was instant
       }
+
     } catch (error: any) {
-      console.error('Full Employee History Lookup Error:', error);
-      setFullHistoryError(error.message || 'Failed to retrieve full employee history.');
-      toast({ title: 'Error', description: `Failed to get full history: ${error.message}`, variant: 'destructive' });
-      setIsUanVerified(false);
-    } finally {
+      console.error('Full Employee History Initiation Error:', error);
+      const errorMessage = error.message || 'An unknown error occurred.';
+      setFullHistoryError(errorMessage);
+      toast({ title: 'Error', description: `Failed to start verification: ${errorMessage}`, variant: 'destructive' });
       setIsFullHistoryLoading(false);
     }
-  }, [candidate?.id, organizationId, candidateUanFromMetadata, toast]);
+  }, [candidate, organizationId, candidateUanFromMetadata, toast]);
 
   const renderVerificationStatus = (doc: DocumentState) => {
+    // This function remains the same as before
     if (shareMode) return null;
-    if (doc.isVerifying) {
-      return (
-        <div className="flex items-center text-yellow-600">
-          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-          <span className="text-xs">Verifying...</span>
-        </div>
-      );
-    }
-    if (doc.isVerified) {
-      return (
-        <div className="flex items-center text-green-600">
-          <CheckCircle2 className="mr-1 h-4 w-4" />
-          <span className="text-xs">Verified on {doc.verificationDate}</span>
-        </div>
-      );
-    }
-    if (doc.error) {
-      return (
-        <div className="flex items-center text-red-600">
-          <XCircle className="mr-1 h-4 w-4" />
-          <span className="text-xs">{doc.error}</span>
-        </div>
-      );
-    }
+    if (doc.isVerifying) return (
+      <div className="flex items-center text-yellow-600"><Loader2 className="mr-1 h-4 w-4 animate-spin" /><span className="text-xs">Verifying...</span></div>
+    );
+    if (doc.isVerified) return (
+      <div className="flex items-center text-green-600"><CheckCircle2 className="mr-1 h-4 w-4" /><span className="text-xs">Verified on {doc.verificationDate}</span></div>
+    );
+    if (doc.error) return (
+      <div className="flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" /><span className="text-xs">{doc.error}</span></div>
+    );
     return null;
   };
 
@@ -313,6 +202,9 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
     const doc = documents[type];
     const isUan = type === 'uan';
     const displayValue = isUan && !doc.value && hasUanInMetadata ? candidateUanFromMetadata : doc.value;
+    // Determine if the UAN has a final, verified result.
+    const isUanVerified = fullHistoryData?.status === 1;
+
     return (
       <div className="border rounded-lg mb-4 bg-white shadow-sm hover:shadow-md transition-shadow w-full">
         <div className="p-4">
@@ -320,85 +212,31 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
             <div className="flex-1">
               <div className="flex items-center">
                 <p className="text-sm font-medium">{label}</p>
-                {doc.isVerified && !shareMode && (
+                {(isUan ? isUanVerified : doc.isVerified) && !shareMode && (
                   <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-100">
                     <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
                   </Badge>
                 )}
               </div>
               {doc.isEditing && !shareMode ? (
-                <Input
-                  value={doc.value}
-                  onChange={(e) => onDocumentChange(type, e.target.value)}
-                  className="mt-1 h-8 text-sm w-full sm:w-1/2"
-                />
+                <Input value={doc.value} onChange={(e) => onDocumentChange(type, e.target.value)} className="mt-1 h-8 text-sm w-full sm:w-1/2" />
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  {displayValue || "Not Provided"}
-                </p>
+                <p className="text-xs text-muted-foreground">{displayValue || "Not Provided"}</p>
               )}
               {renderVerificationStatus(doc)}
             </div>
             {!shareMode && (
               <div className="flex space-x-2">
-                <Button
-                  onClick={() => onToggleEditing(type)}
-                  variant="outline"
-                  size="sm"
-                  disabled={doc.isVerifying || (isUan ? false : doc.isVerified)}
-                  className={cn(
-                    doc.isEditing && "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
-                  )}
-                >
+                <Button onClick={() => onToggleEditing(type)} variant="outline" size="sm" disabled={doc.isVerifying || (isUan ? isUanVerified : doc.isVerified)} className={cn(doc.isEditing && "bg-indigo-100 text-indigo-800 hover:bg-indigo-200")}>
                   {doc.isEditing ? "Cancel" : "Edit"}
                 </Button>
                 {isUan ? (
-                  <Button
-                    onClick={() => {
-                      if (hasUanInMetadata) {
-                        fetchAndSaveFullEmployeeHistory();
-                      } else {
-                        setShowUanFetch(true);
-                      }
-                    }}
-                    variant="secondary"
-                    size="sm"
-                    disabled={doc.isVerifying || isUanLoading}
-                    className={cn(
-                      doc.isVerified && "bg-green-100 text-green-800 hover:bg-green-200"
-                    )}
-                  >
-                    {doc.isVerifying ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    ) : doc.isVerified ? (
-                      <>
-                        Verified <CheckCircle2 className="ml-1 h-3 w-3" />
-                      </>
-                    ) : hasUanInMetadata ? (
-                      <>Verify UAN 🔍</>
-                    ) : (
-                      <>Fetch UAN 🔍</>
-                    )}
+                  <Button onClick={() => { if (hasUanInMetadata) { initiateFullEmployeeHistoryCheck() } else { setShowUanFetch(true) } }} variant="secondary" size="sm" disabled={isFullHistoryLoading || isUanLoading}>
+                    {isFullHistoryLoading ? (<Loader2 className="h-3 w-3 animate-spin mr-1" />) : isUanVerified ? (<>Verified <CheckCircle2 className="ml-1 h-3 w-3" /></>) : hasUanInMetadata ? (<>Verify UAN 🔍</>) : (<>Fetch UAN 🔍</>)}
                   </Button>
                 ) : (
-                  <Button
-                    onClick={() => onVerifyDocument(type, candidate?.id || '', null, candidate, organizationId || '')}
-                    variant="secondary"
-                    size="sm"
-                    disabled={doc.isVerifying}
-                    className={cn(
-                      doc.isVerified && "bg-green-100 text-green-800 hover:bg-green-200"
-                    )}
-                  >
-                    {doc.isVerifying ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    ) : doc.isVerified ? (
-                      <>
-                        Verified <CheckCircle2 className="ml-1 h-3 w-3" />
-                      </>
-                    ) : (
-                      <>Verify 🔍</>
-                    )}
+                  <Button onClick={() => onVerifyDocument(type, candidate?.id || '', null, candidate, organizationId || '')} variant="secondary" size="sm" disabled={doc.isVerifying} className={cn(doc.isVerified && "bg-green-100 text-green-800 hover:bg-green-200")}>
+                    {doc.isVerifying ? (<Loader2 className="h-3 w-3 animate-spin mr-1" />) : doc.isVerified ? (<>Verified <CheckCircle2 className="ml-1 h-3 w-3" /></>) : (<>Verify 🔍</>)}
                   </Button>
                 )}
               </div>
@@ -410,9 +248,7 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
                 <div className="w-full sm:w-1/4">
                   <label className="text-xs font-medium text-gray-600">Method</label>
                   <Select value={lookupMethod} onValueChange={(val: 'mobile' | 'pan') => setLookupMethod(val)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select method" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="mobile">Mobile</SelectItem>
                       <SelectItem value="pan">PAN</SelectItem>
@@ -420,22 +256,19 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
                   </Select>
                 </div>
                 <div className="flex-grow">
-                  <label className="text-xs font-medium text-gray-600">
-                    {lookupMethod === 'mobile' ? 'Mobile Number' : 'PAN Number'}
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder={`Enter ${lookupMethod === 'mobile' ? 'Mobile Number' : 'PAN Number'}`}
-                    value={lookupValue}
-                    onChange={(e) => setLookupValue(e.target.value)}
-                    disabled={isUanLoading}
-                  />
+                  <label className="text-xs font-medium text-gray-600">{lookupMethod === 'mobile' ? 'Mobile Number' : 'PAN Number'}</label>
+                  <Input type="text" placeholder={`Enter ${lookupMethod === 'mobile' ? 'Mobile Number' : 'PAN Number'}`} value={lookupValue} onChange={(e) => setLookupValue(e.target.value)} disabled={isUanLoading} />
                 </div>
                 <Button onClick={onUanLookup} disabled={isUanLoading || !lookupValue}>
-                  {isUanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Get UAN'}
-                </Button>
+    {isUanLoading ? (
+      <>
+        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        {isUanQueued ? 'Auto-verifying...' : 'Fetching UAN...'}
+      </>
+    ) : 'Get UAN'}
+  </Button>
               </div>
-              {isUanLoading && <p className="text-sm text-gray-500 mt-4">Fetching UAN...</p>}
+             {isUanLoading && <p className="text-sm text-gray-500 mt-4">Fetching UAN...</p>}
               {uanData && uanData.status === 9 && (
                 <div className="mt-4 text-red-600 text-sm">
                   {lookupMethod === 'mobile' ? (
@@ -474,9 +307,7 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
             <Card className="border border-gray-200 bg-white shadow-sm p-4">
               <Tabs value={activeUanTab} onValueChange={setActiveUanTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-4">
-                  {isUanBasicVerifiedAndDataAvailable && (
-                    <TabsTrigger value="basic">Basic Employee Info</TabsTrigger>
-                  )}
+                  {isUanBasicVerifiedAndDataAvailable && <TabsTrigger value="basic">Basic Employee Info</TabsTrigger>}
                   <TabsTrigger value="full-history">Full Employee History</TabsTrigger>
                 </TabsList>
                 {isUanBasicVerifiedAndDataAvailable && (
@@ -509,36 +340,41 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
                   </TabsContent>
                 )}
                 <TabsContent value="full-history">
-                  <div className="flex justify-end mb-4">
-                    <Button
-                      onClick={fetchAndSaveFullEmployeeHistory}
-                      disabled={isFullHistoryLoading}
-                      size="sm"
-                    >
-                      {isFullHistoryLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Verify Full History'}
+                  {/* <div className="flex justify-end mb-4">
+                    <Button onClick={initiateFullEmployeeHistoryCheck} disabled={isFullHistoryLoading} size="sm">
+                      {isFullHistoryLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Verifying...</> : 'Verify Full History'}
                     </Button>
-                  </div>
-                  {isFullHistoryLoading && <p className="text-sm text-gray-600">Fetching full history...</p>}
+                  </div> */}
+                  {isFullHistoryLoading && <p className="text-sm text-gray-600">Verification in progress. The results will appear here automatically when ready.</p>}
                   {fullHistoryError && <p className="text-sm text-red-600">Error: {fullHistoryError}</p>}
+                  
                   {fullHistoryData && Array.isArray(fullHistoryData.msg) && fullHistoryData.msg.length > 0 ? (
                     <div className="space-y-4">
                       <h4 className="font-semibold text-md mb-2">Employment Details</h4>
                       {fullHistoryData.msg.map((entry: FullHistoryEmploymentEntry, index: number) => (
-                        <div key={index} className="pb-2 border-b last:border-b-0 text-green-700">
-                          <p className="text-sm font-medium">{entry.EstablishmentName}</p>
-                          <p className="text-xs text-green-600">Join Date: {entry.Doj}</p>
-                          <p className="text-xs text-green-600">Exit Date: {entry.DateOfExitEpf || "Currently Employed"}</p>
-                          <p className="text-xs text-green-600">Member ID: {entry.MemberId}</p>
-                          <p className="text-xs text-green-600">UAN: {entry.uan}</p>
-                          {entry.Overlapping && <p className="text-xs text-green-600 font-semibold">Overlapping: {entry.Overlapping}</p>}
-                        </div>
-                      ))}
+  <div key={index} className="pb-2 border-b last:border-b-0 text-green-700">
+    <p className="text-sm font-medium">
+      {entry['Establishment Name'] || 'Not Available'}
+    </p>
+    <p className="text-xs text-green-600">Join Date: {entry.Doj}</p>
+    <p className="text-xs text-green-600">
+      Exit Date: {entry.DateOfExitEpf || 'Currently Employed'}
+    </p>
+    <p className="text-xs text-green-600">Member ID: {entry.MemberId}</p>
+    <p className="text-xs text-green-600">UAN: {entry.uan}</p>
+    {entry.Overlapping && (
+      <p className="text-xs text-green-600 font-semibold">
+        Overlapping: {entry.Overlapping}
+      </p>
+    )}
+  </div>
+))}
                     </div>
-                  ) : fullHistoryData && !isFullHistoryLoading && typeof fullHistoryData.msg === 'string' ? (
+                  ) : fullHistoryData && typeof fullHistoryData.msg === 'string' ? (
                     <p className="text-sm text-gray-600">{fullHistoryData.msg}</p>
-                  ) : (
+                  ) : !isFullHistoryLoading && !fullHistoryData ? (
                     <p className="text-sm text-gray-600">Click "Verify Full History" to retrieve detailed employment records.</p>
-                  )}
+                  ) : null}
                 </TabsContent>
               </Tabs>
             </Card>
@@ -551,4 +387,3 @@ export const VerificationProcessSection: React.FC<VerificationProcessSectionProp
     </Card>
   );
 };
-// 
