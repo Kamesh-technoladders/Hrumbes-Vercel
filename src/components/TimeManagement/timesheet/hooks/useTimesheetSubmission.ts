@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { DetailedTimesheetEntry } from '@/types/time-tracker-types';
 import { submitTimesheet } from '@/api/timeTracker';
 import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
+import { DateTime } from 'luxon';
 
 interface ProjectEntry {
   projectId: string;
@@ -44,15 +45,15 @@ export const useTimesheetSubmission = () => {
     date,
     clockIn,
     clockOut,
-
+    organization_id,
   }: SubmissionParams): Promise<boolean> => {
     setIsSubmitting(true);
 
     const authData = getAuthDataFromLocalStorage();
-        if (!authData) {
-          throw new Error('Failed to retrieve authentication data');
-        }
-        const { organization_id, userId } = authData;
+    if (!authData) {
+      throw new Error('Failed to retrieve authentication data');
+    }
+    const { userId } = authData;
 
     try {
       // Log top-level clockIn and clockOut
@@ -99,17 +100,25 @@ export const useTimesheetSubmission = () => {
         console.log('Debug: latestClockOut from projectEntries', { latestClockOut, employeeId, date: date.toISOString() });
       }
 
-      // Convert date and times to ISO format
+      // Convert date and times to ISO format, assuming clockIn and clockOut are in IST
       const dateString = date.toISOString().split('T')[0];
       const clockInTime = clockIn
-        ? new Date(`${dateString}T${clockIn}:00Z`).toISOString()
+        ? DateTime.fromFormat(`${dateString} ${clockIn}`, 'yyyy-MM-dd HH:mm', { zone: 'Asia/Kolkata' })
+            .toUTC()
+            .toISO()
         : earliestClockIn
-          ? new Date(`${dateString}T${earliestClockIn}:00Z`).toISOString()
-          : new Date().toISOString();
+          ? DateTime.fromFormat(`${dateString} ${earliestClockIn}`, 'yyyy-MM-dd HH:mm', { zone: 'Asia/Kolkata' })
+              .toUTC()
+              .toISO()
+          : DateTime.now().toISO();
       const clockOutTime = clockOut
-        ? new Date(`${dateString}T${clockOut}:00Z`).toISOString()
+        ? DateTime.fromFormat(`${dateString} ${clockOut}`, 'yyyy-MM-dd HH:mm', { zone: 'Asia/Kolkata' })
+            .toUTC()
+            .toISO()
         : latestClockOut
-          ? new Date(`${dateString}T${latestClockOut}:00Z`).toISOString()
+          ? DateTime.fromFormat(`${dateString} ${latestClockOut}`, 'yyyy-MM-dd HH: mm', { zone: 'Asia/Kolkata' })
+              .toUTC()
+              .toISO()
           : null;
 
       // Log final clockInTime and clockOutTime

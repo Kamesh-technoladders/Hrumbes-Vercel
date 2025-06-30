@@ -475,7 +475,7 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
                   onValidationChange={setIsFormValid}
                 />
               ) : (
-                <TimeLogDetails timeLog={timesheet} />
+                <TimeLogDetails timeLog={timesheet} employeeHasProjects={employeeHasProjects} />
               )}
             </>
           )}

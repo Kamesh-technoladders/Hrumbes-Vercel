@@ -16,6 +16,7 @@ interface Submission {
   client_owner: string;
   candidate_name: string;
   status: string;
+  employeeHasProjects: boolean;
 }
 
 // Custom CSS for table styling
@@ -72,6 +73,7 @@ export const TimeLogDetails = ({
   timesheet,
   getProjectName = (id) => (id ? `Project ${id.substring(0, 8)}` : "Unassigned"),
   onRegularizationRequest,
+  employeeHasProjects
 }: TimeLogDetailsProps) => {
   const log = timeLog || timesheet;
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -216,7 +218,7 @@ export const TimeLogDetails = ({
   return (
     <div className="space-y-3 max-h-[60vh] overflow-y-auto px-1">
       <BasicInfoSection timeLog={log} parsedNotes={parsedNotes} />
-      <TimeEntrySection timeLog={log} />
+      <TimeEntrySection timeLog={log} employeeHasProjects={employeeHasProjects} />
       <ProjectAllocationSection timeLog={log} getProjectName={getProjectName} />
 
       {/* Candidate Submissions Section */}

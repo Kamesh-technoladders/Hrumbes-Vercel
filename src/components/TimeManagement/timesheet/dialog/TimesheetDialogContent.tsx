@@ -93,7 +93,7 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
       </DialogHeader>
 
       <div className="space-y-4">
-        <div>
+        {/* <div>
           <Label htmlFor="title">Timesheet Title</Label>
           <Input
             id="title"
@@ -102,7 +102,7 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
             placeholder="Enter timesheet title"
             className="mt-1"
           />
-        </div>
+        </div> */}
         {/* <div>
           <Label htmlFor="workReport">General Work Report</Label>
           <Textarea

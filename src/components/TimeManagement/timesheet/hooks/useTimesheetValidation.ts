@@ -25,18 +25,7 @@ export const useTimesheetValidation = () => {
         return false;
       }
 
-      const invalidProject = validProjectEntries.find(p =>
-        !p.projectId || (p.hours > 0 && !p.report.trim())
-      );
-
-      if (invalidProject) {
-        toast({
-          title: "Invalid project entry",
-          description: "Please provide a work summary for projects with non-zero hours",
-          variant: "destructive"
-        });
-        return false;
-      }
+      
 
       // Removed 8-hour validation for project entries
     } else if (detailedEntries.length > 0) {

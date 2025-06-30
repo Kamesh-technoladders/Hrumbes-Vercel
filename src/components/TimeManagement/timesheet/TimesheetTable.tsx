@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, MessageCircleQuestion, ChevronLeft, ChevronRight } from "lucide-react";
 import { TimeLog } from "@/types/time-tracker-types";
 import { formatDate, formatTime } from "@/utils/timeFormatters";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TimesheetTableProps {
   timesheets: TimeLog[];
@@ -12,6 +13,11 @@ interface TimesheetTableProps {
   onRespondToClarification?: (timesheet: TimeLog) => void;
   type: 'pending' | 'clarification' | 'approved';
   employeeHasProjects: boolean;
+}
+
+interface Project {
+  id: string;
+  name: string;
 }
 
 export const TimesheetTable: React.FC<TimesheetTableProps> = ({
@@ -24,6 +30,52 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [projects, setProjects] = useState<Map<string, string>>(new Map());
+
+  console.log("projects", projects)
+
+  // Fetch project names for projectIds in timesheets
+  useEffect(() => {
+    const fetchProjects = async () => {
+      if (!employeeHasProjects || !timesheets.length) return;
+
+      // Collect unique project IDs from all timesheets
+      const projectIds = new Set<string>();
+      timesheets.forEach((timesheet) => {
+        if (timesheet.project_time_data?.projects) {
+          timesheet.project_time_data.projects.forEach((entry) => {
+            if (entry.projectId) {
+              projectIds.add(entry.projectId);
+            }
+          });
+        }
+      });
+
+      if (projectIds.size === 0) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('hr_projects')
+          .select('id, name')
+          .in('id', Array.from(projectIds));
+
+        if (error) {
+          console.error('Error fetching projects:', error);
+          return;
+        }
+
+        const projectMap = new Map<string, string>();
+        data.forEach((project: Project) => {
+          projectMap.set(project.id, project.name);
+        });
+        setProjects(projectMap);
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+      }
+    };
+
+    fetchProjects();
+  }, [timesheets, employeeHasProjects]);
 
   const formatStatus = (timesheet: TimeLog) => {
     if (type === 'pending') {
@@ -45,10 +97,28 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
     }
   };
 
+  // Format project-wise duration
+  const formatProjectDuration = (timesheet: TimeLog) => {
+    if (!employeeHasProjects || !timesheet.project_time_data?.projects) {
+      return timesheet.duration_minutes
+        ? `${Math.floor(timesheet.duration_minutes / 60)}h ${timesheet.duration_minutes % 60}m`
+        : 'N/A';
+    }
+
+    return timesheet.project_time_data.projects
+      .map((entry) => {
+        const projectName = projects.get(entry.projectId) || 'Unknown Project';
+        return `${projectName}: ${entry.hours}h`;
+      })
+      .join(', ');
+  };
+
   // Pagination logic
   const totalPages = Math.ceil(timesheets.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedTimesheets = timesheets.slice(startIndex, startIndex + itemsPerPage);
+
+  console.log("paginatedTimesheet", paginatedTimesheets);
 
   if (loading) {
     return (
@@ -57,7 +127,6 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
       </div>
     );
   }
-
 
   if (timesheets.length === 0) {
     return (
@@ -92,37 +161,32 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                   <td className="px-4 py-2">
                     {timesheet.clock_out_time ? formatTime(timesheet.clock_out_time) : 'N/A'}
                   </td>
-                  <td className="px-4 py-2">
-                    {timesheet.duration_minutes
-                      ? `${Math.floor(timesheet.duration_minutes / 60)}h ${timesheet.duration_minutes % 60}m`
-                      : 'N/A'}
-                  </td>
+                  <td className="px-4 py-2">{formatProjectDuration(timesheet)}</td>
                   <td className="px-4 py-2">
                     <span className={getStatusColor(timesheet)}>{formatStatus(timesheet)}</span>
                   </td>
                   <td className="px-4 py-2 flex gap-2">
                     {type === 'pending' && !timesheet.is_submitted ? (
-  <Button
-    variant="outline"
-    size="sm"
-    className="h-8 px-2"
-    onClick={() => onViewTimesheet(timesheet)}
-  >
-    <FileText className="h-4 w-4 mr-1" />
-    Submit
-  </Button>
-) : (
-  <Button
-    variant="outline"
-    size="sm"
-    className="h-8 px-2"
-    onClick={() => onViewTimesheet(timesheet)}
-  >
-    <FileText className="h-4 w-4 mr-1" />
-    View
-  </Button>
-)}
-
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2"
+                        onClick={() => onViewTimesheet(timesheet)}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        Submit
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2"
+                        onClick={() => onViewTimesheet(timesheet)}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                    )}
                     {type === 'clarification' && onRespondToClarification && (
                       <Button
                         variant="outline"
@@ -181,7 +245,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                   {page}
                 </Button>
               ))}
-            <Button
+    <Button
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
