@@ -142,7 +142,7 @@ export const TimesheetDialogContent: React.FC<TimesheetDialogContentProps> = ({
         <Button variant="outline" onClick={handleClose}>Cancel</Button>
         <Button
           onClick={() => handleSubmit(title, workReport, clockIn, clockOut)}
-          disabled={isSubmitting || !title.trim()}
+          disabled={isSubmitting}
         >
           {isSubmitting ? "Submitting..." : "Submit Timesheet"}
         </Button>

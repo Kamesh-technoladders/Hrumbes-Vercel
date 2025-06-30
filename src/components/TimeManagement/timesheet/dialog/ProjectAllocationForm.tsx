@@ -198,7 +198,7 @@ export const ProjectAllocationForm = ({
                     id={`hours-${project.id}`}
                     type="number"
                     min="0"
-                    step="0.5"
+                    step="0.25"
                     value={entry.hours === 0 ? "" : entry.hours}
                     onChange={(e) => handleHoursChange(project.id, e.target.value)}
                     placeholder="Hours"

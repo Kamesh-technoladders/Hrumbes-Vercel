@@ -57,13 +57,13 @@ export const useTimesheetSubmission = () => {
 
     try {
       // Log top-level clockIn and clockOut
-      if (clockIn == null) {
-        console.warn('Debug: Top-level clockIn is null or undefined', { employeeId, date: date.toISOString() });
+      if (clockIn == null || clockIn === '') {
+        console.warn('Debug: Top-level clockIn is null, undefined, or empty', { employeeId, date: date.toISOString() });
       } else {
         console.log('Debug: Top-level clockIn', { clockIn, employeeId, date: date.toISOString() });
       }
-      if (clockOut == null) {
-        console.warn('Debug: Top-level clockOut is null or undefined', { employeeId, date: date.toISOString() });
+      if (clockOut == null || clockOut === '') {
+        console.warn('Debug: Top-level clockOut is null, undefined, or empty', { employeeId, date: date.toISOString() });
       } else {
         console.log('Debug: Top-level clockOut', { clockOut, employeeId, date: date.toISOString() });
       }
@@ -102,7 +102,8 @@ export const useTimesheetSubmission = () => {
 
       // Convert date and times to ISO format, assuming clockIn and clockOut are in IST
       const dateString = date.toISOString().split('T')[0];
-      const clockInTime = clockIn
+
+      const clockInTime = clockIn && clockIn !== ''
         ? DateTime.fromFormat(`${dateString} ${clockIn}`, 'yyyy-MM-dd HH:mm', { zone: 'Asia/Kolkata' })
             .toUTC()
             .toISO()
@@ -110,20 +111,31 @@ export const useTimesheetSubmission = () => {
           ? DateTime.fromFormat(`${dateString} ${earliestClockIn}`, 'yyyy-MM-dd HH:mm', { zone: 'Asia/Kolkata' })
               .toUTC()
               .toISO()
-          : DateTime.now().toISO();
-      const clockOutTime = clockOut
+          : null;
+
+      const clockOutTime = clockOut && clockOut !== ''
         ? DateTime.fromFormat(`${dateString} ${clockOut}`, 'yyyy-MM-dd HH:mm', { zone: 'Asia/Kolkata' })
             .toUTC()
             .toISO()
         : latestClockOut
-          ? DateTime.fromFormat(`${dateString} ${latestClockOut}`, 'yyyy-MM-dd HH: mm', { zone: 'Asia/Kolkata' })
+          ? DateTime.fromFormat(`${dateString} ${latestClockOut}`, 'yyyy-MM-dd HH:mm', { zone: 'Asia/Kolkata' })
               .toUTC()
               .toISO()
           : null;
 
       // Log final clockInTime and clockOutTime
-      console.log('Debug: Final clockInTime', { clockInTime, source: clockIn ? 'top-level' : earliestClockIn ? 'projectEntries' : 'default', employeeId, date: date.toISOString() });
-      console.log('Debug: Final clockOutTime', { clockOutTime, source: clockOut ? 'top-level' : latestClockOut ? 'projectEntries' : 'null', employeeId, date: date.toISOString() });
+      console.log('Debug: Final clockInTime', {
+        clockInTime,
+        source: clockIn && clockIn !== '' ? 'top-level' : earliestClockIn ? 'projectEntries' : 'null',
+        employeeId,
+        date: date.toISOString(),
+      });
+      console.log('Debug: Final clockOutTime', {
+        clockOutTime,
+        source: clockOut && clockOut !== '' ? 'top-level' : latestClockOut ? 'projectEntries' : 'null',
+        employeeId,
+        date: date.toISOString(),
+      });
 
       // Calculate duration_minutes
       const durationMinutes = Math.round(totalWorkingHours * 60);
