@@ -159,6 +159,7 @@ const TimesheetApproval = () => {
                   type="pending"
                   onViewTimesheet={openDialog}
                   emptyMessage="No pending timesheet approvals"
+                  handleApprove={handleApprove}
                 />
               </CardContent>
             </Card>

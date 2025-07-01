@@ -2,19 +2,25 @@ import { useState } from "react";
 import { TimeLog } from "@/types/time-tracker-types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, MessageCircleQuestion, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, MessageCircleQuestion, ChevronLeft, ChevronRight, CheckCircle2, Check, AlertCircle } from "lucide-react";
 import { formatDate } from "@/utils/timeFormatters";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 import parse from "html-react-parser";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 interface TimesheetListProps {
   timesheets: TimeLog[];
   loading: boolean;
   searchTerm: string;
   type: 'pending' | 'clarification' | 'approved';
-  onViewTimesheet: (timesheet: TimeLog) => void;
+  onViewTimesheet: (timesheet: TimeLog, openClarification?: boolean) => void;
   onRespondToClarification?: (timesheet: TimeLog) => void;
+  handleApprove: (timesheetId: string) => Promise<void>;
+  handleRequestClarification: (timesheetId: string, reason: string) => Promise<void>;
   emptyMessage: string;
 }
 
@@ -38,7 +44,7 @@ export const filterTimesheetsByEmployee = (timesheets: TimeLog[], searchTerm: st
 const format12HourTime = (time: string | null) => {
   if (!time) return "N/A";
   const date = new Date(time);
-  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours_gene 30 minutes in milliseconds
   const istDate = new Date(date.getTime() + istOffset);
   const hours = istDate.getUTCHours();
   const minutes = istDate.getUTCMinutes().toString().padStart(2, "0");
@@ -99,7 +105,6 @@ const getTimeBasedStatus = (minutes: number | null) => {
   return { display: statuses.join(", "), components };
 };
 
-
 // Check login/logout rules
 const getLoginDisplay = (clockIn: string | null) => {
   if (!clockIn) return { display: "N/A", className: "" };
@@ -137,15 +142,89 @@ const TimesheetList = ({
   type,
   onViewTimesheet,
   onRespondToClarification,
+  handleApprove,
+  handleRequestClarification,
   emptyMessage,
 }: TimesheetListProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [selectedTimesheets, setSelectedTimesheets] = useState<string[]>([]);
+  const [clarificationDialogOpen, setClarificationDialogOpen] = useState(false);
+  const [clarificationTimesheetId, setClarificationTimesheetId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [reasonError, setReasonError] = useState(false);
 
   const filteredTimesheets = filterTimesheetsByEmployee(timesheets, searchTerm);
   const totalPages = Math.ceil(filteredTimesheets.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedTimesheets = filteredTimesheets.slice(startIndex, startIndex + itemsPerPage);
+
+  const handleSelectTimesheet = (timesheetId: string) => {
+    setSelectedTimesheets((prev) =>
+      prev.includes(timesheetId)
+        ? prev.filter((id) => id !== timesheetId)
+        : [...prev, timesheetId]
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedTimesheets(paginatedTimesheets.map((t) => t.id));
+    } else {
+      setSelectedTimesheets([]);
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    const failedApprovals: string[] = [];
+    try {
+      await Promise.all(
+        selectedTimesheets.map(async (id) => {
+          try {
+            await handleApprove(id);
+          } catch (error) {
+            failedApprovals.push(id);
+            console.error(`Failed to approve timesheet ${id}:`, error);
+          }
+        })
+      );
+      if (failedApprovals.length > 0) {
+        toast.error(`Failed to approve ${failedApprovals.length} timesheet(s)`);
+      } else {
+        toast.success(`${selectedTimesheets.length} timesheet(s) approved successfully`);
+      }
+      setSelectedTimesheets([]);
+    } catch (error) {
+      toast.error("An unexpected error occurred during bulk approval");
+      console.error("Bulk approval error:", error);
+    }
+  };
+
+  const handleClarification = (timesheetId: string) => {
+    setClarificationTimesheetId(timesheetId);
+    setClarificationDialogOpen(true);
+    setRejectionReason("");
+    setReasonError(false);
+  };
+
+  const handleSendClarification = async () => {
+    if (!rejectionReason.trim()) {
+      setReasonError(true);
+      return;
+    }
+    if (clarificationTimesheetId) {
+      try {
+        await handleRequestClarification(clarificationTimesheetId, rejectionReason);
+        toast.success("Clarification request sent successfully");
+        setClarificationDialogOpen(false);
+        setReRejectionReason("");
+        setClarificationTimesheetId(null);
+      } catch (error) {
+        toast.error("Failed to send clarification request");
+        console.error("Clarification error:", error);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -163,6 +242,8 @@ const TimesheetList = ({
     );
   }
 
+  console.log("filtered timesheet", filteredTimesheets);
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm animate-scale-in">
@@ -170,6 +251,14 @@ const TimesheetList = ({
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                {type === 'pending' && (
+                  <th className="px-4 py-2 text-left text-sm">
+                    <Checkbox
+                      checked={selectedTimesheets.length === paginatedTimesheets.length && paginatedTimesheets.length > 0}
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-2 text-left text-sm">Date</th>
                 <th className="px-4 py-2 text-left text-sm">Employee</th>
                 <th className="px-4 py-2 text-left text-sm">Department</th>
@@ -178,7 +267,22 @@ const TimesheetList = ({
                 <th className="px-4 py-2 text-right text-sm">Hours</th>
                 <th className="px-4 py-2 text-left text-sm">Status</th>
                 <th className="px-4 py-2 text-left text-sm">Notes</th>
-                <th className="px-4 py-2 text-left text-sm">Actions</th>
+                <th className="px-4 py-2 text-left text-sm">
+                  <div className="flex items-center gap-2">
+                    Actions
+                    {type === 'pending' && selectedTimesheets.length > 0 && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleBulkApprove}
+                        className="flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Approve Selected
+                      </Button>
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -188,6 +292,14 @@ const TimesheetList = ({
                 const statusDisplay = getTimeBasedStatus(timesheet.duration_minutes);
                 return (
                   <tr key={timesheet.id} className="hover:bg-gray-50 transition">
+                    {type === 'pending' && (
+                      <td className="px-4 py-2">
+                        <Checkbox
+                          checked={selectedTimesheets.includes(timesheet.id)}
+                          onCheckedChange={() => handleSelectTimesheet(timesheet.id)}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-2">{formatDate(timesheet.date)}</td>
                     <td className="px-4 py-2 font-medium">
                       {timesheet.employee?.first_name && timesheet.employee?.last_name
@@ -227,15 +339,93 @@ const TimesheetList = ({
                           Submit
                         </Button>
                       ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={() => onViewTimesheet(timesheet)}
-                        >
-                          <FileText className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => onViewTimesheet(timesheet)}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          {type === 'pending' && (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-8 px-2 bg-green-600 hover:bg-green-700"
+                                onClick={async () => {
+                                  try {
+                                    await handleApprove(timesheet.id);
+                                    toast.success("Timesheet approved successfully");
+                                  } catch (error) {
+                                    toast.error("Failed to approve timesheet");
+                                    console.error("Approve error:", error);
+                                  }
+                                }}
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                              <AlertDialog open={clarificationDialogOpen && clarificationTimesheetId === timesheet.id} onOpenChange={(open) => {
+                                setClarificationDialogOpen(open);
+                                if (!open) {
+                                  setClarificationTimesheetId(null);
+                                  setRejectionReason("");
+                                  setReasonError(false);
+                                }
+                              }}>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 px-2 border-yellow-500 text-yellow-500 hover:bg-yellow-50"
+                                    onClick={() => handleClarification(timesheet.id)}
+                                  >
+                                    <AlertCircle className="h-4 w-4 mr-1" />
+                                    Clarify
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Request Clarification</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Request additional information from the employee before making a decision.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <div className="py-4">
+                                    <label htmlFor="reason" className="block text-sm font-medium mb-2">
+                                      Reason for clarification
+                                    </label>
+                                    <Textarea
+                                      id="reason"
+                                      value={rejectionReason}
+                                      onChange={(e) => {
+                                        setRejectionReason(e.target.value);
+                                        if (e.target.value.trim()) setReasonError(false);
+                                      }}
+                                      placeholder="Please specify what information you need from the employee"
+                                      className={`min-h-[100px] ${reasonError ? 'border-red-500' : ''}`}
+                                    />
+                                    {reasonError && (
+                                      <p className="text-red-500 text-sm mt-1">Please provide a reason for clarification</p>
+                                    )}
+                                  </div>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={handleSendClarification}
+                                      className="bg-blue-600 hover:bg-blue-700"
+                                    >
+                                      Send Request
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                        </>
                       )}
                       {type === 'clarification' && onRespondToClarification && (
                         <Button

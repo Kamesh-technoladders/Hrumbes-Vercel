@@ -34,6 +34,7 @@ const InvoicesPage: React.FC = () => {
     deleteInvoice,
     updateInvoiceStatus,
     exportInvoice,
+    fetchClients,
   } = useAccountsStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,6 +55,17 @@ const InvoicesPage: React.FC = () => {
   useEffect(() => {
     fetchInvoices(timeFilter);
   }, [fetchInvoices, timeFilter]);
+
+  useEffect(() => {
+    if (isAddDialogOpen) {
+      console.log('Add Invoice dialog opened, fetching clients...');
+      fetchClients().then(() => {
+        console.log('Clients fetch completed');
+      }).catch((error) => {
+        console.error('Error fetching clients in InvoicesPage:', error);
+      });
+    }
+  }, [isAddDialogOpen, fetchClients]);
 
   const filteredInvoices = invoices.filter((invoice) => {
     if (currentTab !== 'all' && invoice.status.toLowerCase() !== currentTab) {

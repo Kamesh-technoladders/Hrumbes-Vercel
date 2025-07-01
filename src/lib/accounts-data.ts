@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import { formatINR } from '@/utils/currency';
 import { generateCSV, formatDateForFilename } from '@/utils/export-utils';
 import { supabase } from '@/integrations/supabase/client';
+import { getAuthDataFromLocalStorage } from '@/utils/localstorage';
+
 
 export type InvoiceStatus = 'Paid' | 'Unpaid' | 'Overdue' | 'Draft';
 export type ExpenseCategory = 'Rent' | 'Utilities' | 'Salary' | 'Office Supplies' | 'Travel' | 'Marketing' | 'Software' | 'Hardware' | 'Other';
@@ -10,6 +12,7 @@ export type PaymentMethod = 'Cash' | 'Credit Card' | 'Debit Card' | 'Bank Transf
 
 export interface Invoice {
   id: string;
+  clientId: string;
   invoiceNumber: string;
   clientName: string;
   invoiceDate: string;
@@ -38,6 +41,13 @@ export interface InvoiceItem {
   rate: number;
   amount: number;
   taxable?: boolean;
+}
+
+// Added Client interface
+export interface Client {
+  id: string;
+  client_name: string;
+  display_name: string;
 }
 
 export interface Expense {
@@ -76,6 +86,7 @@ export interface AccountsStats {
 interface AccountsState {
   invoices: Invoice[];
   expenses: Expense[];
+  clients: Client[];
   stats: AccountsStats;
   selectedInvoice: Invoice | null;
   selectedExpense: Expense | null;
@@ -88,6 +99,7 @@ interface AccountsState {
   selectInvoice: (id: string | null) => void;
   updateInvoiceStatus: (id: string, status: InvoiceStatus) => Promise<void>;
   exportInvoice: (id: string, format: 'pdf' | 'csv') => void;
+  fetchClients: () => Promise<void>;
 
   // Expense actions
   fetchExpenses: (timeFilter?: string) => Promise<void>;
@@ -150,6 +162,7 @@ const calculateStats = (invoices: Invoice[], expenses: Expense[]): AccountsStats
 export const useAccountsStore = create<AccountsState>((set, get) => ({
   invoices: [],
   expenses: [],
+  clients: [],
   stats: {
     totalInvoiced: 0,
     totalPaid: 0,
@@ -162,12 +175,43 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
   selectedInvoice: null,
   selectedExpense: null,
 
+  // Added fetchClients action
+  fetchClients: async () => {
+  try {
+    console.log('Fetching clients from hr_clients...');
+    const { data, error } = await supabase
+      .from('hr_clients')
+      .select('id, client_name, display_name, currency')
+      .eq('status', 'active')
+      .order('client_name', { ascending: true });
+    
+    if (error) {
+      console.error('Supabase error details:', error);
+      throw new Error(`Error fetching clients: ${error.message}`);
+    }
+
+    console.log('Raw data from Supabase:', data);
+    const clients: Client[] = data.map((client: any) => ({
+      id: client.id,
+      client_name: client.client_name,
+      display_name: client.display_name,
+      currency: client.currency,
+    }));
+
+    console.log('Mapped clients:', clients);
+    set({ clients });
+  } catch (error) {
+    console.error('Error fetching clients:', error);
+    toast.error('Failed to fetch clients. Please try again.');
+    }
+  },
+
   // Fetch invoices with optional time filter
   fetchInvoices: async (timeFilter = 'all') => {
     try {
       let query = supabase
         .from('hr_invoices')
-        .select('*')
+        .select('*, hr_clients!hr_invoices_client_id_fkey(client_name, display_name)')
         .order('created_at', { ascending: false });
 
       // Apply time filter
@@ -222,6 +266,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         id: invoice.id,
         invoiceNumber: invoice.invoice_number,
         clientName: invoice.client_name,
+        clientId: invoice.client_id, // Added
         invoiceDate: formatDate(invoice.invoice_date),
         dueDate: formatDate(invoice.due_date),
         status: invoice.status as InvoiceStatus,
@@ -265,12 +310,14 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       if (userError) {
         console.warn('User not authenticated, setting created_by to null');
       }
+  
 
       const { data: newInvoice, error: invoiceError } = await supabase
         .from('hr_invoices')
         .insert({
           invoice_number: invoice.invoiceNumber,
           client_name: invoice.clientName,
+          client_id: invoice.clientId,
           invoice_date: parseDate(invoice.invoiceDate),
           due_date: parseDate(invoice.dueDate),
           subtotal: invoice.subtotal || 0,
@@ -283,7 +330,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
           created_by: userData?.user?.id || null,
           paid_amount: invoice.status === 'Paid' ? invoice.totalAmount : 0,
           payment_date: invoice.status === 'Paid' ? new Date().toISOString().split('T')[0] : null,
-          organization_id: invoice.organizationId || null,
+          organization_id: organization_id|| null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -294,12 +341,15 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         throw new Error(`Error adding invoice: ${invoiceError.message}`);
       }
 
+  
+
       const itemsToInsert = invoice.items.map((item) => ({
         invoice_id: newInvoice.id,
         description: item.description,
         quantity: item.quantity,
         rate: item.rate,
         amount: item.amount,
+        organization_id: organization_id,
       }));
 
       const { error: itemsError } = await supabase
@@ -324,6 +374,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       const updateData: any = {};
       if (data.invoiceNumber) updateData.invoice_number = data.invoiceNumber;
       if (data.clientName) updateData.client_name = data.clientName;
+      if (data.clientId) updateData.client_id = data.clientId; // Added
       if (data.invoiceDate) updateData.invoice_date = parseDate(data.invoiceDate);
       if (data.dueDate) updateData.due_date = parseDate(data.dueDate);
       if (data.subtotal !== undefined) updateData.subtotal = data.subtotal;
@@ -426,6 +477,11 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       if (fetchItemsError) {
         throw new Error(`Error fetching invoice items: ${fetchItemsError.message}`);
       }
+      const authData = getAuthDataFromLocalStorage();
+              if (!authData) {
+                throw new Error('Failed to retrieve authentication data');
+              }
+              const { organization_id, userId } = authData;
 
       // Step 3: Insert the invoice into backup_invoices
       const { error: backupInvoiceError } = await supabase
@@ -434,6 +490,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
           id: invoiceData.id,
           invoice_number: invoiceData.invoice_number,
           client_name: invoiceData.client_name,
+          client_id: invoiceData.client_id,
           invoice_date: invoiceData.invoice_date,
           due_date: invoiceData.due_date,
           subtotal: invoiceData.subtotal,
@@ -450,6 +507,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
           paid_amount: invoiceData.paid_amount,
           payment_date: invoiceData.payment_date,
           deleted_at: new Date().toISOString(),
+          organization_id: organization_id,
         });
 
       if (backupInvoiceError) {
@@ -467,6 +525,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
           amount: item.amount,
           created_at: item.created_at,
           deleted_at: new Date().toISOString(),
+          organization_id: organization_id,
         }));
 
         const { error: backupItemsError } = await supabase
@@ -575,6 +634,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
           ['Invoice Number', 'Client Name', 'Invoice Date', 'Due Date', 'Status', 'Total Amount'],
           [
             invoice.invoiceNumber,
+            invoice.clientId, // Added
             invoice.clientName,
             invoice.invoiceDate,
             invoice.dueDate,
@@ -697,6 +757,11 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
 
         receiptUrl = publicUrlData.publicUrl;
       }
+      const authData = getAuthDataFromLocalStorage();
+              if (!authData) {
+                throw new Error('Failed to retrieve authentication data');
+              }
+              const { organization_id, userId } = authData;
 
       const expenseData = {
         category: expense.category,
@@ -709,7 +774,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         vendor: expense.vendor || null,
         created_by: userData.user.id,
         status: 'Pending',
-        organization_id: expense.organizationId || null,
+        organization_id: organization_id || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -815,7 +880,11 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       if (!expenseData) {
         throw new Error('Expense not found or you do not have permission to delete it.');
       }
-
+const authData = getAuthDataFromLocalStorage();
+              if (!authData) {
+                throw new Error('Failed to retrieve authentication data');
+              }
+              const { organization_id, userId } = authData;
       // Step 2: Insert the expense into backup_expenses
       const { error: backupError } = await supabase
         .from('backup_expenses')
@@ -831,7 +900,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
           vendor: expenseData.vendor,
           created_at: expenseData.created_at,
           updated_at: expenseData.updated_at,
-          organization_id: expenseData.organization_id,
+          organization_id: organization_id,
           created_by: expenseData.created_by,
           status: expenseData.status,
           deleted_at: new Date().toISOString(),
@@ -943,6 +1012,7 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
             ...get().invoices.map((inv) => [
               inv.invoiceNumber,
               inv.clientName,
+              inv.clientId, // Added
               inv.invoiceDate,
               inv.dueDate,
               inv.status,

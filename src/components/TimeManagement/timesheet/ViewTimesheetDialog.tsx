@@ -7,6 +7,7 @@ import { TimeLogDetails } from "./dialog/TimeLogDetails";
 import { TimesheetBasicInfo } from "./dialog/TimesheetBasicInfo";
 import { TimesheetDialogContent } from './dialog/TimesheetDialogContent';
 import { TimesheetEditForm } from "./dialog/TimesheetEditForm";
+import { TimesheetProjectDetails } from "./TimesheetProjectDetails";
 import { useTimesheetValidation } from './hooks/useTimesheetValidation';
 import { useTimesheetSubmission } from './hooks/useTimesheetSubmission';
 import { useSelector } from 'react-redux';
@@ -475,7 +476,10 @@ export const ViewTimesheetDialog: React.FC<ViewTimesheetDialogProps> = ({
                   onValidationChange={setIsFormValid}
                 />
               ) : (
-                <TimeLogDetails timeLog={timesheet} employeeHasProjects={employeeHasProjects} />
+                   <>
+                  <TimeLogDetails timeLog={timesheet} employeeHasProjects={employeeHasProjects} />
+                  <TimesheetProjectDetails timesheet={timesheet} employeeHasProjects={employeeHasProjects} />
+                </>
               )}
             </>
           )}

@@ -438,6 +438,7 @@ const fetchMetrics = async () => {
       const { data: timeLogs, error: timeLogsError } = await supabase
         .from("time_logs")
         .select("id, employee_id, date, project_time_data, total_working_hours")
+            .eq("is_approved", true)
         // .eq("organization_id", organization_id);
 
       if (timeLogsError) throw timeLogsError;

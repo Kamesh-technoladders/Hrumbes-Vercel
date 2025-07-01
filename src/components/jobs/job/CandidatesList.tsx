@@ -2318,6 +2318,7 @@ const { data: clientData } = useQuery({
       candidate_id: candidateId,
       resume_url: extractedResumeUrl,
       job_description: jobdescription, // Pass the description prop
+      organization_id: organizationId,
     };
     console.log("Sending payload to proxy /api/proxy:", payload);
  

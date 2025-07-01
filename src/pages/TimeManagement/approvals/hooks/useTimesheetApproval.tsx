@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { TimeLog } from "@/types/time-tracker-types";
 import { useTimesheetApprovalState } from "./timesheetApproval/timesheetApprovalState";
 import { 
@@ -30,8 +29,6 @@ export const useTimesheetApproval = () => {
     setRejectionReason
   } = useTimesheetApprovalState();
 
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
   // Function to fetch all timesheets
   const fetchTimesheets = async () => {
     setLoading(true);
@@ -52,7 +49,7 @@ export const useTimesheetApproval = () => {
       setApprovedTimesheets(approvedData);
 
       // Debug log
-      if (pendingData.length === 0 && refreshTrigger > 0) {
+      if (pendingData.length === 0) {
         toast("No pending timesheets found. Please make sure timesheets are submitted correctly.");
       }
     } catch (error) {
@@ -65,17 +62,21 @@ export const useTimesheetApproval = () => {
 
   // Function to handle approving a timesheet
   const handleApprove = async (timesheetId: string) => {
-    if (!dialogTimesheet) {
-      console.error("No timesheet found for approval");
-      toast.error("Invalid timesheet data");
-      return;
-    }
-    
-    const success = await approveTimesheet(timesheetId);
-    if (success) {
-      fetchTimesheets();
-      setDialogOpen(false);
-      toast.success("Timesheet approved successfully");
+    try {
+      const success = await approveTimesheet(timesheetId);
+      if (success) {
+        await fetchTimesheets();
+        if (dialogTimesheet) {
+          setDialogOpen(false);
+        }
+        toast.success("Timesheet approved successfully");
+      } else {
+        throw new Error("Approval failed");
+      }
+    } catch (error) {
+      console.error(`Error approving timesheet ${timesheetId}:`, error);
+      toast.error("Failed to approve timesheet");
+      throw error; // Propagate error for bulk approval handling
     }
   };
 
@@ -98,24 +99,11 @@ export const useTimesheetApproval = () => {
 
   useEffect(() => {
     fetchTimesheets();
-  }, [refreshTrigger]);
-
-  // Set up an interval to periodically check for new submissions
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setRefreshTrigger(prev => prev + 1);
-    }, 30000); // Check every 30 seconds
-
-    return () => clearInterval(intervalId);
   }, []);
 
   const openDialog = (timesheet: TimeLog) => {
     setDialogTimesheet(timesheet);
     setDialogOpen(true);
-  };
-
-  const refreshData = () => {
-    setRefreshTrigger(prev => prev + 1);
   };
 
   const getPendingCount = () => {
@@ -136,7 +124,6 @@ export const useTimesheetApproval = () => {
     handleApprove,
     handleRequestClarification,
     getPendingCount,
-    openDialog,
-    refreshData
+    openDialog
   };
 };

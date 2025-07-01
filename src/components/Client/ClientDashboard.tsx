@@ -244,6 +244,7 @@ const ClientDashboard = () => {
         .from("time_logs")
         .select("id, employee_id, date, project_time_data, total_working_hours")
         // .eq("organization_id", organization_id);
+            .eq("is_approved", true)
       if (error) throw error;
       return data.filter((log) =>
         log.project_time_data?.projects?.some((proj) => projects.some((p) => p.id === proj.projectId))

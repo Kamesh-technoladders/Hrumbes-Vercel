@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { formatDate } from "@/utils/timeFormatters";
 import { TimeLog } from "@/types/time-tracker-types";
+import { format } from "date-fns";
 
 interface TimesheetBasicInfoProps {
   timesheet: TimeLog;
@@ -13,6 +13,12 @@ export const TimesheetBasicInfo: React.FC<TimesheetBasicInfoProps> = ({ timeshee
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
     return `${hours}h ${remainingMinutes}m`;
+  };
+
+  // Format clock-in and clock-out times
+  const formatTime = (time: string | null) => {
+    if (!time) return "N/A";
+    return format(new Date(time), "h:mm a");
   };
 
   console.log("Timesheet data:", timesheet);
@@ -27,6 +33,16 @@ export const TimesheetBasicInfo: React.FC<TimesheetBasicInfoProps> = ({ timeshee
       <div>
         <h3 className="font-semibold text-sm text-muted-foreground">Duration</h3>
         <p>{formatDuration(timesheet.duration_minutes)}</p>
+      </div>
+      
+      <div>
+        <h3 className="font-semibold text-sm text-muted-foreground">Clock In</h3>
+        <p>{formatTime(timesheet.clock_in_time)}</p>
+      </div>
+      
+      <div>
+        <h3 className="font-semibold text-sm text-muted-foreground">Clock Out</h3>
+        <p>{formatTime(timesheet.clock_out_time)}</p>
       </div>
       
       <div>

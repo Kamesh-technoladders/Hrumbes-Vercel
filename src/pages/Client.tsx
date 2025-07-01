@@ -94,7 +94,8 @@ const ClientManagement = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("time_logs")
-        .select("id, employee_id, date, project_time_data, total_working_hours");
+        .select("id, employee_id, date, project_time_data, total_working_hours")
+            .eq("is_approved", true);
       if (error) throw error;
       return data || [];
     },

@@ -4,13 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { formatINR } from '@/utils/currency';
-import { 
-  Calendar, 
-  IndianRupee, 
-  Plus, 
-  Trash2 
-} from 'lucide-react';
+import { Calendar, Plus, Trash2, IndianRupee, DollarSign } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
@@ -58,11 +52,15 @@ const isDateBefore = (date1: string, date2: string): boolean => {
 };
 
 const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
-  const { addInvoice, updateInvoice } = useAccountsStore();
+  const { addInvoice, updateInvoice, clients, fetchClients } = useAccountsStore();
   
   // Form state
   const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoiceNumber || generateInvoiceNumber());
+  const [clientId, setClientId] = useState(invoice?.clientId || '');
   const [clientName, setClientName] = useState(invoice?.clientName || '');
+  const [currency, setCurrency] = useState<'USD' | 'INR'>(invoice?.clientId 
+    ? clients.find(c => c.id === invoice.clientId)?.currency || 'INR' 
+    : 'INR');
   const [invoiceDate, setInvoiceDate] = useState(invoice?.invoiceDate || formatDateString(new Date()));
   const [dueDate, setDueDate] = useState(invoice?.dueDate || '');
   const [items, setItems] = useState<InvoiceItem[]>(invoice?.items || [{ id: '1', description: '', quantity: 1, rate: 0, amount: 0 }]);
@@ -77,13 +75,37 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
 
   // Validation errors state
   const [errors, setErrors] = useState<{
-    clientName?: string;
+    clientId?: string;
     invoiceNumber?: string;
     invoiceDate?: string;
     dueDate?: string;
     items?: string;
     itemErrors?: { description?: string; quantity?: string; rate?: string }[];
   }>({});
+
+  // Fetch clients on component mount
+  useEffect(() => {
+    console.log('InvoiceForm mounted, fetching clients...');
+    fetchClients().then(() => {
+      console.log('Clients fetched:', clients);
+    }).catch(error => {
+      console.error('Error fetching clients:', error);
+    });
+  }, [fetchClients]);
+
+  // Log clients whenever they change
+  useEffect(() => {
+    console.log('Clients state updated:', clients);
+  }, [clients]);
+
+  // Update currency and clientName when client changes
+  useEffect(() => {
+    const selectedClient = clients.find(client => client.id === clientId);
+    if (selectedClient) {
+      setCurrency(selectedClient.currency);
+      setClientName(selectedClient.client_name);
+    }
+  }, [clientId, clients]);
 
   // Update calculations when items or tax rate changes
   useEffect(() => {
@@ -101,7 +123,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
     const newErrors: typeof errors = {};
 
     // Validate top-level fields
-    if (!clientName.trim()) newErrors.clientName = 'Client name is required';
+    if (!clientId) newErrors.clientId = 'Client selection is required';
     if (!invoiceNumber.trim()) newErrors.invoiceNumber = 'Invoice number is required';
     if (!invoiceDate.trim()) newErrors.invoiceDate = 'Invoice date is required';
     if (!dueDate.trim()) newErrors.dueDate = 'Due date is required';
@@ -132,7 +154,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
   // Run validation on mount and when fields change
   useEffect(() => {
     validateForm();
-  }, [clientName, invoiceNumber, invoiceDate, dueDate, items]);
+  }, [clientId, invoiceNumber, invoiceDate, dueDate, items]);
 
   // Handle changes to invoice date and adjust due date if necessary
   const handleInvoiceDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -141,8 +163,14 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
 
     // If due date is before the new invoice date, reset it
     if (dueDate && isDateBefore(dueDate, newDate)) {
-      setDueDate(newDate); // Set due date to invoice date to prevent invalid state
+      setDueDate(newDate);
     }
+  };
+
+  // Handle client selection
+  const handleClientChange = (value: string) => {
+    setClientId(value);
+    // Client name and currency are updated via useEffect
   };
 
   // Handle item amount calculation
@@ -176,6 +204,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
 
     const invoiceData: Omit<Invoice, 'id'> = {
       invoiceNumber,
+      clientId,
       clientName,
       invoiceDate,
       dueDate,
@@ -197,6 +226,22 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
     
     onClose();
   };
+
+  // Helper to get currency symbol
+  const getCurrencySymbol = () => {
+    return currency === 'USD' ? (
+      <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+    ) : (
+      <IndianRupee className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+    );
+  };
+
+  // Helper to format amount with currency
+  const formatAmount = (amount: number) => {
+    return currency === 'USD' 
+      ? `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : `₹${amount.toLocaleString('en-IN')}`;
+  };
   
   const hasErrors = Object.keys(errors).length > 0;
 
@@ -205,13 +250,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div>
-            <Label htmlFor="clientName">Customer Name</Label>
-            <Input 
-              id="clientName" 
-              placeholder="Enter customer name" 
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-            />
+            <Label htmlFor="clientId">Customer</Label>
+            <Select value={clientId} onValueChange={handleClientChange}>
+              <SelectTrigger id="clientId">
+                <SelectValue placeholder="Select a client" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map(client => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.display_name || client.client_name} ({client.currency})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.clientId && <p className="text-red-500 text-sm mt-1">{errors.clientId}</p>}
           </div>
           
           <div>
@@ -245,7 +297,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
                 type="date" 
                 value={formatToHTMLDate(dueDate)}
                 onChange={(e) => setDueDate(formatToDisplayDate(e.target.value))}
-                min={formatToHTMLDate(invoiceDate)} // Restrict dates before invoiceDate
+                min={formatToHTMLDate(invoiceDate)}
               />
             </div>
           </div>
@@ -264,8 +316,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
           <div className="grid grid-cols-12 gap-4 p-4 bg-muted/30 border-b">
             <div className="col-span-4 font-medium">Description</div>
             <div className="col-span-2 font-medium">Quantity</div>
-            <div className="col-span-2 font-medium">Rate (₹)</div>
-            <div className="col-span-2 font-medium">Amount (₹)</div>
+            <div className="col-span-2 font-medium">Rate ({currency})</div>
+            <div className="col-span-2 font-medium">Amount ({currency})</div>
             <div className="col-span-2 font-medium text-right">Action</div>
           </div>
           
@@ -304,7 +356,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
                 </div>
                 <div className="col-span-2">
                   <div className="relative">
-                    <IndianRupee className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    {getCurrencySymbol()}
                     <Input 
                       type="number" 
                       className={`pl-10 ${errors.itemErrors?.[index]?.rate ? 'border-red-500' : ''}`}
@@ -321,7 +373,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
                 </div>
                 <div className="col-span-2 flex items-center">
                   <div className="financial-amount">
-                    ₹{item.amount.toLocaleString()}
+                    {formatAmount(item.amount)}
                   </div>
                 </div>
                 <div className="col-span-2 text-right">
@@ -372,7 +424,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
         <div className="space-y-4">
           <div className="flex justify-between p-4 bg-muted/30 rounded-md">
             <span>Subtotal:</span>
-            <span className="financial-amount">{formatINR(subtotal)}</span>
+            <span className="financial-amount">{formatAmount(subtotal)}</span>
           </div>
           
           <div className="flex items-center gap-4">
@@ -393,13 +445,13 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, onClose }) => {
             </div>
             <div className="flex-1 flex justify-between">
               <span>Tax:</span>
-              <span className="financial-amount">{formatINR(taxAmount)}</span>
+              <span className="financial-amount">{formatAmount(taxAmount)}</span>
             </div>
           </div>
           
           <div className="flex justify-between p-4 bg-blue-50 rounded-md font-semibold">
             <span>Total Amount:</span>
-            <span className="financial-amount text-lg">{formatINR(totalAmount)}</span>
+            <span className="financial-amount text-lg">{formatAmount(totalAmount)}</span>
           </div>
         </div>
       </div>

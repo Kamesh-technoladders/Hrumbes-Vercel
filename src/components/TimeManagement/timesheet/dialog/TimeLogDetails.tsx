@@ -218,7 +218,7 @@ export const TimeLogDetails = ({
   return (
     <div className="space-y-3 max-h-[60vh] overflow-y-auto px-1">
       <BasicInfoSection timeLog={log} parsedNotes={parsedNotes} />
-      <TimeEntrySection timeLog={log} employeeHasProjects={employeeHasProjects} />
+      {/* <TimeEntrySection timeLog={log} employeeHasProjects={employeeHasProjects} /> */}
       <ProjectAllocationSection timeLog={log} getProjectName={getProjectName} />
 
       {/* Candidate Submissions Section */}

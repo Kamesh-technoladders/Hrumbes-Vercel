@@ -137,8 +137,20 @@ export const useTimesheetSubmission = () => {
         date: date.toISOString(),
       });
 
+      function parsePackedHours(hoursStrOrNum: string | number): number {
+  const str = String(hoursStrOrNum);
+  const [hourPart, minutePart] = str.split('.').map(Number);
+  const hours = hourPart || 0;
+  const minutes = minutePart || 0;
+
+  // interpret `.25` as 25 minutes (not 0.25 * 60)
+  return hours * 60 + minutes;
+}
+
+
       // Calculate duration_minutes
-      const durationMinutes = Math.round(totalWorkingHours * 60);
+    const durationMinutes = parsePackedHours(totalWorkingHours);
+
 
       const formData = {
         employeeId,
