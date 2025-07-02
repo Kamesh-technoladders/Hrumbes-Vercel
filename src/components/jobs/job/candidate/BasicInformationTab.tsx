@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import MultiLocationSelector from "./MultiLocationSelector";
-import SingleLocationSelector from "./SingleLocationSelector"; // Import new component
+import SingleLocationSelector from "./SingleLocationSelector";
 import { CandidateFormData } from "./AddCandidateDrawer";
 import { supabase } from "@/integrations/supabase/client";
 import { FileText, Loader2 } from "lucide-react";
@@ -37,58 +37,58 @@ interface BasicInformationTabProps {
 // Revert to hard-coded locations
 const LOCATION_OPTIONS = [
   "Delhi",
-"Mumbai",
-"Bangalore",
-"Chennai",
-"Kolkata",
-"Hyderabad",
-"Pune",
-"Ahmedabad",
-"Jaipur",
-"Surat",
-"Lucknow",
-"Kanpur",
-"Nagpur",
-"Indore",
-"Bhopal",
-"Patna",
-"Vadodara",
-"Ludhiana",
-"Agra",
-"Nashik",
-"Faridabad",
-"Meerut",
-"Rajkot",
-"Kalyan",
-"Vasai-Virar",
-"Varanasi",
-"Srinagar",
-"Aurangabad",
-"Dhanbad",
-"Amritsar",
-"Navi Mumbai",
-"Allahabad",
-"Ranchi",
-"Howrah",
-"Gwalior",
-"Jabalpur",
-"Coimbatore",
-"Madurai",
-"Visakhapatnam",
-"Vijayawada",
-"Chandigarh",
-"Thiruvananthapuram",
-"Kochi",
-"Mysore",
-"Jodhpur",
-"Raipur",
-"Dehradun",
-"Guwahati",
-"Hubli-Dharwad",
-"Salem",
-"Tiruchirappalli",
-"Bhubaneshwar",
-"Gurgaon",
+  "Mumbai",
+  "Bangalore",
+  "Chennai",
+  "Kolkata",
+  "Hyderabad",
+  "Pune",
+  "Ahmedabad",
+  "Jaipur",
+  "Surat",
+  "Lucknow",
+  "Kanpur",
+  "Nagpur",
+  "Indore",
+  "Bhopal",
+  "Patna",
+  "Vadodara",
+  "Ludhiana",
+  "Agra",
+  "Nashik",
+  "Faridabad",
+  "Meerut",
+  "Rajkot",
+  "Kalyan",
+  "Vasai-Virar",
+  "Varanasi",
+  "Srinagar",
+  "Aurangabad",
+  "Dhanbad",
+  "Amritsar",
+  "Navi Mumbai",
+  "Allahabad",
+  "Ranchi",
+  "Howrah",
+  "Gwalior",
+  "Jabalpur",
+  "Coimbatore",
+  "Madurai",
+  "Visakhapatnam",
+  "Vijayawada",
+  "Chandigarh",
+  "Thiruvananthapuram",
+  "Kochi",
+  "Mysore",
+  "Jodhpur",
+  "Raipur",
+  "Dehradun",
+  "Guwahati",
+  "Hubli-Dharwad",
+  "Salem",
+  "Tiruchirappalli",
+  "Bhubaneshwar",
+  "Gurgaon",
   "Remote",
   "Others",
 ];
@@ -107,7 +107,6 @@ const formatINR = (value: number): string => {
   }
   return `${formattedNumber}`;
 };
-
 
 const preprocessNumber = (val: unknown) => {
   if (val === "" || val === null || val === undefined) return undefined;
@@ -147,17 +146,11 @@ const basicInfoSchema = z.object({
     .preprocess(preprocessNumber, z.number().min(0, "Cannot be negative"))
     .optional(),
   resume: z.string().url("Resume URL is required"),
-  skills: z.array(
-    z.object({
-      name: z.string(),
-      rating: z.number(),
-    })
-  ),
   noticePeriod: z
-  .enum(["Immediate", "15 days", "30 days", "45 days", "60 days", "90 days"])
-  .optional(),
+    .enum(["Immediate", "15 days", "30 days", "45 days", "60 days", "90 days"])
+    .optional(),
   lastWorkingDay: z.string().optional(),
-  linkedInId: z.string().url("Invalid LinkedIn URL").optional(),
+  linkedInId: z.string().url("LinkedIn URL is required").min(1, "LinkedIn URL is required"),
   hasOffers: z.enum(["Yes", "No"]).optional(),
   offerDetails: z.string().optional(),
 });
@@ -181,16 +174,17 @@ const sanitizeFileName = (fileName: string): string => {
   // Replace invalid characters with hyphens, remove multiple hyphens, and trim
   const sanitizedName = name
     .toLowerCase()
-    .replace(/[^a-z0-9.-]/g, "-") // Replace non-alphanumeric (except . and -) with -
-    .replace(/-+/g, "-") // Replace multiple hyphens with single hyphen
-    .replace(/^-|-$/g, ""); // Remove leading/trailing hyphens
+    .replace(/[^a-z0-9.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 
   return `${sanitizedName}.${extension}`;
 };
 
 const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformationTabProps) => {
   const [isParsing, setIsParsing] = useState(false);
- const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -240,7 +234,7 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
         if (parsedData.currentLocation) form.setValue("currentLocation", parsedData.currentLocation, { shouldValidate: true });
         if (parsedData.totalExperience !== undefined) form.setValue("totalExperience", parsedData.totalExperience, { shouldValidate: true });
         if (parsedData.totalExperienceMonths !== undefined) form.setValue("totalExperienceMonths", parsedData.totalExperienceMonths, { shouldValidate: true });
-        if (parsedData.skills && parsedData.skills.length > 0) form.setValue("skills", parsedData.skills);
+        // Skip skills to avoid validation issues in Basic Information tab
         if (parsedData.linkedInId) form.setValue("linkedInId", parsedData.linkedInId, { shouldValidate: true });
       }
       
@@ -254,7 +248,20 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
     }
   };
 
-
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Trigger validation for all fields
+    const isValid = await form.trigger();
+    if (!isValid) {
+      const errors = form.formState.errors;
+      console.log("Form validation errors:", errors); // Debug: Log validation errors
+      toast.error("Please fill all required fields correctly.");
+      return;
+    }
+    // If valid, proceed with form data
+    const formData = form.getValues();
+    onSaveAndNext(formData);
+  };
 
   const currentSalary = form.watch("currentSalary");
   const expectedSalary = form.watch("expectedSalary");
@@ -262,7 +269,7 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSaveAndNext)} className="space-y-4 py-4">
+      <form onSubmit={handleSubmit} className="space-y-4 py-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -541,33 +548,33 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormField
-    control={form.control}
-    name="noticePeriod"
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel>Notice Period</FormLabel>
-        <Select
-          onValueChange={field.onChange}
-          value={field.value}
-        >
-          <FormControl>
-            <SelectTrigger>
-              <SelectValue placeholder="Select notice period" />
-            </SelectTrigger>
-          </FormControl>
-          <SelectContent>
-            {NOTICE_PERIOD_OPTIONS.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
+          <FormField
+            control={form.control}
+            name="noticePeriod"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notice Period</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select notice period" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {NOTICE_PERIOD_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <FormField
             control={form.control}
             name="lastWorkingDay"
@@ -593,7 +600,9 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             name="linkedInId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>LinkedIn Profile URL</FormLabel>
+                <FormLabel>
+                  LinkedIn Profile URL <span className="text-red-500">*</span>
+                </FormLabel>
                 <FormControl>
                   <Input
                     placeholder="https://linkedin.com/in/username"
@@ -646,12 +655,12 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
                     />
                   </FormControl>
                   <FormMessage />
-                </FormItem>
+              </FormItem>
               )}
             />
           )}
         </div>
-         <FormField
+        <FormField
           control={form.control}
           name="resume"
           render={({ field }) => (
@@ -697,4 +706,3 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
 };
 
 export default BasicInformationTab;
-// Resume parser logic
