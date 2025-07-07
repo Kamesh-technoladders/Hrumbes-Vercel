@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { useForm, UseFormReturn } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { UseFormReturn } from "react-hook-form";
 import {
   Form,
   FormControl,
@@ -19,6 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch"; // Import Switch
+import { Label } from "@/components/ui/label";   // Import Label
 import MultiLocationSelector from "./MultiLocationSelector";
 import SingleLocationSelector from "./SingleLocationSelector";
 import { CandidateFormData } from "./AddCandidateDrawer";
@@ -36,148 +36,41 @@ interface BasicInformationTabProps {
 
 // Revert to hard-coded locations
 const LOCATION_OPTIONS = [
-  "Delhi",
-  "Mumbai",
-  "Bangalore",
-  "Chennai",
-  "Kolkata",
-  "Hyderabad",
-  "Pune",
-  "Ahmedabad",
-  "Jaipur",
-  "Surat",
-  "Lucknow",
-  "Kanpur",
-  "Nagpur",
-  "Indore",
-  "Bhopal",
-  "Patna",
-  "Vadodara",
-  "Ludhiana",
-  "Agra",
-  "Nashik",
-  "Faridabad",
-  "Meerut",
-  "Rajkot",
-  "Kalyan",
-  "Vasai-Virar",
-  "Varanasi",
-  "Srinagar",
-  "Aurangabad",
-  "Dhanbad",
-  "Amritsar",
-  "Navi Mumbai",
-  "Allahabad",
-  "Ranchi",
-  "Howrah",
-  "Gwalior",
-  "Jabalpur",
-  "Coimbatore",
-  "Madurai",
-  "Visakhapatnam",
-  "Vijayawada",
-  "Chandigarh",
-  "Thiruvananthapuram",
-  "Kochi",
-  "Mysore",
-  "Jodhpur",
-  "Raipur",
-  "Dehradun",
-  "Guwahati",
-  "Hubli-Dharwad",
-  "Salem",
-  "Tiruchirappalli",
-  "Bhubaneshwar",
-  "Gurgaon",
-  "Remote",
-  "Others",
+  "Delhi", "Mumbai", "Bangalore", "Chennai", "Kolkata", "Hyderabad", "Pune", 
+  "Ahmedabad", "Jaipur", "Surat", "Lucknow", "Kanpur", "Nagpur", "Indore",
+  "Bhopal", "Patna", "Vadodara", "Ludhiana", "Agra", "Nashik", "Faridabad",
+  "Meerut", "Rajkot", "Kalyan", "Vasai-Virar", "Varanasi", "Srinagar",
+  "Aurangabad", "Dhanbad", "Amritsar", "Navi Mumbai", "Allahabad", "Ranchi",
+  "Howrah", "Gwalior", "Jabalpur", "Coimbatore", "Madurai", "Visakhapatnam",
+  "Vijayawada", "Chandigarh", "Thiruvananthapuram", "Kochi", "Mysore",
+  "Jodhpur", "Raipur", "Dehradun", "Guwahati", "Hubli-Dharwad", "Salem",
+  "Tiruchirappalli", "Bhubaneshwar", "Gurgaon", "Remote", "Others",
 ];
 
 const formatINR = (value: number): string => {
   const formattedNumber = new Intl.NumberFormat("en-IN").format(value);
-  
-  if (value >= 1_00_00_000) {
-    return `${formattedNumber} (Crore)`;
-  } else if (value >= 1_00_000) {
-    return `${formattedNumber} (Lakh)`;
-  } else if (value >= 1_000) {
-    return `${formattedNumber} (Thousand)`;
-  } else if (value >= 100) {
-    return `${formattedNumber} (Hundred)`;
-  }
+  if (value >= 1_00_00_000) return `${formattedNumber} (Crore)`;
+  if (value >= 1_00_000) return `${formattedNumber} (Lakh)`;
+  if (value >= 1_000) return `${formattedNumber} (Thousand)`;
+  if (value >= 100) return `${formattedNumber} (Hundred)`;
   return `${formattedNumber}`;
-};
-
-const preprocessNumber = (val: unknown) => {
-  if (val === "" || val === null || val === undefined) return undefined;
-  const number = Number(val);
-  return isNaN(number) ? undefined : number;
 };
 
 const YEARS = Array.from({ length: 31 }, (_, i) => i.toString());
 const MONTHS = Array.from({ length: 12 }, (_, i) => i.toString());
 
-const basicInfoSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Invalid email format"),
-  phone: z
-    .string()
-    .regex(/^\+\d{10,15}$/, "Phone number must include country code and be 10-15 digits")
-    .min(1, "Phone number is required"),
-  currentLocation: z.string().min(1, "Current location is required"),
-  preferredLocations: z.array(z.string()).min(1, "At least one preferred location is required"),
-  totalExperience: z
-    .preprocess(preprocessNumber, z.number().min(0, "Cannot be negative"))
-    .optional(),
-  totalExperienceMonths: z
-    .preprocess(preprocessNumber, z.number().min(0).max(11, "Max 11 months"))
-    .optional(),
-  relevantExperience: z
-    .preprocess(preprocessNumber, z.number().min(0, "Cannot be negative"))
-    .optional(),
-  relevantExperienceMonths: z
-    .preprocess(preprocessNumber, z.number().min(0).max(11, "Max 11 months"))
-    .optional(),
-  currentSalary: z
-    .preprocess(preprocessNumber, z.number().min(0, "Cannot be negative"))
-    .optional(),
-  expectedSalary: z
-    .preprocess(preprocessNumber, z.number().min(0, "Cannot be negative"))
-    .optional(),
-  resume: z.string().url("Resume URL is required"),
-  noticePeriod: z
-    .enum(["Immediate", "15 days", "30 days", "45 days", "60 days", "90 days"])
-    .optional(),
-  lastWorkingDay: z.string().optional(),
-  linkedInId: z.string().url("LinkedIn URL is required").min(1, "LinkedIn URL is required"),
-  hasOffers: z.enum(["Yes", "No"]).optional(),
-  offerDetails: z.string().optional(),
-});
-
-// Define notice period options
 const NOTICE_PERIOD_OPTIONS = [
-  "Immediate",
-  "15 days",
-  "30 days",
-  "45 days",
-  "60 days",
-  "90 days",
+  "Immediate", "15 days", "30 days", "45 days", "60 days", "90 days",
 ];
 
-// Function to sanitize file names
 const sanitizeFileName = (fileName: string): string => {
-  // Extract the file extension
   const extension = fileName.split(".").pop()?.toLowerCase() || "";
   const name = fileName.substring(0, fileName.length - (extension.length + 1));
-
-  // Replace invalid characters with hyphens, remove multiple hyphens, and trim
   const sanitizedName = name
     .toLowerCase()
     .replace(/[^a-z0-9.-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-
   return `${sanitizedName}.${extension}`;
 };
 
@@ -188,7 +81,6 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file type
     const allowedTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
     if (!allowedTypes.includes(file.type)) {
       toast.error("Invalid file type. Please upload a PDF or DOCX file.");
@@ -202,39 +94,39 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
     toast.info("Uploading resume...");
 
     try {
-      // 1. Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("candidate_resumes")
         .upload(filePath, file, { cacheControl: "3600", upsert: false });
-
       if (uploadError) throw new Error(`Upload Error: ${uploadError.message}`);
 
       const { data: { publicUrl } } = supabase.storage.from("candidate_resumes").getPublicUrl(filePath);
-
       if (!publicUrl) throw new Error("Failed to retrieve resume URL.");
       
       form.setValue("resume", publicUrl);
       toast.success("Resume uploaded. Parsing with AI, please wait...");
 
-      // 2. Invoke the Supabase Edge Function
       const { data: parsedData, error: functionError } = await supabase.functions.invoke('parse-resume', {
         body: { fileUrl: publicUrl },
       });
+      if (functionError) throw new Error(`AI Parsing Error: ${functionError.message}`);
       
-      if (functionError) {
-        throw new Error(`AI Parsing Error: ${functionError.message}`);
-      }
-      
-      // 3. Populate form with parsed data from Gemini
       if (parsedData) {
         if (parsedData.firstName) form.setValue("firstName", parsedData.firstName, { shouldValidate: true });
         if (parsedData.lastName) form.setValue("lastName", parsedData.lastName, { shouldValidate: true });
         if (parsedData.email) form.setValue("email", parsedData.email, { shouldValidate: true });
-        if (parsedData.phone) form.setValue("phone", parsedData.phone, { shouldValidate: true });
+
+        // **Phone number parsing fix**
+        if (parsedData.phone) {
+          let phoneNumber = parsedData.phone.replace(/\s+/g, ''); // Remove spaces
+          if (!phoneNumber.startsWith('+')) {
+            phoneNumber = `+91${phoneNumber}`; // Prepend +91 if missing
+          }
+          form.setValue("phone", phoneNumber, { shouldValidate: true });
+        }
+
         if (parsedData.currentLocation) form.setValue("currentLocation", parsedData.currentLocation, { shouldValidate: true });
         if (parsedData.totalExperience !== undefined) form.setValue("totalExperience", parsedData.totalExperience, { shouldValidate: true });
         if (parsedData.totalExperienceMonths !== undefined) form.setValue("totalExperienceMonths", parsedData.totalExperienceMonths, { shouldValidate: true });
-        // Skip skills to avoid validation issues in Basic Information tab
         if (parsedData.linkedInId) form.setValue("linkedInId", parsedData.linkedInId, { shouldValidate: true });
       }
       
@@ -250,15 +142,13 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Trigger validation for all fields
     const isValid = await form.trigger();
     if (!isValid) {
       const errors = form.formState.errors;
-      console.log("Form validation errors:", errors); // Debug: Log validation errors
+      console.log("Form validation errors:", errors);
       toast.error("Please fill all required fields correctly.");
       return;
     }
-    // If valid, proceed with form data
     const formData = form.getValues();
     onSaveAndNext(formData);
   };
@@ -266,19 +156,56 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
   const currentSalary = form.watch("currentSalary");
   const expectedSalary = form.watch("expectedSalary");
   const hasOffers = form.watch("hasOffers");
+  const isLinkedInRequired = form.watch("isLinkedInRequired");
 
   return (
     <Form {...form}>
       <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        {/* **Resume field moved to top** */}
+        <div className="mb-6">
+          <FormField
+            control={form.control}
+            name="resume"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Resume <span className="text-red-500">*</span>
+                </FormLabel>
+                <FormControl>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept=".pdf,.docx"
+                      onChange={handleFileChange}
+                      disabled={isParsing}
+                      className="flex-1"
+                    />
+                    {isParsing && <Loader2 className="h-5 w-5 animate-spin text-purple-600" />}
+                  </div>
+                </FormControl>
+                {field.value && !isParsing && (
+                  <div className="flex items-center text-sm mt-1 gap-1">
+                    <FileText size={16} className="purple-text-color" />
+                    <a href={field.value} target="_blank" rel="noopener noreferrer" className="purple-text-color underline">
+                      View Uploaded Resume
+                    </a>
+                  </div>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <hr className="my-6"/>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="firstName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  First Name <span className="text-red-500">*</span>
-                </FormLabel>
+                <FormLabel>First Name <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <Input placeholder="John" {...field} />
                 </FormControl>
@@ -291,9 +218,7 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             name="lastName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  Last Name <span className="text-red-500">*</span>
-                </FormLabel>
+                <FormLabel>Last Name <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <Input placeholder="Doe" {...field} />
                 </FormControl>
@@ -308,9 +233,7 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  Email <span className="text-red-500">*</span>
-                </FormLabel>
+                <FormLabel>Email <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <Input placeholder="john.doe@example.com" type="email" {...field} />
                 </FormControl>
@@ -323,9 +246,7 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             name="phone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  Phone Number <span className="text-red-500">*</span>
-                </FormLabel>
+                <FormLabel>Phone Number <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <PhoneInput
                     international
@@ -347,9 +268,7 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             name="currentLocation"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  Current Location <span className="text-red-500">*</span>
-                </FormLabel>
+                <FormLabel>Current Location <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <SingleLocationSelector
                     locations={LOCATION_OPTIONS}
@@ -366,9 +285,7 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             name="preferredLocations"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  Preferred Locations <span className="text-red-500">*</span>
-                </FormLabel>
+                <FormLabel>Preferred Locations <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <MultiLocationSelector
                     locations={LOCATION_OPTIONS}
@@ -388,24 +305,9 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Total Experience (years)</FormLabel>
-                <Select
-                  onValueChange={(value) =>
-                    field.onChange(value ? Number(value) : undefined)
-                  }
-                  value={field.value?.toString()}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select years" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {YEARS.map((year) => (
-                      <SelectItem key={year} value={year}>
-                        {year} years
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select years" /></SelectTrigger></FormControl>
+                  <SelectContent>{YEARS.map((year) => (<SelectItem key={year} value={year}>{year} years</SelectItem>))}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
@@ -417,24 +319,9 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Total Experience (months)</FormLabel>
-                <Select
-                  onValueChange={(value) =>
-                    field.onChange(value ? Number(value) : undefined)
-                  }
-                  value={field.value?.toString()}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select months" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {MONTHS.map((month) => (
-                      <SelectItem key={month} value={month}>
-                        {month} months
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select months" /></SelectTrigger></FormControl>
+                  <SelectContent>{MONTHS.map((month) => (<SelectItem key={month} value={month}>{month} months</SelectItem>))}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
@@ -448,24 +335,9 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Relevant Experience (years)</FormLabel>
-                <Select
-                  onValueChange={(value) =>
-                    field.onChange(value ? Number(value) : undefined)
-                  }
-                  value={field.value?.toString()}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select years" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {YEARS.map((year) => (
-                      <SelectItem key={year} value={year}>
-                        {year} years
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select years" /></SelectTrigger></FormControl>
+                  <SelectContent>{YEARS.map((year) => (<SelectItem key={year} value={year}>{year} years</SelectItem>))}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
@@ -477,24 +349,9 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Relevant Experience (months)</FormLabel>
-                <Select
-                  onValueChange={(value) =>
-                    field.onChange(value ? Number(value) : undefined)
-                  }
-                  value={field.value?.toString()}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select months" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {MONTHS.map((month) => (
-                      <SelectItem key={month} value={month}>
-                        {month} months
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select months" /></SelectTrigger></FormControl>
+                  <SelectContent>{MONTHS.map((month) => (<SelectItem key={month} value={month}>{month} months</SelectItem>))}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
@@ -508,18 +365,8 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Current Salary</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={field.value ?? ""}
-                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                    placeholder="Enter salary in INR"
-                  />
-                </FormControl>
-                {currentSalary !== undefined && (
-                  <p className="text-sm text-gray-500 mt-1">₹ {formatINR(currentSalary)}</p>
-                )}
+                <FormControl><Input type="number" min="0" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)} placeholder="Enter salary in INR"/></FormControl>
+                {currentSalary !== undefined && (<p className="text-sm text-gray-500 mt-1">₹ {formatINR(currentSalary)}</p>)}
                 <FormMessage />
               </FormItem>
             )}
@@ -530,18 +377,8 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Expected Salary</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={field.value ?? ""}
-                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                    placeholder="Enter salary in INR"
-                  />
-                </FormControl>
-                {expectedSalary !== undefined && (
-                  <p className="text-sm text-gray-500 mt-1">₹ {formatINR(expectedSalary)}</p>
-                )}
+                <FormControl><Input type="number" min="0" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)} placeholder="Enter salary in INR"/></FormControl>
+                {expectedSalary !== undefined && (<p className="text-sm text-gray-500 mt-1">₹ {formatINR(expectedSalary)}</p>)}
                 <FormMessage />
               </FormItem>
             )}
@@ -554,22 +391,9 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Notice Period</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select notice period" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {NOTICE_PERIOD_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select notice period" /></SelectTrigger></FormControl>
+                  <SelectContent>{NOTICE_PERIOD_OPTIONS.map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
@@ -581,40 +405,53 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Last Working Day</FormLabel>
-                <FormControl>
-                  <Input
-                    type="date"
-                    value={field.value ?? ""}
-                    onChange={(e) => field.onChange(e.target.value || undefined)}
-                    placeholder="Select date"
-                  />
-                </FormControl>
+                <FormControl><Input type="date" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || undefined)} placeholder="Select date"/></FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="linkedInId"
-            render={({ field }) => (
-              <FormItem>
+        
+        {/* **LinkedIn Field with Toggle** */}
+        <FormField
+          control={form.control}
+          name="linkedInId"
+          render={({ field }) => (
+            <FormItem>
+              <div className="flex items-center justify-between">
                 <FormLabel>
-                  LinkedIn Profile URL <span className="text-red-500">*</span>
+                  LinkedIn Profile URL 
+                  {isLinkedInRequired && <span className="text-red-500">*</span>}
                 </FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="https://linkedin.com/in/username"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+                <FormField
+                  control={form.control}
+                  name="isLinkedInRequired"
+                  render={({ field: switchField }) => (
+                    <FormItem className="flex items-center space-x-2">
+                       <FormControl>
+                         <Switch
+                          checked={switchField.value}
+                          onCheckedChange={switchField.onChange}
+                         />
+                       </FormControl>
+                       <Label htmlFor="isLinkedInRequired" className="text-sm font-medium">Required</Label>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormControl>
+                <Input
+                  placeholder="https://linkedin.com/in/username"
+                  {...field}
+                  value={field.value ?? ""}
+                  disabled={!isLinkedInRequired}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -622,15 +459,8 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Existing Offers</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select option" />
-                    </SelectTrigger>
-                  </FormControl>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select option" /></SelectTrigger></FormControl>
                   <SelectContent>
                     <SelectItem value="Yes">Yes</SelectItem>
                     <SelectItem value="No">No</SelectItem>
@@ -647,51 +477,14 @@ const BasicInformationTab = ({ form, onSaveAndNext, onCancel }: BasicInformation
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Offer Details</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Enter offer details"
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
+                  <FormControl><Input placeholder="Enter offer details" {...field} value={field.value ?? ""}/></FormControl>
                   <FormMessage />
               </FormItem>
               )}
             />
           )}
         </div>
-        <FormField
-          control={form.control}
-          name="resume"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Resume <span className="text-red-500">*</span>
-              </FormLabel>
-              <FormControl>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="file"
-                    accept=".pdf,.docx"
-                    onChange={handleFileChange}
-                    disabled={isParsing}
-                    className="flex-1"
-                  />
-                  {isParsing && <Loader2 className="h-5 w-5 animate-spin text-purple-600" />}
-                </div>
-              </FormControl>
-              {field.value && !isParsing && (
-                <div className="flex items-center text-sm mt-1 gap-1">
-                  <FileText size={16} className="purple-text-color" />
-                  <a href={field.value} target="_blank" rel="noopener noreferrer" className="purple-text-color underline">
-                    View Resume
-                  </a>
-                </div>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        
         <div className="flex justify-end space-x-4 pt-4">
           <Button type="button" variant="outline" onClick={onCancel} disabled={isParsing}>
             Cancel

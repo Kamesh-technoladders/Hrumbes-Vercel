@@ -58,6 +58,7 @@ export type CandidateFormData = {
   noticePeriod?: string;
   lastWorkingDay?: string;
   linkedInId: string;
+  isLinkedInRequired?: boolean;
   hasOffers?: "Yes" | "No";
   offerDetails?: string;
   uan?: string;
@@ -108,10 +109,40 @@ const basicInfoSchema = z.object({
     .enum(["Immediate", "15 days", "30 days", "45 days", "60 days", "90 days"])
     .optional(),
   lastWorkingDay: z.string().optional(),
-  linkedInId: z.string().url("LinkedIn URL is required").min(1, "LinkedIn URL is required"),
+  // **FIX STARTS HERE**
+  // 1. Define as a simple optional string. All logic will be in superRefine.
+  linkedInId: z.string().optional(), 
+  isLinkedInRequired: z.boolean().optional(),
+  // **FIX ENDS HERE**
   hasOffers: z.enum(["Yes", "No"]).optional(),
   offerDetails: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // 2. Implement the full conditional logic here.
+  const { isLinkedInRequired, linkedInId } = data;
+
+  // Rule 1: If the field has a value (is not empty), it MUST be a valid URL format.
+  // This applies whether it's required or not.
+  if (linkedInId && linkedInId.trim() !== '') {
+    const urlCheck = z.string().url().safeParse(linkedInId);
+    if (!urlCheck.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Please enter a valid LinkedIn URL.",
+        path: ["linkedInId"],
+      });
+    }
+  }
+
+  // Rule 2: If the toggle is ON, the field cannot be empty.
+  if (isLinkedInRequired && (!linkedInId || linkedInId.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "LinkedIn URL is required.",
+      path: ["linkedInId"],
+    });
+  }
 });
+
 
 // Zod schema for Skills Information tab
 const skillsSchema = z.object({
@@ -156,6 +187,7 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
       noticePeriod: candidate?.metadata?.noticePeriod || undefined,
       lastWorkingDay: candidate?.metadata?.lastWorkingDay || "",
       linkedInId: candidate?.metadata?.linkedInId || "",
+      isLinkedInRequired: true, // Default to true
       hasOffers: candidate?.metadata?.hasOffers || undefined,
       offerDetails: candidate?.metadata?.offerDetails || "",
       uan: candidate?.metadata?.uan || "",
@@ -216,7 +248,7 @@ const AddCandidateDrawer = ({ job, onCandidateAdded, candidate, open, onOpenChan
 
     // Validate form data against schema
     try {
-      basicInfoSchema.parse(data);
+      await basicInfoSchema.parseAsync(data);
     } catch (error) {
       console.error("Validation error:", error);
       toast.error("Please fill all required fields correctly.");
