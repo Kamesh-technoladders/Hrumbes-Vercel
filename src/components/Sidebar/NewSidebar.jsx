@@ -86,6 +86,10 @@ const NewSidebar = ({ isExpanded, toggleSidebar }) => {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [isMobile] = useMediaQuery("(max-width: 768px)");
 
+  console.log('Role', role)
+  console.log('departmentName', departmentName)
+
+
   // --- NEW: State for employee profile and profile menu toggle ---
   const [employeeProfile, setEmployeeProfile] = useState(null);
   const { isOpen: isProfileMenuOpen, onToggle: toggleProfileMenu } = useDisclosure();
@@ -125,10 +129,54 @@ const NewSidebar = ({ isExpanded, toggleSidebar }) => {
     fetchEmployeeProfile();
   }, [user?.id]);
 
-  // Fetch department name for roles that need it
   useEffect(() => {
-    // ... (This useEffect remains the same as before)
-  }, [user?.id, role]);
+    const fetchDepartmentName = async () => {
+      if (!user?.id) {
+        setDepartmentName("Unknown Department");
+        return;
+      }
+
+      try {
+        // Step 1: Fetch department_id from hr_employees where id matches user.id
+        const { data: employeeData, error: employeeError } = await supabase
+          .from("hr_employees")
+          .select("department_id")
+          .eq("id", user.id)
+          .single();
+
+        if (employeeError) {
+          console.error("Error fetching employee data:", employeeError);
+          setDepartmentName("Unknown Department");
+          return;
+        }
+
+        if (!employeeData?.department_id) {
+          setDepartmentName("Unknown Department");
+          return;
+        }
+
+        // Step 2: Fetch department name from hr_departments using department_id
+        const { data: departmentData, error: departmentError } = await supabase
+          .from("hr_departments")
+          .select("name")
+          .eq("id", employeeData.department_id)
+          .single();
+
+        if (departmentError) {
+          console.error("Error fetching department data:", departmentError);
+          setDepartmentName("Unknown Department");
+          return;
+        }
+
+        setDepartmentName(departmentData.name || "Unknown Department");
+      } catch (error) {
+        console.error("Unexpected error:", error);
+        setDepartmentName("Unknown Department");
+      }
+    };
+
+    fetchDepartmentName();
+  }, [user?.id]);
 
   const menuConfig =
     role === "employee" || role === "admin"
