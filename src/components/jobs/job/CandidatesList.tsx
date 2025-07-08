@@ -2321,14 +2321,11 @@ const { data: clientData } = useQuery({
       organization_id: organizationId,
     };
     console.log("Sending payload to proxy /api/proxy:", payload);
- 
-    // --- Call the Vercel Proxy (POST) ---
-    const response = await fetch("/api/proxy", { // Relative path to your proxy function
+const response = await fetch("http://localhost:5005/validate-resume", { // Direct backend endpoint
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify(payload),
     });
-    // ---
  
     if (!response.ok) { // Check if response status is 2xx
       const errorText = await response.text();
